@@ -93,8 +93,8 @@ function App() {
     lsSet('caulis_plants', plants.map(({ userImage, ...rest }) => rest));
     plants.forEach(p => {
       try {
-        if (p.userImage) localStorage.setItem('caulis_img_' + p.id, p.userImage);
-        else localStorage.removeItem('caulis_img_' + p.id);
+        if (p.userImage) lsSet('caulis_img_' + p.id, p.userImage);
+        else try { localStorage.removeItem('caulis_img_' + p.id); } catch(e) {}
       } catch(e) {}
     });
   }, [plants]);

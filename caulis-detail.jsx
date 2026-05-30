@@ -228,11 +228,15 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   // "Take photo" → real file picker → user's own image (overrides preset)
   const takePhoto = () => { setSheet(false); setTimeout(() => fileRef.current && fileRef.current.click(), 0); };
   const onFile = (e) => {
-    const f = e.target.files && e.target.files[0];
+    const f = e.target.files?.[0];
     if (!f) return;
+    const preview = URL.createObjectURL(f);
+    setUserPhoto(preview);
+    setIdentified(false);
     const reader = new FileReader();
-    reader.onload = () => { setUserPhoto(reader.result); setIdentified(false); };
+    reader.onload = (ev) => setUserPhoto(ev.target.result);
     reader.readAsDataURL(f);
+    e.target.value = '';
   };
 
   // "Identify plant" → Perenual identification → auto-fill + preset image
@@ -262,10 +266,13 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
 
         <div style={{ padding:'14px 18px 24px', position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:18 }}>
           {/* photo area */}
-          <div onClick={()=>{ if (identifying) return; isDesktop ? setTimeout(() => fileRef.current && fileRef.current.click(), 0) : setSheet(true); }} style={{ position:'relative', cursor: identifying ? 'default' : 'pointer' }}>
+          <div onClick={()=>{ if (identifying || isDesktop) return; setSheet(true); }} style={{ position:'relative', cursor: identifying ? 'default' : 'pointer' }}>
             <Specimen tint={TINTS[0]} height={150} radius={20} leafSize={60} image={displayImage}
               caption={identifying ? '' : (hasPhoto ? '' : 'tap to add a photo')}/>
-            <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display:'none' }}/>
+            {isDesktop
+              ? <input ref={fileRef} type="file" accept="image/*" onChange={onFile} onClick={e=>e.stopPropagation()} style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer', zIndex:2 }}/>
+              : <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display:'none' }}/>
+            }
             {!identifying && (
               <div style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <CameraIcon s={19}/>

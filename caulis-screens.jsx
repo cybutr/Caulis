@@ -310,7 +310,7 @@ function ScannerScreen({ plants, onScan, isDesktop }) {
         ctx.drawImage(video, 0, 0);
         const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
         if (typeof jsQR !== 'undefined') {
-          const code = jsQR(img.data, img.width, img.height);
+          const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
           if (code) {
             const m = code.data.match(/[?&]plant=(\d+)/) || code.data.match(/caulis:\/\/plant\/(\d+)/);
             if (m) { onScan(parseInt(m[1], 10)); return; }
@@ -648,7 +648,7 @@ function BottomNav({ tab, setTab }) {
   return (
     <div style={{
       flexShrink:0, position:'relative', zIndex:30,
-      background:'rgba(250,250,247,0.86)', backdropFilter:'blur(18px) saturate(160%)', WebkitBackdropFilter:'blur(18px) saturate(160%)',
+      background:`${C.bg}DC`, backdropFilter:'blur(18px) saturate(160%)', WebkitBackdropFilter:'blur(18px) saturate(160%)',
       borderTop:'0.5px solid rgba(45,80,22,0.1)',
       padding:'9px 14px 26px',
       display:'flex', alignItems:'flex-end', justifyContent:'space-between',
@@ -663,7 +663,7 @@ function BottomNav({ tab, setTab }) {
                 background:`linear-gradient(160deg, ${C.sage} 0%, ${C.forest} 90%)`,
                 display:'flex', alignItems:'center', justifyContent:'center',
                 boxShadow: active ? '0 8px 20px rgba(45,80,22,0.42), 0 0 0 4px rgba(122,158,78,0.18)' : '0 6px 16px rgba(45,80,22,0.34)',
-                border:'3px solid #FAFAF7', transition:'box-shadow 200ms ease',
+                border:`3px solid ${C.bg}`, transition:'box-shadow 200ms ease',
               }}>
                 <IconScan s={26} c="#fff"/>
               </div>
