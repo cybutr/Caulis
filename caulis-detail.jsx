@@ -226,7 +226,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   const canSave = name.trim().length > 0;
 
   // "Take photo" → real file picker → user's own image (overrides preset)
-  const takePhoto = () => { setSheet(false); if (fileRef.current) fileRef.current.click(); };
+  const takePhoto = () => { setSheet(false); setTimeout(() => fileRef.current && fileRef.current.click(), 0); };
   const onFile = (e) => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
@@ -262,7 +262,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
 
         <div style={{ padding:'14px 18px 24px', position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:18 }}>
           {/* photo area */}
-          <div onClick={()=>{ if (identifying) return; isDesktop ? fileRef.current && fileRef.current.click() : setSheet(true); }} style={{ position:'relative', cursor: identifying ? 'default' : 'pointer' }}>
+          <div onClick={()=>{ if (identifying) return; isDesktop ? setTimeout(() => fileRef.current && fileRef.current.click(), 0) : setSheet(true); }} style={{ position:'relative', cursor: identifying ? 'default' : 'pointer' }}>
             <Specimen tint={TINTS[0]} height={150} radius={20} leafSize={60} image={displayImage}
               caption={identifying ? '' : (hasPhoto ? '' : 'tap to add a photo')}/>
             <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display:'none' }}/>

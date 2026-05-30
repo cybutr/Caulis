@@ -9,7 +9,7 @@ function App() {
   const lsGet = (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} };
 
-  const [plants, setPlants]       = useState(() => lsGet('caulis_plants', []));
+  const [plants, setPlants]       = useState(() => lsGet('caulis_plants', []).map(p => ({ ...p, userImage: lsGet('caulis_img_' + p.id, null) })));
   const [locations, setLocations] = useState(() => lsGet('caulis_locations', [...SEED_LOCATIONS]));
   const [tab, setTab]             = useState('garden');
   const [detail, setDetail]       = useState(null);
@@ -34,7 +34,9 @@ function App() {
     } catch(e) { return 'local-garden'; }
   });
 
-  const switchingGardenRef = useRef(false);
+  const switchingGardenRef = useRef(
+    (() => { try { return !!new URLSearchParams(window.location.search).get('g'); } catch(e) { return false; } })()
+  );
 
   const [darkMode, setDarkModeState] = useState(() => {
     try { return localStorage.getItem('caulis_dark') === '1'; } catch(e) { return false; }
@@ -87,7 +89,15 @@ function App() {
   };
 
   // ── Persist to localStorage ──
-  useEffect(() => { lsSet('caulis_plants', plants); }, [plants]);
+  useEffect(() => {
+    lsSet('caulis_plants', plants.map(({ userImage, ...rest }) => rest));
+    plants.forEach(p => {
+      try {
+        if (p.userImage) localStorage.setItem('caulis_img_' + p.id, p.userImage);
+        else localStorage.removeItem('caulis_img_' + p.id);
+      } catch(e) {}
+    });
+  }, [plants]);
   useEffect(() => { lsSet('caulis_locations', locations); }, [locations]);
   useEffect(() => { lsSet('caulis_queue', queue); }, [queue]);
 
@@ -100,11 +110,18 @@ function App() {
   // ── Firebase sync: listen for remote changes ──
   useEffect(() => {
     if (!gardenKey) return;
+    const toArr = v => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
     const unsubscribe = listenGarden(gardenKey, (data) => {
       fromRemoteRef.current = true;
-      if (Array.isArray(data.plants) && data.plants.length) setPlants(data.plants);
-      if (Array.isArray(data.locations) && data.locations.length) setLocations(data.locations);
-      if (Array.isArray(data.queue)) setQueue(data.queue);
+      if (data.plants) {
+        const incoming = toArr(data.plants).filter(Boolean);
+        if (incoming.length) setPlants(prev => incoming.map(p => {
+          const local = prev.find(lp => lp.id === p.id);
+          return { ...p, userImage: local ? local.userImage : null };
+        }));
+      }
+      if (data.locations) { const a = toArr(data.locations).filter(Boolean); if (a.length) setLocations(a); }
+      if (data.queue)     setQueue(toArr(data.queue).filter(Boolean));
     });
     return unsubscribe;
   }, [gardenKey]);
