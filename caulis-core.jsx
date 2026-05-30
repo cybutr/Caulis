@@ -24,7 +24,7 @@ const C = {
   line:   'rgba(45,80,22,0.08)',
   hair:   '0.5px solid rgba(45,80,22,0.08)',
 };
-const C_LIGHT = { ...C };
+const C_LIGHT = { ...C, input: '#F2F2EE' };
 const C_DARK = {
   bg:     '#111610',
   panel:  '#192115',
@@ -34,7 +34,9 @@ const C_DARK = {
   ink:    '#DCE8CC',
   line:   'rgba(255,255,255,0.07)',
   hair:   '0.5px solid rgba(255,255,255,0.08)',
+  input:  '#1E2A1A',
 };
+C.input = C_LIGHT.input;
 
 const FONT_SERIF = '"Cormorant Garamond", serif';
 const FONT_SANS  = '"DM Sans", sans-serif';
@@ -63,6 +65,13 @@ function applyTheme(dark) {
   Object.assign(STATUS.needs, ss.needs);
   const ts = dark ? TINTS_DARK : TINTS_LIGHT;
   ts.forEach((t, i) => { TINTS[i] = t; });
+  if (typeof document !== 'undefined') {
+    let el = document.getElementById('caulis-theme');
+    if (!el) { el = document.createElement('style'); el.id = 'caulis-theme'; document.head.appendChild(el); }
+    el.textContent = dark
+      ? 'input::placeholder,textarea::placeholder{color:rgba(220,232,204,0.32)!important}'
+      : 'input::placeholder,textarea::placeholder{color:rgba(42,42,38,0.34)!important}';
+  }
 }
 
 // ── status from days-since vs interval ────────────────────

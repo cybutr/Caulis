@@ -6,22 +6,35 @@ function App() {
   const vw = useWindowWidth();
   const isDesktop = vw >= DESKTOP_BP;
 
-  const [plants, setPlants]       = useState([]);
-  const [locations, setLocations] = useState(() => [...SEED_LOCATIONS]);
+  const lsGet = (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} };
+
+  const [plants, setPlants]       = useState(() => lsGet('caulis_plants', []));
+  const [locations, setLocations] = useState(() => lsGet('caulis_locations', [...SEED_LOCATIONS]));
   const [tab, setTab]             = useState('garden');
   const [detail, setDetail]       = useState(null);
   const [form, setForm]           = useState(null);
   const [moveTarget, setMoveTarget] = useState(null);
   const [menuPlant, setMenuPlant]   = useState(null);
-  const [queue, setQueue]         = useState([]);
+  const [queue, setQueue]         = useState(() => lsGet('caulis_queue', []));
   const [printed, setPrinted]     = useState(false);
+  const genKey = () => {
+    const adj  = ['green','mossy','sunny','leafy','dewy','wild','quiet','calm','bright','soft','deep','cool'];
+    const noun = ['fern','oak','sage','moss','leaf','vine','seed','root','grove','bloom','stem','bud'];
+    return adj[Math.random()*adj.length|0]+'-'+noun[Math.random()*noun.length|0]+'-'+((Math.random()*90+10)|0);
+  };
+
   const [gardenKey, setGardenKeyState] = useState(() => {
     try {
       const g = new URLSearchParams(window.location.search).get('g');
-      if (g) localStorage.setItem('caulis_garden_key', g);
-      return localStorage.getItem('caulis_garden_key') || '';
-    } catch(e) { return ''; }
+      if (g) { localStorage.setItem('caulis_garden_key', g); return g; }
+      let k = localStorage.getItem('caulis_garden_key');
+      if (!k) { k = genKey(); localStorage.setItem('caulis_garden_key', k); }
+      return k;
+    } catch(e) { return 'local-garden'; }
   });
+
+  const switchingGardenRef = useRef(false);
 
   const [darkMode, setDarkModeState] = useState(() => {
     try { return localStorage.getItem('caulis_dark') === '1'; } catch(e) { return false; }
@@ -37,6 +50,7 @@ function App() {
   }, [darkMode]);
 
   const fromRemoteRef = useRef(false);
+  const [plantNotFound, setPlantNotFound] = useState(false);
   const [installPrompt, setInstallPrompt] = useState(null);
   const [pendingPlantId] = useState(() => {
     try {
@@ -53,9 +67,29 @@ function App() {
   }, []);
 
   const setGardenKey = (k) => {
+    if (k === gardenKey) return;
     try { localStorage.setItem('caulis_garden_key', k); } catch(e) {}
+    switchingGardenRef.current = true;
     setGardenKeyState(k);
+    setPlants([]);
+    setLocations([...SEED_LOCATIONS]);
+    setQueue([]);
   };
+
+  const renameGardenKey = async (newKey) => {
+    const data = { plants, locations, queue };
+    const ok = await renameGarden(gardenKey, newKey, data);
+    if (ok) {
+      try { localStorage.setItem('caulis_garden_key', newKey); } catch(e) {}
+      setGardenKeyState(newKey);
+    }
+    return ok;
+  };
+
+  // ── Persist to localStorage ──
+  useEffect(() => { lsSet('caulis_plants', plants); }, [plants]);
+  useEffect(() => { lsSet('caulis_locations', locations); }, [locations]);
+  useEffect(() => { lsSet('caulis_queue', queue); }, [queue]);
 
   // ── Open plant from URL param once data loads ──
   useEffect(() => {
@@ -79,6 +113,7 @@ function App() {
   useEffect(() => {
     if (!gardenKey) return;
     if (fromRemoteRef.current) { fromRemoteRef.current = false; return; }
+    if (switchingGardenRef.current) { switchingGardenRef.current = false; return; }
     const timer = setTimeout(() => {
       pushGarden(gardenKey, { plants, locations, queue });
     }, 800);
@@ -212,7 +247,7 @@ window.onload=()=>{
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} onScan={id=>openDetail(id, true)} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} onSetGardenKey={setGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
@@ -246,6 +281,7 @@ window.onload=()=>{
             onRemove={removePlant}
             isDesktop/>
         )}
+        {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
       </div>
     );
   }
@@ -272,6 +308,7 @@ window.onload=()=>{
           onMove={p=>setMoveTarget(p)}
           onRemove={removePlant}/>
       )}
+      {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
     </div>
   );
 }

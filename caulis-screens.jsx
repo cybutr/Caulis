@@ -28,7 +28,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress }) {
       <div style={{ position:'relative' }}>
         <Specimen tint={tint} height={96} image={plant.userImage || plant.image}/>
         <div style={{
-          position:'absolute', top:9, right:9, width:18, height:18, borderRadius:999, background:'#fff',
+          position:'absolute', top:9, right:9, width:18, height:18, borderRadius:999, background:C.panel,
           display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 2px rgba(43,42,38,0.12)',
         }}>
           <StatusDot status={status}/>
@@ -183,7 +183,7 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop }) {
               {empty ? <>Welcome to Caulis.</> : needs > 0 ? <>{needs} plants would love a drink.</> : <>Everything looks happy today.</>}
             </div>
           </div>
-          <div onClick={onAdd} style={{ flexShrink:0, width:38, height:38, borderRadius:999, background:'#fff', border:'0.5px solid rgba(45,80,22,0.1)', boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+          <div onClick={onAdd} style={{ flexShrink:0, width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <IconPlus/>
           </div>
         </div>
@@ -433,16 +433,45 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, installPrompt, onInstall, darkMode, onToggleDark }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark }) {
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
-  const [syncKey, setSyncKey] = useState(gardenKey || '');
-  const [syncSaved, setSyncSaved] = useState(false);
   const sp = isDesktop ? 28 : 18;
-  const saveSyncKey = () => {
-    onSetGardenKey(syncKey.trim());
-    setSyncSaved(true);
-    setTimeout(() => setSyncSaved(false), 1800);
+
+  const [renaming, setRenaming] = useState(false);
+  const [renameKey, setRenameKey] = useState('');
+  const [renameStatus, setRenameStatus] = useState('idle'); // idle|checking|available|taken|saving|done|error
+  const [joining, setJoining] = useState(false);
+  const [joinKey, setJoinKey] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const copyKey = () => {
+    navigator.clipboard.writeText(gardenKey).catch(()=>{});
+    setCopied(true); setTimeout(() => setCopied(false), 1500);
+  };
+
+  const checkRename = async () => {
+    const k = renameKey.trim();
+    if (!k || k === gardenKey) return;
+    setRenameStatus('checking');
+    const exists = await gardenExists(k);
+    setRenameStatus(exists ? 'taken' : 'available');
+  };
+
+  const doRename = async () => {
+    const k = renameKey.trim();
+    if (!k || k === gardenKey) return;
+    setRenameStatus('saving');
+    const ok = await onRenameGardenKey(k);
+    setRenameStatus(ok ? 'done' : 'error');
+    if (ok) setTimeout(() => { setRenaming(false); setRenameKey(''); setRenameStatus('idle'); }, 1200);
+  };
+
+  const doJoin = () => {
+    const k = joinKey.trim();
+    if (!k) return;
+    onSetGardenKey(k);
+    setJoining(false); setJoinKey('');
   };
   const Row = ({ label, value, last }) => (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom: last?'none':C.hair }}>
@@ -506,7 +535,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, installP
             <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5, marginBottom:11 }}>Add a Perenual API key to pull live species photos &amp; care data. Without one, Caulis uses its built-in library.</div>
             <div style={{ display:'flex', gap:8 }}>
               <input value={key} onChange={e=>setKey(e.target.value)} placeholder="perenual API key"
-                style={{ flex:1, boxSizing:'border-box', height:44, borderRadius:12, border:'1px solid rgba(45,80,22,0.14)', background:C.bg, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                style={{ flex:1, boxSizing:'border-box', height:44, borderRadius:12, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
               <div onClick={()=>{ setApiKey(key.trim()); setSaved(true); setTimeout(()=>setSaved(false),1800); }} style={{ flexShrink:0, padding:'0 16px', height:44, borderRadius:12, background: saved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                 {saved && <IconCheck s={14}/>}
                 <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{saved?'Saved':'Save'}</span>
@@ -541,28 +570,62 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, installP
         )}
         <div>
           <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Cloud sync</div>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px' }}>
-            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5, marginBottom:11 }}>
-              {FIREBASE_READY
-                ? 'Set a garden key to sync your plants across devices. Use the same key on every device.'
-                : 'Firebase is not configured. Fill in FIREBASE_CONFIG in caulis-firebase.jsx to enable sync.'}
-            </div>
-            {FIREBASE_READY && (
-              <>
+          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+            {!FIREBASE_READY && (
+              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Firebase not configured. Fill in FIREBASE_CONFIG in caulis-firebase.jsx.</div>
+            )}
+            {FIREBASE_READY && (<>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ flex:1, fontFamily:'ui-monospace,Menlo,monospace', fontSize:13, color:C.forest, background:C.input, borderRadius:10, padding:'9px 12px', border:C.hair, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{gardenKey}</div>
+                <div onClick={copyKey} style={{ flexShrink:0, padding:'0 14px', height:38, borderRadius:10, background: copied ? C.sage : 'rgba(45,80,22,0.1)', color: copied ? '#fff' : C.forest, display:'flex', alignItems:'center', gap:5, cursor:'pointer', transition:'all 160ms', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600 }}>
+                  {copied && <IconCheck s={13} c="#fff"/>}{copied ? 'Copied' : 'Copy'}
+                </div>
+              </div>
+              {!renaming && !joining && (
                 <div style={{ display:'flex', gap:8 }}>
-                  <input value={syncKey} onChange={e=>setSyncKey(e.target.value)} placeholder="e.g. my-garden-2025"
-                    style={{ flex:1, boxSizing:'border-box', height:44, borderRadius:12, border:'1px solid rgba(45,80,22,0.14)', background:C.bg, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-                  <div onClick={saveSyncKey} style={{ flexShrink:0, padding:'0 16px', height:44, borderRadius:12, background: syncSaved ? C.sage : C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
-                    {syncSaved && <IconCheck s={14}/>}
-                    <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{syncSaved ? 'Saved' : 'Save'}</span>
+                  <div onClick={()=>{ setRenaming(true); setRenameKey(''); setRenameStatus('idle'); }} style={{ flex:1, height:38, borderRadius:10, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Rename</div>
+                  <div onClick={()=>{ setJoining(true); setJoinKey(''); }} style={{ flex:1, height:38, borderRadius:10, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join garden</div>
+                </div>
+              )}
+              {renaming && (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>Rename keeps your current plants under a new key.</div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <input value={renameKey} onChange={e=>{ setRenameKey(e.target.value); setRenameStatus('idle'); }} onKeyDown={e=>{ if(e.key==='Enter') checkRename(); }} placeholder="new-garden-name"
+                      style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                    <div onClick={checkRename} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:10, background:'rgba(45,80,22,0.1)', color:C.forest, display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Check</div>
+                  </div>
+                  {renameStatus==='checking' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>Checking…</div>}
+                  {renameStatus==='available' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#6E9A3E' }}>✓ Available — safe to rename</div>}
+                  {renameStatus==='taken' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>⚠ Key already has a garden. Renaming will overwrite it.</div>}
+                  {renameStatus==='error' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Something went wrong. Try again.</div>}
+                  {renameStatus==='done' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#6E9A3E' }}>✓ Renamed successfully</div>}
+                  <div style={{ display:'flex', gap:8 }}>
+                    <div onClick={()=>{ setRenaming(false); setRenameKey(''); setRenameStatus('idle'); }} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
+                    {(renameStatus==='available'||renameStatus==='taken') && (
+                      <div onClick={doRename} style={{ flex:2, height:38, borderRadius:10, background:renameStatus==='taken'?'#B4472E':C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>
+                        {renameStatus==='saving'?'Saving…':renameStatus==='taken'?'Overwrite & rename':'Rename'}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:11 }}>
-                  <span style={{ width:7, height:7, borderRadius:999, background: gardenKey ? C.sage : C.brown, opacity: gardenKey ? 1 : 0.4 }}/>
-                  <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>{gardenKey ? `Syncing — garden "${gardenKey}"` : 'Not syncing'}</span>
+              )}
+              {joining && (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>Enter a key to load that garden. Your current plants will be replaced.</div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <input value={joinKey} onChange={e=>setJoinKey(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') doJoin(); }} placeholder="other-garden-key"
+                      style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                    <div onClick={doJoin} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join</div>
+                  </div>
+                  <div onClick={()=>{ setJoining(false); setJoinKey(''); }} style={{ height:36, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
                 </div>
-              </>
-            )}
+              )}
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ width:7, height:7, borderRadius:999, background:C.sage, flexShrink:0 }}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>Syncing — {gardenKey}</span>
+              </div>
+            </>)}
           </div>
         </div>
         <div style={{ textAlign:'center', fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.brown, opacity:0.5, marginTop:4 }}>Caulis · grown with care</div>
@@ -654,11 +717,31 @@ function MoveSheet({ plant, locations, onClose, onPick, onAddLocation, isDesktop
         </div>
         <div style={{ display:'flex', gap:8, marginTop:12 }}>
           <input value={typed} onChange={e=>setTyped(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); addNew(); } }} placeholder="New room…"
-            style={{ flex:1, boxSizing:'border-box', height:46, borderRadius:14, border:'1px solid rgba(45,80,22,0.14)', background:C.panel, padding:'0 15px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
+            style={{ flex:1, boxSizing:'border-box', height:46, borderRadius:14, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 15px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
           <div onClick={addNew} style={{ flexShrink:0, width:46, height:46, borderRadius:14, background: typed.trim()?C.forest:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <IconPlus s={16} c={typed.trim()?'#fff':C.forest}/>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  ERROR SCREENS
+// ════════════════════════════════════════════════════════════
+function PlantNotFoundScreen({ onBack }) {
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:50, background:C.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:32, animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
+      <Sprig opacity={0.14}/>
+      <div style={{ width:96, height:96, borderRadius:999, background:'rgba(180,71,46,0.1)', border:'1px dashed rgba(180,71,46,0.3)', display:'flex', alignItems:'center', justifyContent:'center', position:'relative', zIndex:2 }}>
+        <LeafOutline size={44} color='#B4472E' sw={1.2}/>
+      </div>
+      <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:28, color:C.forest, marginTop:24, textAlign:'center', position:'relative', zIndex:2 }}>Plant not found</div>
+      <div style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink, opacity:0.55, marginTop:8, lineHeight:1.6, textAlign:'center', maxWidth:260, position:'relative', zIndex:2 }}>This QR code points to a plant that doesn't exist in your garden.</div>
+      <div onClick={onBack} style={{ marginTop:28, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:9, background:C.forest, color:'#fff', borderRadius:16, padding:'14px 24px', boxShadow:'0 6px 16px rgba(45,80,22,0.24)', position:'relative', zIndex:2 }}>
+        <IconBack s={17} c="#fff"/>
+        <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600 }}>Back to garden</span>
       </div>
     </div>
   );
@@ -750,5 +833,5 @@ function DesktopModal({ onClose, children, maxWidth = 520 }) {
 Object.assign(window, {
   PlantCard, ScreenHead, GardenScreen, NeedsWaterScreen, ScannerScreen,
   PrintQueueScreen, SettingsScreen, BottomNav, MoveSheet, ContextMenu,
-  DesktopSidebar, DesktopModal,
+  DesktopSidebar, DesktopModal, PlantNotFoundScreen,
 });

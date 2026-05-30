@@ -50,4 +50,18 @@ function pushGarden(key, data) {
   if (ref) ref.set(data);
 }
 
-Object.assign(window, { listenGarden, pushGarden, FIREBASE_READY });
+async function gardenExists(key) {
+  const ref = gardenRef(key);
+  if (!ref) return false;
+  try { const snap = await ref.once('value'); return snap.exists(); } catch(e) { return false; }
+}
+
+async function renameGarden(oldKey, newKey, data) {
+  const nr = gardenRef(newKey), or = gardenRef(oldKey);
+  if (!nr || !or) return false;
+  await nr.set(data);
+  await or.remove();
+  return true;
+}
+
+Object.assign(window, { listenGarden, pushGarden, gardenExists, renameGarden, FIREBASE_READY });

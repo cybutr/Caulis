@@ -39,8 +39,8 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
       <div style={{ flex:1, overflowY:'auto', position:'relative' }}>
         <Sprig opacity={0.12}/>
         {/* top bar */}
-        <div style={{ position:'sticky', top:0, zIndex:5, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'52px 18px 10px', background:'linear-gradient(180deg, rgba(250,250,247,0.96) 60%, rgba(250,250,247,0))' }}>
-          <div onClick={onBack} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:'#fff', border:'0.5px solid rgba(45,80,22,0.1)', boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ position:'sticky', top:0, zIndex:5, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'52px 18px 10px', background:`linear-gradient(180deg, ${C.bg}F5 60%, ${C.bg}00)` }}>
+          <div onClick={onBack} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <IconBack/>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -50,7 +50,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 <span style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>Scanned</span>
               </div>
             )}
-            <div onClick={()=>onEdit(plant)} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:'#fff', border:'0.5px solid rgba(45,80,22,0.1)', boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div onClick={()=>onEdit(plant)} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
               <svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M13 3.5l3.5 3.5L7 16.5H3.5V13L13 3.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round"/></svg>
             </div>
           </div>
@@ -154,10 +154,10 @@ function Field({ label, children }) {
     </div>
   );
 }
-const inputStyle = {
-  width:'100%', boxSizing:'border-box', height:48, borderRadius:14, border:'1px solid rgba(45,80,22,0.14)',
-  background:C.panel, padding:'0 15px', fontFamily:FONT_SANS, fontSize:15, color:C.ink, outline:'none',
-};
+const inputStyle = () => ({
+  width:'100%', boxSizing:'border-box', height:48, borderRadius:14, border:C.hair,
+  background:C.input, padding:'0 15px', fontFamily:FONT_SANS, fontSize:15, color:C.ink, outline:'none',
+});
 
 // the plant identifier returns a Perenual species record (see caulis-perenual.jsx)
 function CameraIcon({ s = 20, c = C.forest }) {
@@ -253,7 +253,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
       <div style={{ flex:1, overflowY:'auto', position:'relative' }}>
         <Sprig opacity={0.1}/>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'52px 18px 6px', position:'relative', zIndex:2 }}>
-          <div onClick={onBack} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:'#fff', border:'0.5px solid rgba(45,80,22,0.1)', boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div onClick={onBack} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <IconBack/>
           </div>
           <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest, whiteSpace:'nowrap' }}>{editing ? 'Edit plant' : 'New plant'}</span>
@@ -267,7 +267,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
               caption={identifying ? '' : (hasPhoto ? '' : 'tap to add a photo')}/>
             <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display:'none' }}/>
             {!identifying && (
-              <div style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:999, background:'rgba(250,250,247,0.92)', border:'0.5px solid rgba(45,80,22,0.12)', boxShadow:'0 2px 8px rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <div style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <CameraIcon s={19}/>
               </div>
             )}
@@ -294,7 +294,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
           </div>
 
           <Field label="Common name">
-            <input value={name} onChange={e=>onNameChange(e.target.value)} placeholder="e.g. Monstera" style={inputStyle}/>
+            <input value={name} onChange={e=>onNameChange(e.target.value)} placeholder="e.g. Monstera" style={inputStyle()}/>
             {suggestions.length > 0 && (
               <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:4 }}>
                 {suggestions.map(p => (
@@ -323,7 +323,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
             )}
           </Field>
           <Field label="Latin name">
-            <input value={latin} onChange={e=>setLatin(e.target.value)} placeholder="e.g. Monstera deliciosa" style={{ ...inputStyle, fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:16 }}/>
+            <input value={latin} onChange={e=>setLatin(e.target.value)} placeholder="e.g. Monstera deliciosa" style={{ ...inputStyle(), fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:16 }}/>
           </Field>
 
           {/* location tag input */}
@@ -333,7 +333,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
                 value={typed} onChange={e=>setTyped(e.target.value)}
                 onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); commitTyped(); } }}
                 placeholder={loc ? '' : 'Type a room or spot…'}
-                style={{ ...inputStyle, flex:1 }}/>
+                style={{ ...inputStyle(), flex:1 }}/>
               <div onClick={commitTyped} style={{ flexShrink:0, width:48, height:48, borderRadius:14, background: typed.trim()?C.forest:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'background 160ms' }}>
                 <IconPlus s={17} c={typed.trim()?'#fff':C.forest}/>
               </div>
@@ -376,7 +376,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
       </div>
 
       {/* save bar */}
-      <div style={{ flexShrink:0, padding:'12px 18px 26px', borderTop:'0.5px solid rgba(45,80,22,0.1)', background:'rgba(250,250,247,0.92)', backdropFilter:'blur(14px)' }}>
+      <div style={{ flexShrink:0, padding:'12px 18px 26px', borderTop:'0.5px solid rgba(45,80,22,0.1)', background:C.bg+'F2', backdropFilter:'blur(14px)' }}>
         <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, userImage:userPhoto }) : undefined}
           style={{
             height:52, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
