@@ -24,6 +24,17 @@ const C = {
   line:   'rgba(45,80,22,0.08)',
   hair:   '0.5px solid rgba(45,80,22,0.08)',
 };
+const C_LIGHT = { ...C };
+const C_DARK = {
+  bg:     '#111610',
+  panel:  '#192115',
+  forest: '#7EC870',
+  sage:   '#A0C876',
+  brown:  '#C4A882',
+  ink:    '#DCE8CC',
+  line:   'rgba(255,255,255,0.07)',
+  hair:   '0.5px solid rgba(255,255,255,0.08)',
+};
 
 const FONT_SERIF = '"Cormorant Garamond", serif';
 const FONT_SANS  = '"DM Sans", sans-serif';
@@ -32,10 +43,27 @@ const FONT_SANS  = '"DM Sans", sans-serif';
 function qrUrl(data, size = 240) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=0&qzone=1&color=2D5016&bgcolor=FAFAF7&data=${encodeURIComponent(data)}`;
 }
-const PLANT_QR_URL = id => `https://cybutr.github.io/Caulis/?plant=${id}`;
+const PLANT_QR_URL = id => {
+  let g = '';
+  try { g = localStorage.getItem('caulis_garden_key') || ''; } catch(e) {}
+  return `https://cybutr.github.io/Caulis/?plant=${id}${g ? '&g='+encodeURIComponent(g) : ''}`;
+};
 
 // soft specimen tints ---------------------------------------
-const TINTS = ['#E7EDDE','#EEEAE0','#E3EAD6','#ECE7DC','#E9EEE2','#EDE9DF','#E6ECE0','#EFE9DE'];
+const TINTS_LIGHT = ['#E7EDDE','#EEEAE0','#E3EAD6','#ECE7DC','#E9EEE2','#EDE9DF','#E6ECE0','#EFE9DE'];
+const TINTS_DARK  = ['#1A2416','#201C12','#182210','#1E1C14','#1A2014','#201E14','#182016','#201A12'];
+const TINTS = [...TINTS_LIGHT];
+
+function applyTheme(dark) {
+  const src = dark ? C_DARK : C_LIGHT;
+  Object.assign(C, src);
+  const ss = dark ? STATUS_DARK : STATUS_LIGHT;
+  Object.assign(STATUS.ok, ss.ok);
+  Object.assign(STATUS.soon, ss.soon);
+  Object.assign(STATUS.needs, ss.needs);
+  const ts = dark ? TINTS_DARK : TINTS_LIGHT;
+  ts.forEach((t, i) => { TINTS[i] = t; });
+}
 
 // ── status from days-since vs interval ────────────────────
 function statusOf(days, every) {
@@ -44,10 +72,20 @@ function statusOf(days, every) {
   if (r >= 0.7) return 'soon';
   return 'ok';
 }
-const STATUS = {
+const STATUS_LIGHT = {
   ok:    { dot: '#6E9A3E', ring: 'rgba(110,154,62,0.18)', soft: 'rgba(110,154,62,0.12)', label: 'Healthy' },
   soon:  { dot: '#C98A2B', ring: 'rgba(201,138,43,0.18)', soft: 'rgba(201,138,43,0.12)', label: 'Water soon' },
   needs: { dot: '#B4472E', ring: 'rgba(180,71,46,0.18)',  soft: 'rgba(180,71,46,0.12)',  label: 'Needs water' },
+};
+const STATUS_DARK = {
+  ok:    { dot: '#72C050', ring: 'rgba(114,192,80,0.22)', soft: 'rgba(114,192,80,0.16)', label: 'Healthy' },
+  soon:  { dot: '#D4962E', ring: 'rgba(212,150,46,0.22)', soft: 'rgba(212,150,46,0.16)', label: 'Water soon' },
+  needs: { dot: '#D45840', ring: 'rgba(212,88,64,0.22)',  soft: 'rgba(212,88,64,0.16)',  label: 'Needs water' },
+};
+const STATUS = {
+  ok:    { ...STATUS_LIGHT.ok },
+  soon:  { ...STATUS_LIGHT.soon },
+  needs: { ...STATUS_LIGHT.needs },
 };
 
 function agoLabel(days) {
@@ -246,5 +284,5 @@ Object.assign(window, {
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
-  useWindowWidth, DESKTOP_BP, PLANT_QR_URL,
+  useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme,
 });

@@ -16,8 +16,25 @@ function App() {
   const [queue, setQueue]         = useState([]);
   const [printed, setPrinted]     = useState(false);
   const [gardenKey, setGardenKeyState] = useState(() => {
-    try { return localStorage.getItem('caulis_garden_key') || ''; } catch(e) { return ''; }
+    try {
+      const g = new URLSearchParams(window.location.search).get('g');
+      if (g) localStorage.setItem('caulis_garden_key', g);
+      return localStorage.getItem('caulis_garden_key') || '';
+    } catch(e) { return ''; }
   });
+
+  const [darkMode, setDarkModeState] = useState(() => {
+    try { return localStorage.getItem('caulis_dark') === '1'; } catch(e) { return false; }
+  });
+  const setDarkMode = (v) => {
+    try { localStorage.setItem('caulis_dark', v ? '1' : '0'); } catch(e) {}
+    setDarkModeState(v);
+  };
+  applyTheme(darkMode);
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.content = darkMode ? '#111610' : '#2D5016';
+  }, [darkMode]);
 
   const fromRemoteRef = useRef(false);
   const [installPrompt, setInstallPrompt] = useState(null);
@@ -79,7 +96,54 @@ function App() {
 
   const toggleQueue = (id) => { setQueue(q => q.includes(id) ? q.filter(x => x !== id) : [...q, id]); setPrinted(false); };
   const removeQueue = (id) => setQueue(q => q.filter(x => x !== id));
-  const printAll = () => { setPrinted(true); setTimeout(() => setPrinted(false), 2600); };
+  const printAll = () => {
+    const items = queue.map(id => plants.find(p => p.id === id)).filter(Boolean);
+    if (!items.length) return;
+    const labels = items.map(p => `
+      <div class="wrap">
+        <div class="label">
+          <div class="mark tl"></div><div class="mark tr"></div>
+          <div class="mark bl"></div><div class="mark br"></div>
+          <img src="${qrUrl(PLANT_QR_URL(p.id), 220)}" alt=""/>
+          <div class="name">${p.name}</div>
+          <div class="latin">${p.latin}</div>
+          <div class="brand">Caulis</div>
+        </div>
+      </div>`).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Caulis labels</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.labels{display:flex;flex-wrap:wrap;padding:8mm;gap:0}
+.wrap{width:48mm;height:48mm;display:flex;align-items:center;justify-content:center;break-inside:avoid}
+.label{width:40mm;height:40mm;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;border:0.6px solid #2D5016;border-radius:2.5mm;padding:1.5mm;background:#FAFAF7}
+.mark{position:absolute;width:3.5mm;height:3.5mm}
+.mark::before,.mark::after{content:'';position:absolute;background:#999}
+.mark::before{width:100%;height:0.3px;top:0;left:0}
+.mark::after{width:0.3px;height:100%;top:0;left:0}
+.tl{top:-3mm;left:-3mm}.tr{top:-3mm;right:-3mm;transform:scaleX(-1)}.bl{bottom:-3mm;left:-3mm;transform:scaleY(-1)}.br{bottom:-3mm;right:-3mm;transform:scale(-1)}
+.label img{width:26mm;height:26mm;display:block}
+.name{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;font-size:7pt;color:#2D5016;margin-top:0.8mm;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:36mm}
+.latin{font-family:'DM Sans',sans-serif;font-size:4pt;color:#6B4C2A;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:36mm;margin-top:0.4mm;font-style:italic}
+.brand{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:4pt;color:#2D5016;opacity:0.45;margin-top:0.6mm}
+@media print{body{margin:0}.labels{padding:6mm}}
+</style></head><body>
+<div class="labels">${labels}</div>
+<script>
+window.onload=()=>{
+  const imgs=document.querySelectorAll('img');
+  let n=0,t=imgs.length;
+  const go=()=>{if(++n>=t){window.print();setTimeout(()=>window.close(),500)}};
+  if(!t){window.print();setTimeout(()=>window.close(),500);return}
+  imgs.forEach(img=>{if(img.complete)go();else{img.onload=go;img.onerror=go}});
+};
+</script></body></html>`;
+    const win = window.open('', '_blank');
+    if (win) { win.document.write(html); win.document.close(); }
+    setPrinted(true);
+    setTimeout(() => setPrinted(false), 2600);
+  };
 
   const addLocation = (v) => setLocations(ls => ls.includes(v) ? ls : [...ls, v]);
 
@@ -129,6 +193,7 @@ function App() {
       onToggleQueue={toggleQueue}
       onGoQueue={()=>{ closeDetail(); setTab('print'); }}
       onEdit={p=>{ closeDetail(); setForm({mode:'edit', plant:p}); }}
+      isDesktop={isDesktop}
     />
   );
 
@@ -147,7 +212,7 @@ function App() {
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} onScan={id=>openDetail(id, true)} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} onSetGardenKey={setGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} onSetGardenKey={setGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
@@ -189,28 +254,24 @@ function App() {
   //  MOBILE LAYOUT
   // ════════════════════════════════════════
   return (
-    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#ECEAE3', padding:'28px 0' }}>
-      <IOSDevice>
-        <div style={{ position:'relative', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden' }}>
-          <div style={{ flex:1, overflowY:'auto', position:'relative' }}>
-            {screen}
-          </div>
-          <BottomNav tab={tab} setTab={setTab}/>
+    <div style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', background:C.bg, overflow:'hidden' }}>
+      <div style={{ flex:1, overflowY:'auto', position:'relative', WebkitOverflowScrolling:'touch' }}>
+        {screen}
+      </div>
+      <BottomNav tab={tab} setTab={setTab}/>
 
-          {detailPlant && detailEl}
-          {form && formEl}
-          {moving && (
-            <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={addLocation}/>
-          )}
-          {menuPlant && (
-            <ContextMenu
-              plant={menuPlant} onClose={()=>setMenuPlant(null)}
-              onEdit={p=>setForm({mode:'edit', plant:p})}
-              onMove={p=>setMoveTarget(p)}
-              onRemove={removePlant}/>
-          )}
-        </div>
-      </IOSDevice>
+      {detailPlant && detailEl}
+      {form && formEl}
+      {moving && (
+        <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={addLocation}/>
+      )}
+      {menuPlant && (
+        <ContextMenu
+          plant={menuPlant} onClose={()=>setMenuPlant(null)}
+          onEdit={p=>setForm({mode:'edit', plant:p})}
+          onMove={p=>setMoveTarget(p)}
+          onRemove={removePlant}/>
+      )}
     </div>
   );
 }

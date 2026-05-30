@@ -111,7 +111,7 @@ function ContextMenu({ plant, onClose, onEdit, onMove, onRemove, isDesktop }) {
     </div>
   );
   return (
-    <div onClick={onClose} style={{ position: isDesktop ? 'fixed' : 'absolute', inset:0, zIndex:35, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:35, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
       <div onClick={e=>e.stopPropagation()} style={{ margin:'0 12px 12px', background:C.bg, borderRadius:24, overflow:'hidden', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', boxShadow:'0 -4px 30px rgba(0,0,0,0.12)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, padding:'15px 16px 13px' }}>
           <Leaf size={17} color={C.forest}/>
@@ -433,7 +433,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, installPrompt, onInstall }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, installPrompt, onInstall, darkMode, onToggleDark }) {
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [syncKey, setSyncKey] = useState(gardenKey || '');
@@ -460,6 +460,20 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, installP
       <Sprig opacity={0.14}/>
       <ScreenHead eyebrow="Preferences" title="Settings" isDesktop={isDesktop}/>
       <div style={{ padding:`22px ${sp}px 0`, position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? 680 : undefined }}>
+        <div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Appearance</div>
+          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+            <div onClick={onToggleDark} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Dark mode</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, marginTop:1 }}>Botanical night theme</div>
+              </div>
+              <div style={{ width:44, height:26, borderRadius:999, background:darkMode?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
+                <div style={{ position:'absolute', top:3, left:darkMode?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
+              </div>
+            </div>
+          </div>
+        </div>
         <div>
           <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Garden</div>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
@@ -618,7 +632,7 @@ function MoveSheet({ plant, locations, onClose, onPick, onAddLocation, isDesktop
     onPick(plant.id, v); onClose();
   };
   return (
-    <div onClick={onClose} style={{ position: isDesktop ? 'fixed' : 'absolute', inset:0, zIndex:36, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:36, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
       <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:26, borderTopRightRadius:26, padding:'10px 18px 30px', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'80%', overflowY:'auto' }}>
         <div style={{ width:38, height:4, borderRadius:999, background:'rgba(45,80,22,0.16)', margin:'0 auto 14px' }}/>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, color:C.forest, textAlign:'center' }}>Move {plant.name}</div>

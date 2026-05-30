@@ -18,7 +18,7 @@ function InfoTile({ icon, label, children, accent = C.forest }) {
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
-function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit }) {
+function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, isDesktop }) {
   const [justWatered, setJustWatered] = useState(false);
   const prevRef = useRef(null);
   const status = statusOf(plant.days, plant.every);
@@ -34,7 +34,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
   };
 
   return (
-    <div style={{ position:'absolute', inset:0, zIndex:40, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
+    <div style={{ position: isDesktop ? 'absolute' : 'fixed', inset:0, zIndex:40, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
       {/* scrollable body */}
       <div style={{ flex:1, overflowY:'auto', position:'relative' }}>
         <Sprig opacity={0.12}/>
@@ -249,7 +249,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   };
 
   return (
-    <div style={{ position:'absolute', inset:0, zIndex:45, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
+    <div style={{ position: isDesktop ? 'absolute' : 'fixed', inset:0, zIndex:45, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
       <div style={{ flex:1, overflowY:'auto', position:'relative' }}>
         <Sprig opacity={0.1}/>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'52px 18px 6px', position:'relative', zIndex:2 }}>
