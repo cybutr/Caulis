@@ -270,45 +270,104 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, isDesktop }) {
 // ════════════════════════════════════════════════════════════
 //  QR SCANNER (primary action)
 // ════════════════════════════════════════════════════════════
-function ScannerScreen({ plants, onScan, isDesktop }) {
-  const target = plants.find(p=>statusOf(p.days,p.every)==='needs') || plants[0];
+function Viewfinder() {
   return (
-    <div style={{ height: isDesktop ? '100vh' : '100%', position:'relative', background:'#20301A', overflow:'hidden' }}>
-      {/* faux camera feed */}
-      <div style={{ position:'absolute', inset:0, background:'radial-gradient(120% 90% at 50% 35%, #2E4322 0%, #1B2814 70%, #141E0F 100%)' }}/>
-      <div style={{ position:'absolute', inset:0, opacity:0.5, backgroundImage:'repeating-linear-gradient(135deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 7px)' }}/>
-      <Leaf size={150} color="#fff" opacity={0.04}/>
-      <div style={{ position:'absolute', top:'12%', left:'70%', opacity:0.4 }}><LeafOutline size={84} color="#fff" sw={1}/></div>
+    <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:212, height:212, zIndex:3 }}>
+      {[['top','left'],['top','right'],['bottom','left'],['bottom','right']].map(([v,h],i)=>(
+        <div key={i} style={{
+          position:'absolute', [v]:0, [h]:0, width:40, height:40,
+          [`border${v[0].toUpperCase()+v.slice(1)}`]:`3px solid rgba(255,255,255,0.92)`,
+          [`border${h[0].toUpperCase()+h.slice(1)}`]:`3px solid rgba(255,255,255,0.92)`,
+          [`border${v==='top'?'TopLeftRadius':'BottomLeftRadius'}`]: h==='left'?14:0,
+          [`border${v==='top'?'TopRightRadius':'BottomRightRadius'}`]: h==='right'?14:0,
+        }}/>
+      ))}
+      <div style={{ position:'absolute', left:6, right:6, height:2, borderRadius:2, background:'rgba(170,210,120,0.9)', boxShadow:'0 0 14px rgba(170,210,120,0.8)', animation:'scanline 2.4s ease-in-out infinite' }}/>
+    </div>
+  );
+}
 
-      {/* top label */}
-      <div style={{ position:'absolute', top:62, left:0, right:0, textAlign:'center', zIndex:3 }}>
-        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:24, color:'#fff', letterSpacing:0.3 }}>Scan a plant tag</div>
-        <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:'rgba(255,255,255,0.72)', marginTop:3 }}>Point the camera at a Caulis QR code</div>
-      </div>
+function ScannerScreen({ plants, onScan, isDesktop }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const rafRef = useRef(null);
+  const [camError, setCamError] = useState(null);
+  const [scanning, setScanning] = useState(false);
+  const target = plants.find(p=>statusOf(p.days,p.every)==='needs') || plants[0];
 
-      {/* viewfinder */}
-      <div style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:212, height:212, zIndex:3 }}>
-        {[['top','left'],['top','right'],['bottom','left'],['bottom','right']].map(([v,h],i)=>(
-          <div key={i} style={{
-            position:'absolute', [v]:0, [h]:0, width:40, height:40,
-            [`border${v[0].toUpperCase()+v.slice(1)}`]:`3px solid rgba(255,255,255,0.92)`,
-            [`border${h[0].toUpperCase()+h.slice(1)}`]:`3px solid rgba(255,255,255,0.92)`,
-            [`border${v==='top'?'TopLeftRadius':'BottomLeftRadius'}`]: h==='left'?14:0,
-            [`border${v==='top'?'TopRightRadius':'BottomRightRadius'}`]: h==='right'?14:0,
-          }}/>
-        ))}
-        <div style={{ position:'absolute', left:6, right:6, height:2, borderRadius:2, background:'rgba(170,210,120,0.9)', boxShadow:'0 0 14px rgba(170,210,120,0.8)', animation:'scanline 2.4s ease-in-out infinite' }}/>
-      </div>
+  useEffect(() => {
+    if (isDesktop) return;
+    let stream = null;
 
-      {/* shutter / simulate */}
-      <div style={{ position:'absolute', bottom:34, left:0, right:0, display:'flex', flexDirection:'column', alignItems:'center', gap:14, zIndex:3 }}>
-        <div onClick={()=>onScan(target.id)} style={{ cursor:'pointer', width:74, height:74, borderRadius:999, background:'rgba(255,255,255,0.16)', border:'2px solid rgba(255,255,255,0.85)', display:'flex', alignItems:'center', justifyContent:'center', backdropFilter:'blur(4px)' }}>
-          <div style={{ width:58, height:58, borderRadius:999, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <IconScan s={28} c={C.forest}/>
-          </div>
+    const tick = () => {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width  = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (typeof jsQR !== 'undefined') {
+          const code = jsQR(img.data, img.width, img.height);
+          if (code) {
+            const m = code.data.match(/[?&]plant=(\d+)/) || code.data.match(/caulis:\/\/plant\/(\d+)/);
+            if (m) { onScan(parseInt(m[1], 10)); return; }
+          }
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } })
+      .then(s => {
+        stream = s;
+        if (videoRef.current) { videoRef.current.srcObject = s; videoRef.current.play(); }
+        setScanning(true);
+        rafRef.current = requestAnimationFrame(tick);
+      })
+      .catch(() => setCamError('Camera access denied'));
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    };
+  }, [isDesktop]);
+
+  if (isDesktop) {
+    return (
+      <div style={{ height:'100vh', position:'relative', background:'#20301A', overflow:'hidden' }}>
+        <div style={{ position:'absolute', inset:0, background:'radial-gradient(120% 90% at 50% 35%, #2E4322 0%, #1B2814 70%, #141E0F 100%)' }}/>
+        <div style={{ position:'absolute', inset:0, opacity:0.5, backgroundImage:'repeating-linear-gradient(135deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 7px)' }}/>
+        <Leaf size={150} color="#fff" opacity={0.04}/>
+        <div style={{ position:'absolute', top:62, left:0, right:0, textAlign:'center', zIndex:3 }}>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:24, color:'#fff' }}>Scan a plant tag</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:'rgba(255,255,255,0.72)', marginTop:3 }}>Use your phone to scan — or simulate below</div>
         </div>
-        <div style={{ fontFamily:FONT_SANS, fontSize:11, color:'rgba(255,255,255,0.6)', letterSpacing:0.3 }}>Tap to simulate a scan</div>
+        <Viewfinder/>
+        <div style={{ position:'absolute', bottom:34, left:0, right:0, display:'flex', flexDirection:'column', alignItems:'center', gap:14, zIndex:3 }}>
+          {target && <div onClick={()=>onScan(target.id)} style={{ cursor:'pointer', width:74, height:74, borderRadius:999, background:'rgba(255,255,255,0.16)', border:'2px solid rgba(255,255,255,0.85)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div style={{ width:58, height:58, borderRadius:999, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center' }}><IconScan s={28} c={C.forest}/></div>
+          </div>}
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, color:'rgba(255,255,255,0.6)', letterSpacing:0.3 }}>Tap to simulate a scan</div>
+        </div>
       </div>
+    );
+  }
+
+  return (
+    <div style={{ height:'100%', position:'relative', background:'#111', overflow:'hidden' }}>
+      <video ref={videoRef} playsInline muted style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
+      <canvas ref={canvasRef} style={{ display:'none' }}/>
+      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.35)' }}/>
+      <div style={{ position:'absolute', top:62, left:0, right:0, textAlign:'center', zIndex:3 }}>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:24, color:'#fff' }}>Scan a plant tag</div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:'rgba(255,255,255,0.72)', marginTop:3 }}>
+          {camError || (scanning ? 'Point at a Caulis QR code' : 'Starting camera…')}
+        </div>
+      </div>
+      <Viewfinder/>
     </div>
   );
 }
@@ -321,7 +380,7 @@ function QueueRow({ plant, onOpen, onRemove }) {
     <div style={{ display:'flex', alignItems:'center', gap:12, background:C.panel, borderRadius:18, padding:12, border:'0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)' }}>
       <div style={{ width:48, height:48, flexShrink:0 }}><Specimen tint={TINTS[(plant.id-1)%TINTS.length]} height={48} radius={11} leafSize={22} image={plant.userImage || plant.image}/></div>
       <div style={{ width:50, height:50, borderRadius:11, background:C.bg, border:C.hair, padding:5, flexShrink:0 }}>
-        <img src={qrUrl('caulis://plant/'+plant.id, 120)} alt="QR" style={{ width:'100%', height:'100%', display:'block' }}/>
+        <img src={qrUrl(PLANT_QR_URL(plant.id), 120)} alt="QR" style={{ width:'100%', height:'100%', display:'block' }}/>
       </div>
       <div onClick={()=>onOpen(plant.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest, lineHeight:1.05, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{plant.name}</div>

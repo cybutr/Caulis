@@ -107,7 +107,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
           <div style={{ marginTop:18, marginBottom:24, background:C.panel, borderRadius:20, border:C.hair, padding:'20px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)', display:'flex', flexDirection:'column', alignItems:'center' }}>
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>Plant tag</div>
             <div style={{ width:148, height:148, marginTop:14, padding:10, background:C.bg, borderRadius:14, border:C.hair }}>
-              <img src={qrUrl('caulis://plant/'+plant.id, 220)} alt="QR code" style={{ width:'100%', height:'100%', display:'block' }}/>
+              <img src={qrUrl(PLANT_QR_URL(plant.id), 220)} alt="QR code" style={{ width:'100%', height:'100%', display:'block' }}/>
             </div>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest, marginTop:12 }}>Scan to open {plant.name}</div>
             <div onClick={()=>onToggleQueue(plant.id)} style={{

@@ -21,6 +21,13 @@ function App() {
 
   const fromRemoteRef = useRef(false);
   const [installPrompt, setInstallPrompt] = useState(null);
+  const [pendingPlantId] = useState(() => {
+    try {
+      const id = parseInt(new URLSearchParams(window.location.search).get('plant'), 10);
+      if (!isNaN(id)) { window.history.replaceState({}, '', window.location.pathname); return id; }
+    } catch(e) {}
+    return null;
+  });
 
   useEffect(() => {
     const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
@@ -32,6 +39,12 @@ function App() {
     try { localStorage.setItem('caulis_garden_key', k); } catch(e) {}
     setGardenKeyState(k);
   };
+
+  // ── Open plant from URL param once data loads ──
+  useEffect(() => {
+    if (!pendingPlantId || !plants.length) return;
+    if (plants.find(p => p.id === pendingPlantId)) openDetail(pendingPlantId, true);
+  }, [plants]);
 
   // ── Firebase sync: listen for remote changes ──
   useEffect(() => {

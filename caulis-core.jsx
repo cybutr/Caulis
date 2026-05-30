@@ -32,6 +32,7 @@ const FONT_SANS  = '"DM Sans", sans-serif';
 function qrUrl(data, size = 240) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=0&qzone=1&color=2D5016&bgcolor=FAFAF7&data=${encodeURIComponent(data)}`;
 }
+const PLANT_QR_URL = id => `https://cybutr.github.io/Caulis/?plant=${id}`;
 
 // soft specimen tints ---------------------------------------
 const TINTS = ['#E7EDDE','#EEEAE0','#E3EAD6','#ECE7DC','#E9EEE2','#EDE9DF','#E6ECE0','#EFE9DE'];
@@ -245,5 +246,5 @@ Object.assign(window, {
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
-  useWindowWidth, DESKTOP_BP,
+  useWindowWidth, DESKTOP_BP, PLANT_QR_URL,
 });
