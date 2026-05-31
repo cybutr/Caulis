@@ -648,7 +648,7 @@ function BottomNav({ tab, setTab }) {
   return (
     <div style={{
       flexShrink:0, position:'relative', zIndex:30,
-      background:`${C.bg}DC`, backdropFilter:'blur(18px) saturate(160%)', WebkitBackdropFilter:'blur(18px) saturate(160%)',
+      background: C.bg === '#111610' ? 'rgba(17,22,16,0.9)' : 'rgba(250,250,247,0.86)', backdropFilter:'blur(18px) saturate(160%)', WebkitBackdropFilter:'blur(18px) saturate(160%)',
       borderTop:'0.5px solid rgba(45,80,22,0.1)',
       padding:'9px 14px 26px',
       display:'flex', alignItems:'flex-end', justifyContent:'space-between',

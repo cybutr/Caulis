@@ -264,10 +264,10 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
           <div style={{ width:38 }}/>
         </div>
 
-        <div style={{ padding:'14px 18px 24px', position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:18 }}>
+        <div style={{ padding:'10px 18px 14px', position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:12 }}>
           {/* photo area */}
           <div onClick={()=>{ if (identifying || isDesktop) return; setSheet(true); }} style={{ position:'relative', cursor: identifying ? 'default' : 'pointer' }}>
-            <Specimen tint={TINTS[0]} height={150} radius={20} leafSize={60} image={displayImage}
+            <Specimen tint={TINTS[0]} height={120} radius={20} leafSize={60} image={displayImage}
               caption={identifying ? '' : (hasPhoto ? '' : 'tap to add a photo')}/>
             {isDesktop
               ? <input ref={fileRef} type="file" accept="image/*" onChange={onFile} onClick={e=>e.stopPropagation()} style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer', zIndex:2 }}/>
