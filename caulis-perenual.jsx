@@ -171,9 +171,25 @@ async function getSpeciesDetails(id) {
   return PERENUAL.find(p => p.id === id) || null;
 }
 
-// The real product would POST the photo to the Perenual identification
-// API (perenual.com/docs/identify/api); here we simulate a match.
-async function identifySpecies() {
+async function identifySpecies(dataUrl) {
+  if (API_KEY && dataUrl) {
+    try {
+      const r = await fetch(`https://perenual.com/api/v2/identify?key=${API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: [dataUrl] }),
+      });
+      const json = await r.json();
+      const hits = json?.data;
+      if (Array.isArray(hits) && hits.length) {
+        const hit = hits[0];
+        const sp = PERENUAL.find(p => p.id === hit.id) ||
+                   PERENUAL.find(p => p.common_name?.toLowerCase() === hit.common_name?.toLowerCase());
+        if (sp) return sp;
+        if (hit.common_name || hit.scientific_name) return hit;
+      }
+    } catch(e) {}
+  }
   await _wait(1700);
   return PERENUAL[Math.floor(Math.random() * PERENUAL.length)];
 }

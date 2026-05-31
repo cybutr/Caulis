@@ -203,6 +203,7 @@ window.onload=()=>{
   const movePlant   = (id, room) => { addLocation(room); setPlants(ps => ps.map(p => p.id === id ? { ...p, location: room } : p)); };
 
   const savePlant = (data) => {
+    if (data.location) addLocation(data.location);
     if (data.id) {
       setPlants(ps => ps.map(p => {
         if (p.id !== data.id) return p;
@@ -273,7 +274,7 @@ window.onload=()=>{
     return (
       <div style={{ display:'flex', minHeight:'100vh', background:C.bg }}>
         <DesktopSidebar tab={tab} setTab={setTab}/>
-        <div style={{ flex:1, height:'100vh', overflowY:'auto', position:'relative' }}>
+        <div style={{ flex:1, height:'100vh', overflowY:'auto', overflowX:'hidden', position:'relative' }}>
           {screen}
         </div>
 

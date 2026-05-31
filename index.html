@@ -40,11 +40,14 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   ::-webkit-scrollbar { width: 0; height: 0; }
+  #caulis-qr-reader { border: none !important; padding: 0 !important; }
+  #caulis-qr-reader video { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; object-fit:cover !important; }
+  #caulis-qr-reader img, #caulis-qr-reader button, #caulis-qr-reader select { display:none !important; }
 </style>
 </head>
 <body>
 <div id="root"></div>
-<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>

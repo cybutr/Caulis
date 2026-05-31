@@ -288,51 +288,27 @@ function Viewfinder() {
 }
 
 function ScannerScreen({ plants, onScan, isDesktop }) {
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const rafRef = useRef(null);
   const [camError, setCamError] = useState(null);
   const [scanning, setScanning] = useState(false);
+  const scannedRef = useRef(false);
   const target = plants.find(p=>statusOf(p.days,p.every)==='needs') || plants[0];
 
   useEffect(() => {
     if (isDesktop) return;
-    let stream = null;
+    scannedRef.current = false;
+    const scanner = new Html5Qrcode('caulis-qr-reader');
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 220, height: 220 } },
+      (text) => {
+        if (scannedRef.current) return;
+        const m = text.match(/[?&]plant=(\d+)/) || text.match(/caulis:\/\/plant\/(\d+)/);
+        if (m) { scannedRef.current = true; onScan(parseInt(m[1], 10)); }
+      },
+      () => {}
+    ).then(() => setScanning(true)).catch(() => setCamError('Camera access denied'));
 
-    const tick = () => {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!video || !canvas) return;
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width  = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0);
-        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        if (typeof jsQR !== 'undefined') {
-          const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
-          if (code) {
-            const m = code.data.match(/[?&]plant=(\d+)/) || code.data.match(/caulis:\/\/plant\/(\d+)/);
-            if (m) { onScan(parseInt(m[1], 10)); return; }
-          }
-        }
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
-    navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } })
-      .then(s => {
-        stream = s;
-        if (videoRef.current) { videoRef.current.srcObject = s; videoRef.current.play(); }
-        setScanning(true);
-        rafRef.current = requestAnimationFrame(tick);
-      })
-      .catch(() => setCamError('Camera access denied'));
-
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      if (stream) stream.getTracks().forEach(t => t.stop());
-    };
+    return () => { scanner.stop().then(() => scanner.clear()).catch(() => {}); };
   }, [isDesktop]);
 
   if (isDesktop) {
@@ -358,10 +334,9 @@ function ScannerScreen({ plants, onScan, isDesktop }) {
 
   return (
     <div style={{ height:'100%', position:'relative', background:'#111', overflow:'hidden' }}>
-      <video ref={videoRef} playsInline muted style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
-      <canvas ref={canvasRef} style={{ display:'none' }}/>
-      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.35)' }}/>
-      <div style={{ position:'absolute', top:62, left:0, right:0, textAlign:'center', zIndex:3 }}>
+      <div id="caulis-qr-reader" style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}/>
+      <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.35)', pointerEvents:'none' }}/>
+      <div style={{ position:'absolute', top:62, left:0, right:0, textAlign:'center', zIndex:3, pointerEvents:'none' }}>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:24, color:'#fff' }}>Scan a plant tag</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:'rgba(255,255,255,0.72)', marginTop:3 }}>
           {camError || (scanning ? 'Point at a Caulis QR code' : 'Starting camera…')}

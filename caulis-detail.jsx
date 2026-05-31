@@ -36,7 +36,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
   return (
     <div style={{ position: isDesktop ? 'absolute' : 'fixed', inset:0, zIndex:40, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
       {/* scrollable body */}
-      <div style={{ flex:1, overflowY:'auto', position:'relative' }}>
+      <div style={{ flex:1, overflowY:'auto', overflowX:'hidden', position:'relative' }}>
         <Sprig opacity={0.12}/>
         {/* top bar */}
         <div style={{ position:'sticky', top:0, zIndex:5, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'52px 18px 10px', background:`linear-gradient(180deg, ${C.bg}F5 60%, ${C.bg}00)` }}>
@@ -187,6 +187,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSpecies, setLoadingSpecies] = useState(false);
   const fileRef = useRef(null);
+  const photoModeRef = useRef('photo');
 
   const fmtName = n => n.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
@@ -225,8 +226,8 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   };
   const canSave = name.trim().length > 0;
 
-  // "Take photo" → real file picker → user's own image (overrides preset)
-  const takePhoto = () => { setSheet(false); setTimeout(() => fileRef.current && fileRef.current.click(), 0); };
+  const takePhoto = () => { setSheet(false); photoModeRef.current = 'photo'; setTimeout(() => fileRef.current && fileRef.current.click(), 0); };
+  const identify  = () =>  { setSheet(false); photoModeRef.current = 'identify'; setTimeout(() => fileRef.current && fileRef.current.click(), 0); };
   const onFile = (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -234,27 +235,27 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
     setUserPhoto(preview);
     setIdentified(false);
     const reader = new FileReader();
-    reader.onload = (ev) => setUserPhoto(ev.target.result);
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target.result;
+      setUserPhoto(dataUrl);
+      if (photoModeRef.current === 'identify') {
+        setIdentifying(true);
+        const sp = await identifySpecies(dataUrl);
+        const care = speciesCare(sp);
+        setName(sp.common_name || '');
+        setLatin(Array.isArray(sp.scientific_name) ? sp.scientific_name[0] : (sp.scientific_name || ''));
+        setSpecies(sp);
+        setPresetImage(care.image);
+        setIdentifying(false);
+        setIdentified(true);
+      }
+    };
     reader.readAsDataURL(f);
     e.target.value = '';
   };
-
-  // "Identify plant" → Perenual identification → auto-fill + preset image
-  const identify = async () => {
-    setSheet(false); setIdentified(false); setIdentifying(true);
-    const sp = await identifySpecies();
-    const care = speciesCare(sp);
-    setName(sp.common_name);
-    setLatin(sp.scientific_name[0]);
-    setSpecies(sp);
-    setPresetImage(care.image);
-    setUserPhoto(null);
-    setIdentifying(false); setIdentified(true);
-  };
-
   return (
     <div style={{ position: isDesktop ? 'absolute' : 'fixed', inset:0, zIndex:45, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
-      <div style={{ flex:1, overflowY:'auto', position:'relative' }}>
+      <div style={{ flex:1, overflowY:'auto', overflowX:'hidden', position:'relative' }}>
         <Sprig opacity={0.1}/>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'52px 18px 6px', position:'relative', zIndex:2 }}>
           <div onClick={onBack} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
