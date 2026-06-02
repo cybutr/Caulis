@@ -18,7 +18,7 @@ function InfoTile({ icon, label, children, accent = C.forest }) {
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
-function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, isDesktop }) {
+function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, isDesktop, readonly = false, czechMode = false }) {
   const [justWatered, setJustWatered] = useState(false);
   const prevRef = useRef(null);
   const status = statusOf(plant.days, plant.every);
@@ -45,14 +45,16 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:8 }}>
             {fromScan && (
-              <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'rgba(122,158,78,0.14)', borderRadius:999, padding:'6px 12px' }}>
-                <IconScan s={14} c={C.forest}/>
-                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>Scanned</span>
+              <div style={{ display:'inline-flex', alignItems:'center', gap:6, background: readonly ? 'rgba(107,76,42,0.12)' : 'rgba(122,158,78,0.14)', borderRadius:999, padding:'6px 12px' }}>
+                <IconScan s={14} c={readonly ? C.brown : C.forest}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color: readonly ? C.brown : C.forest }}>{readonly ? 'Guest view' : 'Scanned'}</span>
               </div>
             )}
-            <div onClick={()=>onEdit(plant)} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M13 3.5l3.5 3.5L7 16.5H3.5V13L13 3.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round"/></svg>
-            </div>
+            {!readonly && (
+              <div onClick={()=>onEdit(plant)} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M13 3.5l3.5 3.5L7 16.5H3.5V13L13 3.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round"/></svg>
+              </div>
+            )}
           </div>
         </div>
 
@@ -62,7 +64,10 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
 
           {/* name block */}
           <div style={{ marginTop:16 }}>
-            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:34, color:C.forest, lineHeight:1.05 }}>{plant.name}</div>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:34, color:C.forest, lineHeight:1.05 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
+            {czechMode && plant.czech && (
+              <div style={{ fontFamily:FONT_SANS, fontWeight:500, fontSize:14, color:C.ink, opacity:0.6, marginTop:3 }}>{plant.name}</div>
+            )}
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:500, fontSize:16, color:C.brown, opacity:0.75, marginTop:2 }}>{plant.latin}</div>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:12, flexWrap:'wrap' }}>
               <LocationPill label={plant.location}/>
@@ -72,19 +77,26 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
           </div>
 
           {/* water button */}
-          <div onClick={!justWatered ? water : undefined} style={{
-            marginTop:18, cursor: justWatered?'default':'pointer',
-            display:'flex', alignItems:'center', justifyContent:'center', gap:9,
-            height:52, borderRadius:16,
-            background: justWatered ? 'rgba(110,154,62,0.14)' : C.forest,
-            color: justWatered ? C.sage : '#fff',
-            boxShadow: justWatered ? 'none' : '0 6px 16px rgba(45,80,22,0.24)',
-            transition:'all 260ms cubic-bezier(.2,.8,.2,1)',
-            border: justWatered ? '1px solid rgba(110,154,62,0.4)' : 'none',
-          }}>
-            {justWatered ? <IconCheck s={19} c={C.sage}/> : <IconDrop s={20} c="#fff" fill/>}
-            <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600, letterSpacing:0.2 }}>{justWatered ? 'Watered today' : 'Mark as watered'}</span>
-          </div>
+          {readonly ? (
+            <div style={{ marginTop:18, height:52, borderRadius:16, background:'rgba(45,80,22,0.06)', border:'0.5px solid rgba(45,80,22,0.12)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              <LeafOutline size={16} color={C.brown} sw={1.5}/>
+              <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.brown, opacity:0.7 }}>View only — not your garden</span>
+            </div>
+          ) : (
+            <div onClick={!justWatered ? water : undefined} style={{
+              marginTop:18, cursor: justWatered?'default':'pointer',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:9,
+              height:52, borderRadius:16,
+              background: justWatered ? 'rgba(110,154,62,0.14)' : C.forest,
+              color: justWatered ? C.sage : '#fff',
+              boxShadow: justWatered ? 'none' : '0 6px 16px rgba(45,80,22,0.24)',
+              transition:'all 260ms cubic-bezier(.2,.8,.2,1)',
+              border: justWatered ? '1px solid rgba(110,154,62,0.4)' : 'none',
+            }}>
+              {justWatered ? <IconCheck s={19} c={C.sage}/> : <IconDrop s={20} c="#fff" fill/>}
+              <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600, letterSpacing:0.2 }}>{justWatered ? 'Watered today' : 'Mark as watered'}</span>
+            </div>
+          )}
 
           {/* info tiles */}
           <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:18 }}>
@@ -99,17 +111,17 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
             <InfoTile icon={<span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:14, color:C.sage }}>i</span>} label="Fun fact">{plant.fact}</InfoTile>
             <div style={{ display:'flex', alignItems:'center', gap:6, padding:'2px 4px' }}>
               <LeafOutline size={11} color={C.brown} sw={1.5}/>
-              <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.55, letterSpacing:0.2 }}>Care data &amp; photo via Perenual</span>
+              <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.55, letterSpacing:0.2 }}>Care data &amp; photo via Perenual, House Plants &amp; Wikipedia</span>
             </div>
           </div>
 
           {/* QR block */}
-          <div style={{ marginTop:18, marginBottom:24, background:C.panel, borderRadius:20, border:C.hair, padding:'20px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)', display:'flex', flexDirection:'column', alignItems:'center' }}>
+          {!readonly && <div style={{ marginTop:18, marginBottom:24, background:C.panel, borderRadius:20, border:C.hair, padding:'20px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)', display:'flex', flexDirection:'column', alignItems:'center' }}>
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>Plant tag</div>
             <div style={{ width:148, height:148, marginTop:14, padding:10, background:C.bg, borderRadius:14, border:C.hair }}>
               <img src={qrUrl(PLANT_QR_URL(plant.id), 220)} alt="QR code" style={{ width:'100%', height:'100%', display:'block' }}/>
             </div>
-            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest, marginTop:12 }}>Scan to open {plant.name}</div>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest, marginTop:12 }}>Scan to open {czechMode && plant.czech ? plant.czech : plant.name}</div>
             <div onClick={()=>onToggleQueue(plant.id)} style={{
               marginTop:16, cursor:'pointer', width:'100%',
               display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:48, borderRadius:14,
@@ -123,7 +135,8 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
             {inQueue && (
               <div onClick={onGoQueue} style={{ cursor:'pointer', marginTop:10, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8, textDecoration:'underline', textUnderlineOffset:3 }}>View print queue →</div>
             )}
-          </div>
+          </div>}
+          {readonly && <div style={{ marginBottom:24 }}/>}
         </div>
       </div>
 
@@ -173,17 +186,21 @@ function SparkIcon({ s = 20, c = C.forest }) {
   </svg>);
 }
 
-function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop }) {
+function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop, czechMode }) {
   const [name, setName] = useState(editing ? editing.name : '');
+  const [czech, setCzech] = useState(editing ? (editing.czech || '') : '');
   const [latin, setLatin] = useState(editing && editing.latin !== '\u2014' ? editing.latin : '');
   const [loc, setLoc] = useState(editing ? editing.location : '');
   const [typed, setTyped] = useState('');
   const [sheet, setSheet] = useState(false);
   const [identifying, setIdentifying] = useState(false);
   const [identified, setIdentified] = useState(false);
+  const [source, setSource] = useState('');
   const [species, setSpecies] = useState(null);
   const [presetImage, setPresetImage] = useState(editing ? editing.image : null);
   const [userPhoto, setUserPhoto] = useState(editing ? editing.userImage : null);
+  const [every, setEvery] = useState(editing ? editing.every : 7);
+  const [light, setLight] = useState(editing ? editing.light || '' : '');
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSpecies, setLoadingSpecies] = useState(false);
   const fileRef = useRef(null);
@@ -200,14 +217,19 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
     setSuggestions([]);
     setName(fmtName(p.name));
     setLatin(p.latin);
+    if (p.czech) setCzech(p.czech);
     if (!hasApiKey()) return;
     setLoadingSpecies(true);
     try {
-      const sp = await getSpeciesDetails(p.id);
+      const sp = await getSpeciesDetails(p.id, p.latin);
       if (sp) {
         const care = speciesCare(sp);
         setSpecies(sp);
         setPresetImage(care.image);
+        setEvery(care.every);
+        setLight(care.light || '');
+        if (care.czech) setCzech(care.czech);
+        setSource(sp._source || 'Perenual');
         setIdentified(true);
       }
     } finally {
@@ -226,11 +248,8 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   };
   const canSave = name.trim().length > 0;
 
-  const takePhoto = () => { setSheet(false); photoModeRef.current = 'photo'; setTimeout(() => fileRef.current && fileRef.current.click(), 0); };
-  const identify  = () =>  { setSheet(false); photoModeRef.current = 'identify'; setTimeout(() => fileRef.current && fileRef.current.click(), 0); };
-  const onFile = (e) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
+  const processFile = async (f) => {
+    window._filePickerOpen = false;
     const preview = URL.createObjectURL(f);
     setUserPhoto(preview);
     setIdentified(false);
@@ -244,15 +263,46 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
         const care = speciesCare(sp);
         setName(sp.common_name || '');
         setLatin(Array.isArray(sp.scientific_name) ? sp.scientific_name[0] : (sp.scientific_name || ''));
+        setCzech((sp.czech_names && sp.czech_names[0]) || sp.czech || care.czech || '');
         setSpecies(sp);
         setPresetImage(care.image);
+        setEvery(care.every);
+        setLight(care.light || '');
+        setSource(sp._source || 'PlantNet');
         setIdentifying(false);
         setIdentified(true);
       }
     };
     reader.readAsDataURL(f);
-    e.target.value = '';
   };
+
+  const openPicker = async (mode = 'photo') => {
+    photoModeRef.current = mode;
+    window._filePickerOpen = true;
+    const useCamera = !isDesktop && mode !== 'gallery';
+    if (!useCamera && window.showOpenFilePicker) {
+      try {
+        const [fh] = await window.showOpenFilePicker({ types:[{ description:'Images', accept:{'image/*':['.jpg','.jpeg','.png','.gif','.webp','.avif','.heic']} }], multiple:false });
+        const file = await fh.getFile();
+        await processFile(file);
+      } catch(e) { window._filePickerOpen = false; }
+      return;
+    }
+    const input = fileRef.current;
+    if (!input) { window._filePickerOpen = false; return; }
+    input.value = '';
+    if (useCamera) input.setAttribute('capture', 'environment');
+    else input.removeAttribute('capture');
+    let done = false;
+    const finish = (f) => { if (done) return; done = true; clearInterval(poll); clearTimeout(giveUp); processFile(f); };
+    const poll = setInterval(() => { const f = input.files?.[0]; if (f) finish(f); }, 100);
+    const giveUp = setTimeout(() => { done = true; clearInterval(poll); window._filePickerOpen = false; }, 60000);
+    input.click();
+  };
+
+  const takePhoto    = () => { setSheet(false); openPicker('photo'); };
+  const fromGallery  = () => { setSheet(false); openPicker('gallery'); };
+  const identify     = () => { setSheet(false); openPicker('identify'); };
   return (
     <div style={{ position: isDesktop ? 'absolute' : 'fixed', inset:0, zIndex:45, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
       <div style={{ flex:1, overflowY:'auto', overflowX:'hidden', position:'relative' }}>
@@ -266,33 +316,37 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
         </div>
 
         <div style={{ padding:'10px 18px 14px', position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:12 }}>
-          {/* photo area */}
-          <div onClick={()=>{ if (identifying || isDesktop) return; setSheet(true); }} style={{ position:'relative', cursor: identifying ? 'default' : 'pointer' }}>
-            <Specimen tint={TINTS[0]} height={120} radius={20} leafSize={60} image={displayImage}
-              caption={identifying ? '' : (hasPhoto ? '' : 'tap to add a photo')}/>
-            {isDesktop
-              ? <input ref={fileRef} type="file" accept="image/*" onChange={onFile} onClick={e=>e.stopPropagation()} style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer', zIndex:2 }}/>
-              : <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{ display:'none' }}/>
-            }
+          {/* photo area — input lives outside conditional so it never remounts */}
+          <input ref={fileRef} id="caulis-file-input" type="file" accept="image/*" style={{ display:'none' }}/>
+          <div style={{ position:'relative' }}>
+            {isDesktop ? (
+            <div onClick={()=>{ if (identifying) return; openPicker('photo'); }} style={{ cursor: identifying ? 'default' : 'pointer' }}>
+              <Specimen tint={TINTS[0]} height={120} radius={20} leafSize={60} image={displayImage}
+                caption={identifying ? '' : (hasPhoto ? '' : 'click to add a photo')}/>
+            </div>
+            ) : (
+            <div onClick={()=>{ if (identifying) return; setSheet(true); }} style={{ cursor: identifying ? 'default' : 'pointer' }}>
+              <Specimen tint={TINTS[0]} height={120} radius={20} leafSize={60} image={displayImage}
+                caption={identifying ? '' : (hasPhoto ? '' : 'tap to add a photo')}/>
+            </div>
+            )}
             {!identifying && (
-              <div style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <div style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
                 <CameraIcon s={19}/>
               </div>
             )}
-            {/* identified / own-photo badge */}
             {identified && !identifying && (
-              <div style={{ position:'absolute', bottom:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:C.forest, borderRadius:999, padding:'5px 11px' }}>
+              <div style={{ position:'absolute', bottom:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:C.forest, borderRadius:999, padding:'5px 11px', pointerEvents:'none' }}>
                 <SparkIcon s={13} c="#fff"/>
-                <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:'#fff' }}>Identified via Perenual</span>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:'#fff' }}>{source === 'demo' ? 'Demo match' : `Identified via ${source || 'Perenual'}`}</span>
               </div>
             )}
             {userPhoto && !identifying && (
-              <div style={{ position:'absolute', bottom:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:'rgba(42,42,38,0.7)', borderRadius:999, padding:'5px 11px' }}>
+              <div style={{ position:'absolute', bottom:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:'rgba(42,42,38,0.7)', borderRadius:999, padding:'5px 11px', pointerEvents:'none' }}>
                 <CameraIcon s={13} c="#fff"/>
                 <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:'#fff' }}>Your photo</span>
               </div>
             )}
-            {/* loading overlay */}
             {identifying && (
               <div style={{ position:'absolute', inset:0, borderRadius:20, background:'rgba(45,80,22,0.32)', backdropFilter:'blur(2px)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
                 <div style={{ width:38, height:38, borderRadius:999, border:'3px solid rgba(255,255,255,0.35)', borderTopColor:'#fff', animation:'spin 0.9s linear infinite' }}/>
@@ -332,6 +386,9 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
           </Field>
           <Field label="Latin name">
             <input value={latin} onChange={e=>setLatin(e.target.value)} placeholder="e.g. Monstera deliciosa" style={{ ...inputStyle(), fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:16 }}/>
+          </Field>
+          <Field label="Czech name">
+            <input value={czech} onChange={e=>setCzech(e.target.value)} placeholder="e.g. Monstera děravá" style={inputStyle()}/>
           </Field>
 
           {/* location tag input */}
@@ -380,12 +437,22 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
               </div>
             </div>
           </Field>
+          <Field label="Watering">
+            <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, opacity:0.65 }}>Every</span>
+              <input type="number" min="1" max="365" value={every} onChange={e=>setEvery(Math.max(1,parseInt(e.target.value)||7))} style={{ ...inputStyle(), width:88 }}/>
+              <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, opacity:0.65 }}>days</span>
+            </div>
+          </Field>
+          <Field label="Light">
+            <input value={light} onChange={e=>setLight(e.target.value)} placeholder="e.g. Bright, indirect" style={inputStyle()}/>
+          </Field>
         </div>
       </div>
 
       {/* save bar */}
       <div style={{ flexShrink:0, padding:'12px 18px 26px', borderTop:'0.5px solid rgba(45,80,22,0.1)', background:C.bg+'F2', backdropFilter:'blur(14px)' }}>
-        <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, userImage:userPhoto }) : undefined}
+        <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, userImage:userPhoto, every, light:light.trim() }) : undefined}
           style={{
             height:52, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
             background: canSave ? C.forest : 'rgba(45,80,22,0.18)', color:'#fff',
@@ -406,15 +473,24 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
             <div onClick={takePhoto} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:16, border:C.hair, cursor:'pointer', marginBottom:10 }}>
               <div style={{ width:42, height:42, borderRadius:12, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}><CameraIcon s={22}/></div>
               <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14.5, fontWeight:600, color:C.ink }}>{displayImage ? 'Use my own photo' : 'Take photo'}</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:1 }}>Pick a photo from your device</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14.5, fontWeight:600, color:C.ink }}>Take photo</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:1 }}>Open camera directly</div>
+              </div>
+            </div>
+            <div onClick={fromGallery} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:16, border:C.hair, cursor:'pointer', marginBottom:10 }}>
+              <div style={{ width:42, height:42, borderRadius:12, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke={C.forest} strokeWidth="1.6"/><circle cx="8.5" cy="8.5" r="2" stroke={C.forest} strokeWidth="1.4"/><path d="M3 15l5-5 4 4 2-2 4 4" stroke={C.forest} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/></svg>
+              </div>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14.5, fontWeight:600, color:C.ink }}>Choose from library</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:1 }}>Pick an existing photo</div>
               </div>
             </div>
             <div onClick={identify} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:16, border:'1px solid rgba(110,154,62,0.35)', cursor:'pointer' }}>
               <div style={{ width:42, height:42, borderRadius:12, background:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}><SparkIcon s={22}/></div>
               <div style={{ flex:1 }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14.5, fontWeight:600, color:C.forest }}>Identify plant</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:1 }}>Auto-fill the name &amp; species from a photo</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:1 }}>Take a photo to auto-fill name &amp; species</div>
               </div>
             </div>
           </div>

@@ -32,6 +32,20 @@ function getDb() {
   return _db;
 }
 
+// Storage node id = SHA-256(key + '::' + password). Without both you cannot
+// compute the path, so the password gates read AND write at the data layer.
+async function gardenNodeId(key, password) {
+  const raw = (key || '') + '::' + (password || '');
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    // crypto.subtle needs a secure context; fall back to a weak hash
+    let h = 0; for (let i = 0; i < raw.length; i++) { h = (h * 31 + raw.charCodeAt(i)) | 0; }
+    return 'x' + (h >>> 0).toString(16);
+  }
+}
+
 function gardenRef(key) {
   const db = getDb();
   return (db && key) ? db.ref(`gardens/${encodeURIComponent(key)}`) : null;
@@ -47,7 +61,9 @@ function listenGarden(key, onData) {
 
 function pushGarden(key, data) {
   const ref = gardenRef(key);
-  if (ref) ref.set(data);
+  if (!ref) return;
+  const clean = JSON.parse(JSON.stringify(data, (_, v) => v === undefined ? null : v));
+  ref.set(clean);
 }
 
 async function gardenExists(key) {
@@ -64,4 +80,19 @@ async function renameGarden(oldKey, newKey, data) {
   return true;
 }
 
-Object.assign(window, { listenGarden, pushGarden, gardenExists, renameGarden, FIREBASE_READY });
+async function fetchGardenOnce(key) {
+  const ref = gardenRef(key);
+  if (!ref) return null;
+  try { const snap = await ref.once('value'); return snap.exists() ? snap.val() : null; } catch(e) { return null; }
+}
+
+async function getGardenPasswordOnly(key) {
+  const ref = gardenRef(key);
+  if (!ref) return null;
+  try {
+    const snap = await ref.child('password').once('value');
+    return snap.exists() ? snap.val() : null;
+  } catch(e) { return null; }
+}
+
+Object.assign(window, { listenGarden, pushGarden, gardenExists, renameGarden, fetchGardenOnce, getGardenPasswordOnly, gardenNodeId, FIREBASE_READY });

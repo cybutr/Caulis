@@ -47,7 +47,7 @@ function qrUrl(data, size = 240) {
 }
 const PLANT_QR_URL = id => {
   let g = '';
-  try { g = localStorage.getItem('caulis_garden_key') || ''; } catch(e) {}
+  try { g = localStorage.getItem('caulis_garden_node') || ''; } catch(e) {}
   return `https://cybutr.github.io/Caulis/?plant=${id}${g ? '&g='+encodeURIComponent(g) : ''}`;
 };
 
@@ -243,7 +243,6 @@ function StatusTag({ status }) {
 
 // Specimen image placeholder OR real photo (tinted block w/ leaf motif) ---
 function Specimen({ tint, height, radius = 15, leafSize = 46, caption, image }) {
-  const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const showImg = image && !failed;
   return (
@@ -259,14 +258,10 @@ function Specimen({ tint, height, radius = 15, leafSize = 46, caption, image }) 
       {showImg && (
         <img
           src={image} alt="" draggable={false}
-          onLoad={()=>setLoaded(true)} onError={()=>setFailed(true)}
-          style={{
-            position:'absolute', inset:0, width:'100%', height:'100%',
-            objectFit:'cover', display:'block',
-            opacity: loaded ? 1 : 0, transition:'opacity 360ms ease',
-          }}/>
+          onError={()=>setFailed(true)}
+          style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
       )}
-      {showImg && loaded && (
+      {showImg && (
         <div style={{ position:'absolute', inset:0, boxShadow:'inset 0 0 0 0.5px rgba(45,80,22,0.10)', borderRadius:radius, pointerEvents:'none',
           background:'linear-gradient(to top, rgba(28,38,18,0.18), transparent 38%)' }}/>
       )}

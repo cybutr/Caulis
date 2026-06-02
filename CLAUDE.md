@@ -75,6 +75,10 @@ printed       // bool (transient Print-all confirmation)
 - No key → uses bundled library (~13 species, same shape as API). Key saved to `localStorage('caulis_perenual_key')`.
 - CORS/key-exposure warning: production needs a serverless proxy; never expose the key client-side.
 
+## Service Worker
+
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v47.
+
 ## Animations
 
 - Overlay slide-in: `translateY(26px → 0)` + fade, 320ms `cubic-bezier(.2,.8,.2,1)`.

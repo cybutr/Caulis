@@ -1,6 +1,7 @@
 // ════════════════════════════════════════════════════════════
 //  Caulis — screens + bottom navigation
 // ════════════════════════════════════════════════════════════
+const PRINT_SIZES = [['S', 30], ['M', 40], ['L', 55]];
 
 // ── Plant card (Garden grid) ──────────────────────────────
 function PlantCard({ plant, tint, onOpen, onLongPress }) {
@@ -302,8 +303,9 @@ function ScannerScreen({ plants, onScan, isDesktop }) {
       { fps: 10, qrbox: { width: 220, height: 220 } },
       (text) => {
         if (scannedRef.current) return;
-        const m = text.match(/[?&]plant=(\d+)/) || text.match(/caulis:\/\/plant\/(\d+)/);
-        if (m) { scannedRef.current = true; onScan(parseInt(m[1], 10)); }
+        const m = text.match(/[?&]plant=(\d+)/);
+        const gm = text.match(/[?&]g=([^&\s]+)/);
+        if (m) { scannedRef.current = true; onScan(parseInt(m[1], 10), gm ? decodeURIComponent(gm[1]) : null); }
       },
       () => {}
     ).then(() => setScanning(true)).catch(() => setCamError('Camera access denied'));
@@ -350,17 +352,31 @@ function ScannerScreen({ plants, onScan, isDesktop }) {
 // ════════════════════════════════════════════════════════════
 //  PRINT QUEUE
 // ════════════════════════════════════════════════════════════
-function QueueRow({ plant, onOpen, onRemove }) {
+function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechMode }) {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:12, background:C.panel, borderRadius:18, padding:12, border:'0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)' }}>
       <div style={{ width:48, height:48, flexShrink:0 }}><Specimen tint={TINTS[(plant.id-1)%TINTS.length]} height={48} radius={11} leafSize={22} image={plant.userImage || plant.image}/></div>
-      <div style={{ width:50, height:50, borderRadius:11, background:C.bg, border:C.hair, padding:5, flexShrink:0 }}>
-        <img src={qrUrl(PLANT_QR_URL(plant.id), 120)} alt="QR" style={{ width:'100%', height:'100%', display:'block' }}/>
-      </div>
       <div onClick={()=>onOpen(plant.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
-        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest, lineHeight:1.05, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{plant.name}</div>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest, lineHeight:1.05, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.ink, opacity:0.55, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{plant.latin}</div>
         <div style={{ marginTop:5 }}><LocationPill label={plant.location}/></div>
+      </div>
+      <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:8, padding:2, flexShrink:0 }}>
+        {PRINT_SIZES.map(([label, mm]) => {
+          const isOverride = sizeMm === mm;
+          const isGlobal = !sizeMm && mm === globalMm;
+          return (
+            <div key={label} onClick={()=>onSetSize(plant.id, isOverride ? null : mm)} style={{
+              cursor:'pointer', width:26, height:22, borderRadius:6,
+              background: isOverride ? C.forest : isGlobal ? 'rgba(45,80,22,0.18)' : 'transparent',
+              color: isOverride ? '#fff' : C.ink,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              fontFamily:FONT_SANS, fontSize:10, fontWeight:600,
+              opacity: isOverride || isGlobal ? 1 : 0.32,
+              transition:'all 120ms ease',
+            }}>{label}</div>
+          );
+        })}
       </div>
       <div onClick={()=>onRemove(plant.id)} style={{ cursor:'pointer', width:30, height:30, borderRadius:999, display:'flex', alignItems:'center', justifyContent:'center', color:C.brown, opacity:0.5, flexShrink:0 }}>
         <svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 3l8 8M11 3l-8 8" stroke={C.brown} strokeWidth="1.5" strokeLinecap="round"/></svg>
@@ -368,7 +384,7 @@ function QueueRow({ plant, onOpen, onRemove }) {
     </div>
   );
 }
-function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed, isDesktop }) {
+function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed, isDesktop, globalPrintSize, onSetGlobalSize, queueSizes, onSetSize, monochromePrint, onToggleMono, czechMode }) {
   const items = queue.map(id => plants.find(p=>p.id===id)).filter(Boolean);
   const sp = isDesktop ? 28 : 22;
   const tp = isDesktop ? 32 : 56;
@@ -389,7 +405,35 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
           )}
         </div>
       </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:12, padding:`22px ${sp}px 0`, position:'relative', zIndex:2 }}>
+      {items.length>0 && (
+        <div style={{ display:'flex', alignItems:'center', gap:10, padding:`10px ${sp}px 0`, position:'relative', zIndex:2 }}>
+          <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.ink, opacity:0.38, letterSpacing:0.4, textTransform:'uppercase', flexShrink:0 }}>Size</span>
+          <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
+            {PRINT_SIZES.map(([label, mm]) => {
+              const on = globalPrintSize === mm;
+              return (
+                <div key={label} onClick={()=>onSetGlobalSize(mm)} style={{
+                  cursor:'pointer', width:32, height:26, borderRadius:6,
+                  background: on ? C.forest : 'transparent',
+                  color: on ? '#fff' : C.ink,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600,
+                  opacity: on ? 1 : 0.45,
+                  transition:'all 140ms ease',
+                }}>{label}</div>
+              );
+            })}
+          </div>
+          <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.38 }}>{globalPrintSize}mm</span>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:7, cursor:'pointer' }} onClick={onToggleMono}>
+            <span style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color: monochromePrint ? C.forest : C.ink, opacity: monochromePrint ? 1 : 0.45, transition:'color 200ms' }}>Mono</span>
+            <div style={{ width:36, height:22, borderRadius:999, background: monochromePrint ? C.forest : 'rgba(45,80,22,0.12)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
+              <div style={{ position:'absolute', top:2, left: monochromePrint ? 16 : 2, width:18, height:18, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={{ display:'flex', flexDirection:'column', gap:12, padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
         {items.length===0 && (
           <div style={{ textAlign:'center', padding:'56px 30px' }}>
             <div style={{ display:'inline-flex', width:64, height:64, borderRadius:999, background:'rgba(107,76,42,0.1)', alignItems:'center', justifyContent:'center' }}>
@@ -399,7 +443,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
             <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Open a plant and tap "Add to print queue" to label it.</div>
           </div>
         )}
-        {items.map(p=> <QueueRow key={p.id} plant={p} onOpen={onOpen} onRemove={onRemove}/>)}
+        {items.map(p => <QueueRow key={p.id} plant={p} onOpen={onOpen} onRemove={onRemove} sizeMm={queueSizes[p.id]||null} globalMm={globalPrintSize} onSetSize={onSetSize} czechMode={czechMode}/>)}
       </div>
     </div>
   );
@@ -408,17 +452,30 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime }) {
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
+  const [housePlantsInput, setHousePlantsInput] = useState('');
+  const [housePlantsSaved, setHousePlantsSaved] = useState(false);
+  const [plantIdInput, setPlantIdInput] = useState('');
+  const [plantIdSaved, setPlantIdSaved] = useState(false);
+  const [gcalInput, setGcalInput] = useState('');
+  const [gcalSaved, setGcalSaved] = useState(false);
+  const [gcalSyncing, setGcalSyncing] = useState(false);
+  const handleGcalSync = async () => { setGcalSyncing(true); await onSyncCalendar(); setGcalSyncing(false); };
   const sp = isDesktop ? 28 : 18;
 
   const [renaming, setRenaming] = useState(false);
   const [renameKey, setRenameKey] = useState('');
-  const [renameStatus, setRenameStatus] = useState('idle'); // idle|checking|available|taken|saving|done|error
+  const [renameStatus, setRenameStatus] = useState('idle');
   const [joining, setJoining] = useState(false);
   const [joinKey, setJoinKey] = useState('');
   const [copied, setCopied] = useState(false);
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [joinPassword, setJoinPassword] = useState('');
+  const [joinPassRequired, setJoinPassRequired] = useState(false);
+  const [joinPassError, setJoinPassError] = useState(false);
 
   const copyKey = () => {
     navigator.clipboard.writeText(gardenKey).catch(()=>{});
@@ -429,7 +486,8 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
     const k = renameKey.trim();
     if (!k || k === gardenKey) return;
     setRenameStatus('checking');
-    const exists = await gardenExists(k);
+    const node = await gardenNodeId(k, gardenPassword);
+    const exists = await gardenExists(node);
     setRenameStatus(exists ? 'taken' : 'available');
   };
 
@@ -442,11 +500,20 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
     if (ok) setTimeout(() => { setRenaming(false); setRenameKey(''); setRenameStatus('idle'); }, 1200);
   };
 
-  const doJoin = () => {
+  const resetJoin = () => { setJoining(false); setJoinKey(''); setJoinPassword(''); setJoinPassRequired(false); setJoinPassError(false); };
+
+  // single step: key + (optional) password derive the node. If nothing is
+  // stored there, the key/password pair is wrong or the garden is empty.
+  const submitJoin = async () => {
     const k = joinKey.trim();
     if (!k) return;
-    onSetGardenKey(k);
-    setJoining(false); setJoinKey('');
+    setJoinPassError(false);
+    if (FIREBASE_READY) {
+      const node = await gardenNodeId(k, joinPassword);
+      const data = await fetchGardenOnce(node);
+      if (!data) { setJoinPassError(true); return; }
+    }
+    onSetGardenKey(k, joinPassword); resetJoin();
   };
   const Row = ({ label, value, last }) => (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom: last?'none':C.hair }}>
@@ -483,7 +550,17 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <Row label="Plants tracked" value={String(plants.length)}/>
             <Row label="Locations" value={String(new Set(plants.map(p=>p.location)).size)}/>
-            <Row label="Default reminder time" value="8:00 AM" last/>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Default watering</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>For new plants without species data</div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <div onClick={()=>onSetDefaultEvery(Math.max(1, defaultEvery - 1))} style={{ width:28, height:28, borderRadius:8, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:18, color:C.forest, fontWeight:500, userSelect:'none', WebkitUserSelect:'none' }}>−</div>
+                <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, minWidth:38, textAlign:'center' }}>{defaultEvery}d</span>
+                <div onClick={()=>onSetDefaultEvery(Math.min(365, defaultEvery + 1))} style={{ width:28, height:28, borderRadius:8, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:18, color:C.forest, fontWeight:500, userSelect:'none', WebkitUserSelect:'none' }}>+</div>
+              </div>
+            </div>
           </div>
         </div>
         <div>
@@ -500,25 +577,109 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
         <div>
           <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Printing</div>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
-            <Row label="Label size" value="40 × 40 mm"/>
-            <Row label="Printer" value="Brother QL-820" last/>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:C.hair }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Label size</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>{globalPrintSize} × {globalPrintSize} mm default</div>
+              </div>
+              <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
+                {PRINT_SIZES.map(([label, mm]) => {
+                  const on = globalPrintSize === mm;
+                  return (
+                    <div key={label} onClick={()=>onSetGlobalSize(mm)} style={{
+                      cursor:'pointer', width:32, height:26, borderRadius:6,
+                      background: on ? C.forest : 'transparent',
+                      color: on ? '#fff' : C.ink,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                      fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600,
+                      opacity: on ? 1 : 0.45, transition:'all 140ms ease',
+                    }}>{label}</div>
+                  );
+                })}
+              </div>
+            </div>
+            <div onClick={onToggleMono} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Monochrome</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Black &amp; white output</div>
+              </div>
+              <div style={{ width:44, height:26, borderRadius:999, background: monochromePrint ? C.forest : 'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
+                <div style={{ position:'absolute', top:3, left: monochromePrint ? 21 : 3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
+              </div>
+            </div>
           </div>
         </div>
         <div>
-          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Plant data · Perenual</div>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px' }}>
-            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5, marginBottom:11 }}>Add a Perenual API key to pull live species photos &amp; care data. Without one, Caulis uses its built-in library.</div>
-            <div style={{ display:'flex', gap:8 }}>
-              <input value={key} onChange={e=>setKey(e.target.value)} placeholder="perenual API key"
-                style={{ flex:1, boxSizing:'border-box', height:44, borderRadius:12, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-              <div onClick={()=>{ setApiKey(key.trim()); setSaved(true); setTimeout(()=>setSaved(false),1800); }} style={{ flexShrink:0, padding:'0 16px', height:44, borderRadius:12, background: saved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
-                {saved && <IconCheck s={14}/>}
-                <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{saved?'Saved':'Save'}</span>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Plant data</div>
+          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:14 }}>
+            <div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Perenual — species photos &amp; care data</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input value={key} onChange={e=>setKey(e.target.value)} placeholder="API key"
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSavePerenualKey(key.trim()); setSaved(true); setTimeout(()=>setSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: saved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  {saved && <IconCheck s={14}/>}
+                  <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{saved?'Saved':'Save'}</span>
+                </div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:8 }}>
+                <span style={{ width:7, height:7, borderRadius:999, background: perenualKey ? C.sage : C.brown, opacity: perenualKey ? 1 : 0.4, flexShrink:0 }}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>{perenualKey ? 'Live mode' : 'Using built-in library'}</span>
               </div>
             </div>
-            <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:11 }}>
-              <span style={{ width:7, height:7, borderRadius:999, background: hasApiKey()? C.sage : C.brown, opacity: hasApiKey()?1:0.4 }}/>
-              <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>{hasApiKey() ? 'Live mode — fetching from Perenual' : 'Using built-in species library'}</span>
+            <div style={{ height:'0.5px', background:'rgba(45,80,22,0.08)' }}/>
+            <div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:4 }}>House Plants API — fallback data</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5, marginBottom:8 }}>RapidAPI key for FreeWebApi House Plants. Used when Perenual hits rate limits.</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input value={housePlantsInput} onChange={e=>setHousePlantsInput(e.target.value)} placeholder="RapidAPI key"
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSaveHousePlantsKey(housePlantsInput.trim()); setHousePlantsSaved(true); setTimeout(()=>setHousePlantsSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: housePlantsSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  {housePlantsSaved && <IconCheck s={14}/>}
+                  <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{housePlantsSaved?'Saved':'Save'}</span>
+                </div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:8 }}>
+                <span style={{ width:7, height:7, borderRadius:999, background: housePlantsKey ? C.sage : C.brown, opacity: housePlantsKey ? 1 : 0.4, flexShrink:0 }}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>{housePlantsKey ? 'Fallback active' : 'Not configured — Wikipedia images used as last resort'}</span>
+              </div>
+            </div>
+            <div style={{ height:'0.5px', background:'rgba(45,80,22,0.08)' }}/>
+            <div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>PlantNet — photo identification</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input value={plantIdInput} onChange={e=>setPlantIdInput(e.target.value)} placeholder="API key"
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSavePlantIdKey(plantIdInput.trim()); setPlantIdSaved(true); setTimeout(()=>setPlantIdSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: plantIdSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  {plantIdSaved && <IconCheck s={14}/>}
+                  <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{plantIdSaved?'Saved':'Save'}</span>
+                </div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:8 }}>
+                <span style={{ width:7, height:7, borderRadius:999, background: plantIdKey ? C.sage : C.brown, opacity: plantIdKey ? 1 : 0.4, flexShrink:0 }}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>{plantIdKey ? 'Identification active' : 'No key — using demo mode'}</span>
+              </div>
+            </div>
+            <div style={{ height:'0.5px', background:'rgba(45,80,22,0.08)' }}/>
+            <div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:8 }}>Name language</div>
+              <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3, alignSelf:'flex-start', width:'fit-content' }}>
+                {[['en','English'],['cs','Česky']].map(([code, label]) => {
+                  const on = identifyLang === code;
+                  return (
+                    <div key={code} onClick={()=>onSetIdentifyLang(code)} style={{
+                      cursor:'pointer', padding:'5px 16px', borderRadius:6,
+                      background: on ? C.forest : 'transparent',
+                      color: on ? '#fff' : C.ink,
+                      fontFamily:FONT_SANS, fontSize:13, fontWeight:600,
+                      opacity: on ? 1 : 0.45, transition:'all 140ms ease',
+                    }}>{label}</div>
+                  );
+                })}
+              </div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, marginTop:7, lineHeight:1.5 }}>
+                {identifyLang === 'cs' ? 'Identified names filled in Czech. Care data stays in English.' : 'Identified names filled in English.'}
+              </div>
             </div>
           </div>
         </div>
@@ -544,26 +705,128 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
           </div>
         )}
         <div>
-          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Cloud sync</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Google sync</div>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
-            {!FIREBASE_READY && (
-              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Firebase not configured. Fill in FIREBASE_CONFIG in caulis-firebase.jsx.</div>
-            )}
-            {FIREBASE_READY && (<>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <div style={{ flex:1, fontFamily:'ui-monospace,Menlo,monospace', fontSize:13, color:C.forest, background:C.input, borderRadius:10, padding:'9px 12px', border:C.hair, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{gardenKey}</div>
-                <div onClick={copyKey} style={{ flexShrink:0, padding:'0 14px', height:38, borderRadius:10, background: copied ? C.sage : 'rgba(45,80,22,0.1)', color: copied ? '#fff' : C.forest, display:'flex', alignItems:'center', gap:5, cursor:'pointer', transition:'all 160ms', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600 }}>
-                  {copied && <IconCheck s={13} c="#fff"/>}{copied ? 'Copied' : 'Copy'}
+            <div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Sync to</div>
+              <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:10, padding:3 }}>
+                {[['tasks','Tasks'],['calendar','Calendar']].map(([val,label]) => {
+                  const on = googleSyncMode === val;
+                  return (
+                    <div key={val} onClick={()=>onSetGoogleSyncMode(val)} style={{ flex:1, height:32, borderRadius:7, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', background: on?C.forest:'transparent', color: on?'#fff':C.ink, opacity: on?1:0.5, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, transition:'all 140ms ease' }}>{label}</div>
+                  );
+                })}
+              </div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.ink, opacity:0.5, lineHeight:1.5, marginTop:6 }}>{googleSyncMode === 'calendar' ? `Own togglable "Caulis Plants" calendar, recurring reminders at ${reminderTime}.` : 'Checkable tasks in a "Caulis Plants" list. Tick them off in Google.'}</div>
+            </div>
+            {googleSyncMode === 'calendar' && (() => {
+              const [h, m] = (reminderTime || '09:00').split(':').map(Number);
+              const step = (dir) => { let t = h*60 + m + dir*30; t = Math.max(0, Math.min(1410, t)); onSetReminderTime(`${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`); };
+              const Btn = ({label, on}) => <div onClick={on} style={{ width:36, height:36, borderRadius:10, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:18, fontWeight:600 }}>{label}</div>;
+              return (
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink }}>Reminder time</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                    <Btn label="−" on={()=>step(-1)}/>
+                    <span style={{ minWidth:52, textAlign:'center', fontFamily:FONT_SANS, fontSize:15, fontWeight:600, color:C.ink }}>{reminderTime}</span>
+                    <Btn label="+" on={()=>step(1)}/>
+                  </div>
                 </div>
+              );
+            })()}
+            <div style={{ height:'0.5px', background:'rgba(45,80,22,0.08)' }}/>
+            {!googleToken ? (<>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Paste your OAuth 2.0 web client ID from Google Cloud Console.</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input value={gcalInput} onChange={e=>setGcalInput(e.target.value)} placeholder="OAuth client ID"
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:11.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSaveGoogleClientId(gcalInput.trim()); setGcalSaved(true); setTimeout(()=>setGcalSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: gcalSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  {gcalSaved && <IconCheck s={14}/>}
+                  <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{gcalSaved?'Saved':'Save'}</span>
+                </div>
+              </div>
+              {googleClientId && (
+                <div onClick={onConnectGoogle} style={{ height:42, borderRadius:12, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', gap:9, cursor:'pointer' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="#fff" strokeWidth="1.7"/><path d="M3 9h18" stroke="#fff" strokeWidth="1.7"/><path d="M8 2v4M16 2v4" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/></svg>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600 }}>Connect Google {googleSyncMode === 'calendar' ? 'Calendar' : 'Tasks'}</span>
+                </div>
+              )}
+              <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                <span style={{ width:7, height:7, borderRadius:999, background: googleClientId ? STATUS.soon.dot : C.brown, opacity: googleClientId ? 1 : 0.4, flexShrink:0 }}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>{googleClientId ? 'Client ID saved — tap Connect' : 'Not configured'}</span>
+              </div>
+            </>) : (<>
+              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                <span style={{ width:8, height:8, borderRadius:999, background:C.sage, flexShrink:0 }}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, flex:1 }}>Connected</span>
+                <div onClick={onDisconnectGoogle} style={{ padding:'6px 13px', borderRadius:10, background:'rgba(180,71,46,0.1)', cursor:'pointer', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:'#B4472E' }}>Disconnect</div>
+              </div>
+              <div onClick={handleGcalSync} style={{ height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:9, cursor:'pointer' }}>
+                {gcalSyncing
+                  ? <div style={{ width:16, height:16, borderRadius:999, border:`2px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/>
+                  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 018-8 8 8 0 016.9 4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/><path d="M20 12a8 8 0 01-8 8 8 8 0 01-6.9-4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/><path d="M18 4l2 3h-3M6 20l-2-3h3" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                }
+                <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600 }}>{gcalSyncing ? 'Syncing…' : (googleSyncMode === 'calendar' ? 'Sync all reminders' : 'Sync all tasks')}</span>
+              </div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5 }}>{googleSyncMode === 'calendar' ? `Recurring reminders update when you mark a plant as watered, at ${reminderTime} on the optimal day.` : 'Tasks update when you mark a plant as watered, due on the optimal day. Switching mode re-syncs everything.'}</div>
+            </>)}
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Cloud sync</div>
+          {!FIREBASE_READY && (
+            <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:'14px 16px' }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Firebase not configured. Fill in FIREBASE_CONFIG in caulis-firebase.jsx.</div>
+            </div>
+          )}
+          {FIREBASE_READY && (
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom:C.hair }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.4, textTransform:'uppercase', marginBottom:3 }}>Garden key</div>
+                    <div style={{ fontFamily:'ui-monospace,Menlo,monospace', fontSize:13.5, color:C.forest, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{gardenKey}</div>
+                  </div>
+                  <div onClick={copyKey} style={{ flexShrink:0, width:34, height:34, borderRadius:10, background: copied ? C.sage : 'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'all 160ms' }}>
+                    {copied
+                      ? <IconCheck s={15} c="#fff"/>
+                      : <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="5.5" y="5.5" width="9" height="9" rx="2" stroke={C.forest} strokeWidth="1.4"/><path d="M3.5 10.5H2.5a1 1 0 01-1-1v-7a1 1 0 011-1h7a1 1 0 011 1v1" stroke={C.forest} strokeWidth="1.4"/></svg>
+                    }
+                  </div>
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px' }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.4, textTransform:'uppercase', marginBottom:3 }}>Password</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:13.5, color: gardenPassword ? C.forest : C.ink, opacity: gardenPassword ? 1 : 0.35 }}>{gardenPassword ? 'Protected' : 'None'}</div>
+                  </div>
+                  {!settingPassword && (
+                    <div onClick={()=>{ setSettingPassword(true); setNewPassword(''); }} style={{ flexShrink:0, padding:'6px 14px', borderRadius:10, background:'rgba(45,80,22,0.08)', cursor:'pointer', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest }}>
+                      {gardenPassword ? 'Change' : 'Set'}
+                    </div>
+                  )}
+                </div>
+                {settingPassword && (
+                  <div style={{ padding:'0 16px 14px', display:'flex', flexDirection:'column', gap:8 }}>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, lineHeight:1.5 }}>
+                      {gardenPassword ? 'New password. Leave empty to remove protection.' : 'Prevent others from joining without a password.'}
+                    </div>
+                    <input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="Password…"
+                      style={{ boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
+                    <div style={{ display:'flex', gap:8 }}>
+                      <div onClick={()=>{ setSettingPassword(false); setNewPassword(''); }} style={{ flex:1, height:36, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
+                      <div onClick={()=>{ onSavePassword(newPassword.trim()); setSettingPassword(false); setNewPassword(''); }} style={{ flex:2, height:36, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Save</div>
+                    </div>
+                  </div>
+                )}
               </div>
               {!renaming && !joining && (
                 <div style={{ display:'flex', gap:8 }}>
-                  <div onClick={()=>{ setRenaming(true); setRenameKey(''); setRenameStatus('idle'); }} style={{ flex:1, height:38, borderRadius:10, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Rename</div>
-                  <div onClick={()=>{ setJoining(true); setJoinKey(''); }} style={{ flex:1, height:38, borderRadius:10, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join garden</div>
+                  <div onClick={()=>{ setRenaming(true); setRenameKey(''); setRenameStatus('idle'); }} style={{ flex:1, height:38, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Rename</div>
+                  <div onClick={()=>{ setJoining(true); setJoinKey(''); setJoinPassword(''); setJoinPassRequired(false); setJoinPassError(false); }} style={{ flex:1, height:38, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join garden</div>
                 </div>
               )}
               {renaming && (
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
                   <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>Rename keeps your current plants under a new key.</div>
                   <div style={{ display:'flex', gap:8 }}>
                     <input value={renameKey} onChange={e=>{ setRenameKey(e.target.value); setRenameStatus('idle'); }} onKeyDown={e=>{ if(e.key==='Enter') checkRename(); }} placeholder="new-garden-name"
@@ -571,10 +834,10 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
                     <div onClick={checkRename} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:10, background:'rgba(45,80,22,0.1)', color:C.forest, display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Check</div>
                   </div>
                   {renameStatus==='checking' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>Checking…</div>}
-                  {renameStatus==='available' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#6E9A3E' }}>✓ Available — safe to rename</div>}
-                  {renameStatus==='taken' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>⚠ Key already has a garden. Renaming will overwrite it.</div>}
+                  {renameStatus==='available' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#6E9A3E' }}>✓ Available</div>}
+                  {renameStatus==='taken' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>⚠ Key already taken — renaming will overwrite it.</div>}
                   {renameStatus==='error' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Something went wrong. Try again.</div>}
-                  {renameStatus==='done' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#6E9A3E' }}>✓ Renamed successfully</div>}
+                  {renameStatus==='done' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#6E9A3E' }}>✓ Renamed</div>}
                   <div style={{ display:'flex', gap:8 }}>
                     <div onClick={()=>{ setRenaming(false); setRenameKey(''); setRenameStatus('idle'); }} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
                     {(renameStatus==='available'||renameStatus==='taken') && (
@@ -586,22 +849,25 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
                 </div>
               )}
               {joining && (
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>Enter a key to load that garden. Your current plants will be replaced.</div>
+                <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>Enter the garden key and its password (if any). Your current plants will be replaced.</div>
+                  <input value={joinKey} onChange={e=>{ setJoinKey(e.target.value); setJoinPassError(false); }} placeholder="garden-key"
+                    style={{ boxSizing:'border-box', height:42, borderRadius:10, border: joinPassError ? '1px solid #B4472E' : C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                  <input type="password" value={joinPassword} onChange={e=>{ setJoinPassword(e.target.value); setJoinPassError(false); }} onKeyDown={e=>{ if(e.key==='Enter') submitJoin(); }} placeholder="Password (leave empty if none)"
+                    style={{ boxSizing:'border-box', height:42, borderRadius:10, border: joinPassError ? '1px solid #B4472E' : C.hair, background:C.input, padding:'0 12px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
+                  {joinPassError && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>⚠ No garden found — check the key and password</div>}
                   <div style={{ display:'flex', gap:8 }}>
-                    <input value={joinKey} onChange={e=>setJoinKey(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') doJoin(); }} placeholder="other-garden-key"
-                      style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-                    <div onClick={doJoin} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join</div>
+                    <div onClick={resetJoin} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
+                    <div onClick={submitJoin} style={{ flex:2, height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join</div>
                   </div>
-                  <div onClick={()=>{ setJoining(false); setJoinKey(''); }} style={{ height:36, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
                 </div>
               )}
               <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                 <span style={{ width:7, height:7, borderRadius:999, background:C.sage, flexShrink:0 }}/>
                 <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>Syncing — {gardenKey}</span>
               </div>
-            </>)}
-          </div>
+            </div>
+          )}
         </div>
         <div style={{ textAlign:'center', fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.brown, opacity:0.5, marginTop:4 }}>Caulis · grown with care</div>
       </div>
@@ -780,9 +1046,9 @@ function DesktopSidebar({ tab, setTab }) {
 // ════════════════════════════════════════════════════════════
 //  DESKTOP MODAL WRAPPER
 // ════════════════════════════════════════════════════════════
-function DesktopModal({ onClose, children, maxWidth = 520 }) {
+function DesktopModal({ onClose, children, maxWidth = 520, noBackdropClose = false }) {
   return (
-    <div onClick={onClose} style={{
+    <div onClick={noBackdropClose ? undefined : (e=>{ if (window._filePickerOpen) return; onClose(); })} style={{
       position:'fixed', inset:0, zIndex:100,
       background:'rgba(42,42,38,0.38)',
       display:'flex', alignItems:'center', justifyContent:'center',
