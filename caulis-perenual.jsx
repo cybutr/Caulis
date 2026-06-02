@@ -200,6 +200,19 @@ async function _wikiImage(latinName) {
   } catch(e) { return null; }
 }
 
+// czech name via Wikipedia's cross-language link (cs) for the latin name
+async function _czechName(latinName) {
+  try {
+    const base = latinName.replace(/['"]/g, '').split(' ').slice(0, 2).join(' ');
+    const u = `https://en.wikipedia.org/w/api.php?action=query&titles=${encodeURIComponent(base)}&prop=langlinks&lllang=cs&format=json&origin=*`;
+    const r = await fetch(u);
+    if (!r.ok) return '';
+    const pages = (await r.json())?.query?.pages || {};
+    for (const k in pages) { const ll = pages[k].langlinks; if (ll && ll[0]) return ll[0]['*'] || ''; }
+  } catch(e) {}
+  return '';
+}
+
 function _normalizeHP(p) {
   return {
     id: p.id,
@@ -233,6 +246,40 @@ async function _hpGetByName(latinName) {
   const norm = _normalizeHP(match);
   if (!norm.default_image?.regular_url) norm.default_image = { regular_url: await _wikiImage(latinName) };
   return norm;
+}
+
+// succulents/cacti need far less water — sensible default when no DB hit
+const _SUCCULENT_GENERA = ['euphorbia','aloe','agave','cactus','opuntia','echeveria','sedum','crassula','sansevieria','haworthia','kalanchoe','gasteria','sempervivum','mammillaria','cereus','senecio','aeonium','lithops','pachypodium','yucca'];
+function _heuristicCare(latinName) {
+  const genus = (latinName || '').toLowerCase().split(' ')[0];
+  if (_SUCCULENT_GENERA.includes(genus)) {
+    return { watering: 'Minimum', watering_general_benchmark: { value: '14', unit: 'days' }, sunlight: ['full sun', 'part shade'],
+      _care: 'Let the soil dry out completely between waterings. Tolerates drought well.',
+      _fact: `${latinName} is a succulent — it stores water in its tissue, so err on the side of underwatering.` };
+  }
+  return { watering: 'Average', sunlight: ['Bright indirect light'] };
+}
+
+// fetch real care data by latin name from the live services
+async function _careByLatin(latinName) {
+  if (HOUSE_PLANTS_KEY) {
+    const hp = await _hpGetByName(latinName);
+    if (hp) return { ...hp, _via: 'House Plants' };
+  }
+  if (API_KEY) {
+    try {
+      const list = await searchSpecies(latinName);
+      const hit = (list || []).find(p => {
+        const sn = Array.isArray(p.scientific_name) ? p.scientific_name : [p.scientific_name || ''];
+        return sn.some(s => (s||'').toLowerCase() === latinName.toLowerCase());
+      }) || (list || [])[0];
+      if (hit) {
+        const det = await getSpeciesDetails(hit.id, latinName);
+        if (det) return { ...det, _via: 'Perenual' };
+      }
+    } catch(e) {}
+  }
+  return null;
 }
 
 async function searchSpecies(query) {
@@ -293,6 +340,25 @@ async function _plantNetIdentify(blob, lang) {
   };
 }
 
+// turn a chosen scientific name into a full, care-enriched plant record
+async function resolveSpecies(scientificName, englishName, score) {
+  const exact = PERENUAL.find(p =>
+    (Array.isArray(p.scientific_name) ? p.scientific_name : [p.scientific_name || ''])
+      .some(s => s.toLowerCase() === scientificName.toLowerCase()));
+  if (exact) {
+    let czech = (exact.czech_names && exact.czech_names[0]) || '';
+    if (!czech) czech = await _czechName(scientificName);
+    return { ...exact, common_name: englishName || exact.common_name, scientific_name: [scientificName], czech, _source: 'PlantNet', _score: score };
+  }
+  const enrich = await _careByLatin(scientificName);
+  const img = (enrich && enrich.default_image?.regular_url) || await _wikiImage(scientificName);
+  const base = enrich || _heuristicCare(scientificName);
+  const czech = await _czechName(scientificName);
+  return { ...base, common_name: englishName || scientificName, scientific_name: [scientificName], czech,
+    default_image: img ? { regular_url: img } : base.default_image,
+    _source: enrich ? `PlantNet + ${enrich._via}` : 'PlantNet', _score: score };
+}
+
 async function identifySpecies(dataUrl) {
   if (PLANT_ID_KEY && dataUrl) {
     try {
@@ -302,27 +368,19 @@ async function identifySpecies(dataUrl) {
       const arr = new Uint8Array(bytes.length);
       for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
       const blob = new Blob([arr], { type: mime });
-      // English call = reliable english + latin
       const en = await _plantNetIdentify(blob, 'en');
-      if (en && en.scientificName) {
-        const scientificName = en.scientificName;
-        const englishName = en.commonName || scientificName;
-        // czech common name from a second pass
-        let czech = '';
-        try { const cs = await _plantNetIdentify(blob, 'cs'); czech = cs?.commonName || ''; } catch(e) {}
-        // enrich care/photo ONLY on an exact latin match — never override the
-        // identified species with a loose common-name guess
-        const exact = PERENUAL.find(p =>
-          (Array.isArray(p.scientific_name) ? p.scientific_name : [p.scientific_name || ''])
-            .some(s => s.toLowerCase() === scientificName.toLowerCase()));
-        if (exact) {
-          return { ...exact, common_name: englishName, scientific_name: [scientificName],
-            czech: czech || (exact.czech_names && exact.czech_names[0]) || '', _source: 'PlantNet' };
-        }
-        const img = await _wikiImage(scientificName);
-        return { common_name: englishName, scientific_name: [scientificName], czech,
-          default_image: img ? { regular_url: img } : undefined,
-          _source: img ? 'PlantNet + Wikipedia' : 'PlantNet' };
+      const results = en?.results || [];
+      if (results.length) {
+        const cands = results.slice(0, 3).map(r => ({
+          scientificName: r.species?.scientificNameWithoutAuthor || '',
+          commonName: (r.species?.commonNames || [])[0] || '',
+          score: r.score,
+        })).filter(c => c.scientificName);
+        const top = cands[0];
+        // confident = strong top score AND clearly ahead of the runner-up
+        const confident = top && top.score >= 0.5 && (cands.length < 2 || top.score - cands[1].score >= 0.12);
+        if (confident) return await resolveSpecies(top.scientificName, top.commonName || top.scientificName, top.score);
+        if (cands.length) return { candidates: cands };
       }
     } catch(e) {}
   }
@@ -763,6 +821,6 @@ const INDOOR_PLANTS = [
 ];
 
 Object.assign(window, {
-  PERENUAL, INDOOR_PLANTS, speciesCare, searchSpecies, searchLocalPlants, getSpeciesDetails, identifySpecies, setPlantIdKey, setIdentifyLang, setHousePlantsKey,
+  PERENUAL, INDOOR_PLANTS, speciesCare, searchSpecies, searchLocalPlants, getSpeciesDetails, identifySpecies, resolveSpecies, setPlantIdKey, setIdentifyLang, setHousePlantsKey,
   setApiKey, hasApiKey, SEED_PLANTS,
 });

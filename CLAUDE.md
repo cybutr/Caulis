@@ -77,7 +77,7 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v53.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v55.
 
 ## Animations
 

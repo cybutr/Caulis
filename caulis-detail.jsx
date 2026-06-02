@@ -278,8 +278,32 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   const [lastWatered, setLastWatered] = useState(editing ? (editing.days || 0) : 0);
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSpecies, setLoadingSpecies] = useState(false);
+  const [candidates, setCandidates] = useState([]);
   const fileRef = useRef(null);
   const photoModeRef = useRef('photo');
+
+  // fill the form from a resolved species record
+  const applyIdentified = (sp) => {
+    const c = speciesCare(sp);
+    setName(sp.common_name || '');
+    setLatin(Array.isArray(sp.scientific_name) ? sp.scientific_name[0] : (sp.scientific_name || ''));
+    setCzech((sp.czech_names && sp.czech_names[0]) || sp.czech || c.czech || '');
+    setSpecies(sp);
+    setPresetImage(c.image);
+    setEvery(c.every);
+    setLight(c.light || '');
+    setCare(c.care || '');
+    setFact(c.fact || '');
+    setSource((sp._source || 'PlantNet') + (sp._score ? ` · ${Math.round(sp._score * 100)}%` : ''));
+    setIdentified(true);
+  };
+  const chooseCandidate = async (cand) => {
+    setCandidates([]);
+    setIdentifying(true);
+    const full = await resolveSpecies(cand.scientificName, cand.commonName || cand.scientificName, cand.score);
+    setIdentifying(false);
+    applyIdentified(full);
+  };
 
   const fmtName = n => n.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 
@@ -333,22 +357,13 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
       setPhotos(prev => [...prev, dataUrl]); // keep the user's shot; never replaced
       if (photoModeRef.current === 'identify') {
         setIdentified(false);
+        setCandidates([]);
         setIdentifying(true);
         const sp = await identifySpecies(dataUrl);
         setIdentifying(false);
         if (!sp) { setSource('failed'); return; }
-        const care = speciesCare(sp);
-        setName(sp.common_name || '');
-        setLatin(Array.isArray(sp.scientific_name) ? sp.scientific_name[0] : (sp.scientific_name || ''));
-        setCzech((sp.czech_names && sp.czech_names[0]) || sp.czech || care.czech || '');
-        setSpecies(sp);
-        setPresetImage(care.image); // wiki/preset becomes an extra gallery slide
-        setEvery(care.every);
-        setLight(care.light || '');
-        setCare(care.care || '');
-        setFact(care.fact || '');
-        setSource(sp._source || 'PlantNet');
-        setIdentified(true);
+        if (sp.candidates) { setCandidates(sp.candidates); return; } // uncertain — let user pick
+        applyIdentified(sp);
       }
     };
     reader.readAsDataURL(f);
@@ -448,6 +463,23 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
             </div>
           )}
           </>); })()}
+
+          {candidates.length > 0 && (
+            <div style={{ background:C.panel, borderRadius:16, border:'1px solid rgba(110,154,62,0.35)', padding:'12px 14px' }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest, marginBottom:8 }}>Not sure — pick the closest:</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                {candidates.map((c, i) => (
+                  <div key={i} onClick={()=>chooseCandidate(c)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'10px 12px', borderRadius:12, background:C.bg, border:'0.5px solid rgba(45,80,22,0.12)', cursor:'pointer' }}>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{c.commonName || c.scientificName}</div>
+                      <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:12, color:C.brown, opacity:0.75 }}>{c.scientificName}</div>
+                    </div>
+                    <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11, fontWeight:700, color:C.sage }}>{Math.round(c.score*100)}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <Field label="Common name">
             <input value={name} onChange={e=>onNameChange(e.target.value)} placeholder="e.g. Monstera" style={inputStyle()}/>
