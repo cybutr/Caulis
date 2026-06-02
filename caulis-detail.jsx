@@ -218,7 +218,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
     setName(fmtName(p.name));
     setLatin(p.latin);
     if (p.czech) setCzech(p.czech);
-    if (!hasApiKey()) return;
+    if (!hasApiKey() && !p.isLibrary) return;
     setLoadingSpecies(true);
     try {
       const sp = await getSpeciesDetails(p.id, p.latin);
