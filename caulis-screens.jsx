@@ -4,7 +4,7 @@
 const PRINT_SIZES = [['S', 30], ['M', 40], ['L', 55]];
 
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode }) {
   const [press, setPress] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
@@ -27,7 +27,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress }) {
         cursor:'pointer', position:'relative', userSelect:'none', WebkitUserSelect:'none',
       }}>
       <div style={{ position:'relative' }}>
-        <Specimen tint={tint} height={96} image={plant.userImage || plant.image}/>
+        <Specimen tint={tint} height={96} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/>
         <div style={{
           position:'absolute', top:9, right:9, width:18, height:18, borderRadius:999, background:C.panel,
           display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 2px rgba(43,42,38,0.12)',
@@ -35,7 +35,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress }) {
           <StatusDot status={status}/>
         </div>
       </div>
-      <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, lineHeight:1.12, color:C.forest, marginTop:11, letterSpacing:0.1 }}>{plant.name}</div>
+      <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, lineHeight:1.12, color:C.forest, marginTop:11, letterSpacing:0.1 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
       <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:400, color:C.brown, opacity:0.7, marginTop:2, letterSpacing:0.2 }}>{plant.location}</div>
       <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:9 }}>
         <svg width="11" height="13" viewBox="0 0 11 13" style={{flexShrink:0}}>
@@ -69,7 +69,7 @@ function ScreenHead({ eyebrow, title, isDesktop }) {
 //  GARDEN
 // ════════════════════════════════════════════════════════════
 function GardenFilterBar({ sort, setSort, sidePad = 22 }) {
-  const filters = [['all','All'],['location','Location']];
+  const filters = [['all','All'],['urgent','Needs water'],['location','Location']];
   return (
     <div style={{ display:'flex', gap:8, overflowX:'auto', padding:`14px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
       {filters.map(([key,label]) => {
@@ -145,8 +145,9 @@ function EmptyGarden({ onAdd }) {
   );
 }
 
-function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop }) {
+function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop, czechMode }) {
   const [sort, setSort] = useState('all');
+  const [q, setQ] = useState('');
   const needs = plants.filter(p => statusOf(p.days,p.every) !== 'ok').length;
   const tintFor = id => TINTS[(id-1)%TINTS.length];
   const empty = plants.length === 0;
@@ -154,16 +155,23 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop }) {
   const topPad  = isDesktop ? 32 : 56;
   const gridCols = isDesktop ? 'repeat(auto-fill, minmax(185px, 1fr))' : '1fr 1fr';
 
+  const nq = q.trim().toLowerCase();
+  const matched = nq
+    ? plants.filter(p => [p.name, p.czech, p.latin, p.location].some(v => (v||'').toLowerCase().includes(nq)))
+    : plants;
+
   let groups = null, flat = null;
   if (sort === 'location') {
     const byRoom = {};
-    plants.forEach(p => { (byRoom[p.location] = byRoom[p.location] || []).push(p); });
+    matched.forEach(p => { (byRoom[p.location] = byRoom[p.location] || []).push(p); });
     groups = Object.keys(byRoom).sort().map(room => ({ room, items: byRoom[room] }));
+  } else if (sort === 'urgent') {
+    flat = [...matched].sort((a,b) => (b.days/b.every) - (a.days/a.every));
   } else {
-    flat = [...plants];
+    flat = [...matched];
   }
 
-  const cardProps = { onOpen, onLongPress };
+  const cardProps = { onOpen, onLongPress, czechMode };
 
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
@@ -192,7 +200,24 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop }) {
 
       {empty && <EmptyGarden onAdd={onAdd}/>}
 
+      {!empty && (
+        <div style={{ padding:`12px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, height:42, borderRadius:12, background:C.panel, border:C.hair, padding:'0 12px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0, opacity:0.5 }}><circle cx="11" cy="11" r="7" stroke={C.ink} strokeWidth="1.7"/><path d="M21 21l-4-4" stroke={C.ink} strokeWidth="1.7" strokeLinecap="round"/></svg>
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search plants…" style={{ flex:1, border:'none', background:'transparent', outline:'none', fontFamily:FONT_SANS, fontSize:14, color:C.ink }}/>
+            {q && <div onClick={()=>setQ('')} style={{ cursor:'pointer', opacity:0.5 }}><svg width="13" height="13" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke={C.ink} strokeWidth="1.6" strokeLinecap="round"/></svg></div>}
+          </div>
+        </div>
+      )}
+
       {!empty && <GardenFilterBar sort={sort} setSort={setSort} sidePad={sidePad}/>}
+
+      {!empty && matched.length === 0 && (
+        <div style={{ textAlign:'center', padding:'48px 30px', position:'relative', zIndex:2 }}>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:20, color:C.forest }}>No matches</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Nothing matches "{q}".</div>
+        </div>
+      )}
 
       {!empty && sort === 'location' && (
         <div style={{ padding:`4px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
@@ -219,7 +244,7 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop }) {
 // ════════════════════════════════════════════════════════════
 //  NEEDS WATER
 // ════════════════════════════════════════════════════════════
-function NeedsRow({ plant, tint, onOpen, onLongPress }) {
+function NeedsRow({ plant, tint, onOpen, onLongPress, czechMode }) {
   const [press, setPress] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
@@ -234,16 +259,16 @@ function NeedsRow({ plant, tint, onOpen, onLongPress }) {
       cursor:'pointer', userSelect:'none', WebkitUserSelect:'none',
       transform: press ? 'scale(0.985)' : 'scale(1)', transition:'transform 160ms ease',
     }}>
-      <div style={{ width:62, height:62, flexShrink:0 }}><Specimen tint={tint} height={62} radius={13} leafSize={28} image={plant.userImage || plant.image}/></div>
+      <div style={{ width:62, height:62, flexShrink:0 }}><Specimen tint={tint} height={62} radius={13} leafSize={28} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/></div>
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.forest, lineHeight:1.1 }}>{plant.name}</div>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.forest, lineHeight:1.1 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6, marginTop:3 }}>{agoLabel(plant.days)} · {plant.location}</div>
       </div>
       <StatusTag status={status}/>
     </div>
   );
 }
-function NeedsWaterScreen({ plants, onOpen, onLongPress, isDesktop }) {
+function NeedsWaterScreen({ plants, onOpen, onLongPress, isDesktop, czechMode }) {
   const order = { needs:0, soon:1 };
   const list = plants.filter(p=>statusOf(p.days,p.every)!=='ok')
     .sort((a,b)=> order[statusOf(a.days,a.every)] - order[statusOf(b.days,b.every)]);
@@ -262,7 +287,7 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, isDesktop }) {
             <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Every plant is happily hydrated.</div>
           </div>
         )}
-        {list.map((p,i)=> <NeedsRow key={p.id} plant={p} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress}/>)}
+        {list.map((p,i)=> <NeedsRow key={p.id} plant={p} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress} czechMode={czechMode}/>)}
       </div>
     </div>
   );
@@ -355,7 +380,7 @@ function ScannerScreen({ plants, onScan, isDesktop }) {
 function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechMode }) {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:12, background:C.panel, borderRadius:18, padding:12, border:'0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)' }}>
-      <div style={{ width:48, height:48, flexShrink:0 }}><Specimen tint={TINTS[(plant.id-1)%TINTS.length]} height={48} radius={11} leafSize={22} image={plant.userImage || plant.image}/></div>
+      <div style={{ width:48, height:48, flexShrink:0 }}><Specimen tint={TINTS[(plant.id-1)%TINTS.length]} height={48} radius={11} leafSize={22} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/></div>
       <div onClick={()=>onOpen(plant.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest, lineHeight:1.05, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.ink, opacity:0.55, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{plant.latin}</div>

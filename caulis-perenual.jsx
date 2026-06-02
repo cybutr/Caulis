@@ -304,39 +304,25 @@ async function identifySpecies(dataUrl) {
       const blob = new Blob([arr], { type: mime });
       // English call = reliable english + latin
       const en = await _plantNetIdentify(blob, 'en');
-      if (en) {
-        // High confidence direct match or library fallback
-        const results = en.results || [];
-        
-        // 1. Precise Scientific Match in Library
-        for (const res of results.slice(0, 3)) {
-          const sn = res.species?.scientificNameWithoutAuthor?.toLowerCase();
-          const match = PERENUAL.find(p => 
-            p.scientific_name.some(s => s.toLowerCase() === sn)
-          );
-          if (match) return { ...match, _source: 'PlantNet' };
-        }
-
-        // 2. Common Name Match in Library
-        for (const res of results.slice(0, 3)) {
-          const cn = (res.species?.commonNames || [])[0]?.toLowerCase();
-          if (!cn) continue;
-          const match = PERENUAL.find(p => 
-            p.common_name.toLowerCase() === cn || 
-            (p.czech_names && p.czech_names.some(s => s.toLowerCase() === cn))
-          );
-          if (match) return { ...match, _source: 'PlantNet' };
-        }
-
+      if (en && en.scientificName) {
         const scientificName = en.scientificName;
         const englishName = en.commonName || scientificName;
-        
-        // wild plant — fetch czech common name separately
+        // czech common name from a second pass
         let czech = '';
         try { const cs = await _plantNetIdentify(blob, 'cs'); czech = cs?.commonName || ''; } catch(e) {}
-        // try an image for the wild plant
+        // enrich care/photo ONLY on an exact latin match — never override the
+        // identified species with a loose common-name guess
+        const exact = PERENUAL.find(p =>
+          (Array.isArray(p.scientific_name) ? p.scientific_name : [p.scientific_name || ''])
+            .some(s => s.toLowerCase() === scientificName.toLowerCase()));
+        if (exact) {
+          return { ...exact, common_name: englishName, scientific_name: [scientificName],
+            czech: czech || (exact.czech_names && exact.czech_names[0]) || '', _source: 'PlantNet' };
+        }
         const img = await _wikiImage(scientificName);
-        return { common_name: englishName, scientific_name: scientificName, czech, default_image: img ? { regular_url: img } : undefined, _source: img ? 'PlantNet + Wikipedia' : 'PlantNet' };
+        return { common_name: englishName, scientific_name: [scientificName], czech,
+          default_image: img ? { regular_url: img } : undefined,
+          _source: img ? 'PlantNet + Wikipedia' : 'PlantNet' };
       }
     } catch(e) {}
   }
@@ -351,15 +337,11 @@ async function identifySpecies(dataUrl) {
       const hits = json?.data;
       if (Array.isArray(hits) && hits.length) {
         const hit = hits[0];
-        const sp = PERENUAL.find(p => p.id === hit.id) ||
-                   PERENUAL.find(p => p.common_name?.toLowerCase() === hit.common_name?.toLowerCase());
-        if (sp) return { ...sp, _source: 'Perenual' };
         if (hit.common_name || hit.scientific_name) return { ...hit, _source: 'Perenual' };
       }
     } catch(e) {}
   }
-  await _wait(1700);
-  return { ...PERENUAL[Math.floor(Math.random() * PERENUAL.length)], _source: 'demo' };
+  return null; // couldn't identify — no fake match
 }
 
 // ── seed garden: 8 plants built from the species library ──

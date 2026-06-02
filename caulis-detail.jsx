@@ -15,17 +15,81 @@ function InfoTile({ icon, label, children, accent = C.forest }) {
   );
 }
 
+const offsetLabel = (n) => n === 0 ? 'Today' : n === 1 ? 'Yesterday' : `${n} days ago`;
+
+// downscale + jpeg-compress so photos are light enough to sync to Firebase
+function compressImage(dataUrl, max = 1024, q = 0.72) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > h && w > max) { h = Math.round(h * max / w); w = max; }
+      else if (h >= w && h > max) { w = Math.round(w * max / h); h = max; }
+      try {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', q));
+      } catch (e) { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+// photos of a plant, in display order: user photos first, then preset/wiki
+function plantGallery(plant) {
+  const user = plant.photos || (plant.userImage ? [plant.userImage] : []);
+  const all = [...user];
+  if (plant.image && !all.includes(plant.image)) all.push(plant.image);
+  return all;
+}
+function firstPhoto(plant) {
+  return (plant.photos && plant.photos[0]) || plant.userImage || plant.image || null;
+}
+
+// ── swipeable photo carousel ──────────────────────────────
+function PhotoCarousel({ images, tint, height = 196, radius = 22 }) {
+  const [slide, setSlide] = useState(0);
+  const ref = useRef(null);
+  const imgs = images.length ? images : [null];
+  const onScroll = () => {
+    const el = ref.current; if (!el) return;
+    setSlide(Math.round(el.scrollLeft / el.clientWidth));
+  };
+  return (
+    <div style={{ position:'relative' }}>
+      <div ref={ref} onScroll={onScroll} style={{ display:'flex', overflowX:'auto', overflowY:'hidden', scrollSnapType:'x mandatory', borderRadius:radius, WebkitOverflowScrolling:'touch', scrollbarWidth:'none' }}>
+        {imgs.map((img, i) => (
+          <div key={i} style={{ flex:'0 0 100%', scrollSnapAlign:'center' }}>
+            <Specimen tint={tint} height={height} radius={radius} leafSize={84} caption="plant photo" image={img}/>
+          </div>
+        ))}
+      </div>
+      {imgs.length > 1 && (
+        <div style={{ position:'absolute', bottom:10, left:0, right:0, display:'flex', justifyContent:'center', gap:6, pointerEvents:'none' }}>
+          {imgs.map((_, i) => (
+            <span key={i} style={{ width: i===slide?7:6, height: i===slide?7:6, borderRadius:999, background:'#fff', opacity: i===slide?1:0.5, boxShadow:'0 1px 2px rgba(0,0,0,0.3)', transition:'all 160ms' }}/>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
 function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, isDesktop, readonly = false, czechMode = false }) {
   const [justWatered, setJustWatered] = useState(false);
+  const [waterOffset, setWaterOffset] = useState(0); // days ago
   const prevRef = useRef(null);
   const status = statusOf(plant.days, plant.every);
+  const gallery = plantGallery(plant);
 
   const water = () => {
     prevRef.current = { days: plant.days };
-    onWater(plant.id);
+    onWater(plant.id, waterOffset);
     setJustWatered(true);
   };
   const undo = () => {
@@ -60,7 +124,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
 
         <div style={{ padding:'0 18px', position:'relative', zIndex:2 }}>
           {/* hero */}
-          <Specimen tint={tint} height={196} radius={22} leafSize={84} caption="plant photo" image={plant.userImage || plant.image}/>
+          <PhotoCarousel images={gallery} tint={tint}/>
 
           {/* name block */}
           <div style={{ marginTop:16 }}>
@@ -82,7 +146,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
               <LeafOutline size={16} color={C.brown} sw={1.5}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.brown, opacity:0.7 }}>View only — not your garden</span>
             </div>
-          ) : (
+          ) : (<>
             <div onClick={!justWatered ? water : undefined} style={{
               marginTop:18, cursor: justWatered?'default':'pointer',
               display:'flex', alignItems:'center', justifyContent:'center', gap:9,
@@ -94,9 +158,17 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
               border: justWatered ? '1px solid rgba(110,154,62,0.4)' : 'none',
             }}>
               {justWatered ? <IconCheck s={19} c={C.sage}/> : <IconDrop s={20} c="#fff" fill/>}
-              <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600, letterSpacing:0.2 }}>{justWatered ? 'Watered today' : 'Mark as watered'}</span>
+              <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600, letterSpacing:0.2 }}>{justWatered ? 'Watered' + (waterOffset ? ` ${offsetLabel(waterOffset)}` : ' today') : (waterOffset ? `Mark watered ${offsetLabel(waterOffset)}` : 'Mark as watered')}</span>
             </div>
-          )}
+            {!justWatered && (
+              <div style={{ marginTop:10, display:'flex', alignItems:'center', justifyContent:'center', gap:12 }}>
+                <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.5 }}>When?</span>
+                <div onClick={()=>setWaterOffset(o=>Math.max(0, o-1))} style={{ cursor:'pointer', width:30, height:30, borderRadius:9, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:17, fontWeight:600 }}>−</div>
+                <span style={{ minWidth:78, textAlign:'center', fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:C.ink }}>{offsetLabel(waterOffset)}</span>
+                <div onClick={()=>setWaterOffset(o=>Math.min(60, o+1))} style={{ cursor:'pointer', width:30, height:30, borderRadius:9, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:17, fontWeight:600 }}>+</div>
+              </div>
+            )}
+          </>)}
 
           {/* info tiles */}
           <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:18 }}>
@@ -107,8 +179,8 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 <span style={{ opacity:0.6 }}> · every {plant.benchmark || plant.every + ' days'}</span>
               </InfoTile>
             </div>
-            <InfoTile icon={<LeafOutline size={14} color={C.sage} sw={1.7}/>} label="Care">{plant.care}</InfoTile>
-            <InfoTile icon={<span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:14, color:C.sage }}>i</span>} label="Fun fact">{plant.fact}</InfoTile>
+            {plant.care && <InfoTile icon={<LeafOutline size={14} color={C.sage} sw={1.7}/>} label="Care">{plant.care}</InfoTile>}
+            {plant.fact && <InfoTile icon={<span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:14, color:C.sage }}>i</span>} label="Fun fact">{plant.fact}</InfoTile>}
             <div style={{ display:'flex', alignItems:'center', gap:6, padding:'2px 4px' }}>
               <LeafOutline size={11} color={C.brown} sw={1.5}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.55, letterSpacing:0.2 }}>Care data &amp; photo via Perenual, House Plants &amp; Wikipedia</span>
@@ -198,9 +270,12 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   const [source, setSource] = useState('');
   const [species, setSpecies] = useState(null);
   const [presetImage, setPresetImage] = useState(editing ? editing.image : null);
-  const [userPhoto, setUserPhoto] = useState(editing ? editing.userImage : null);
+  const [photos, setPhotos] = useState(editing ? (editing.photos || (editing.userImage ? [editing.userImage] : [])) : []);
   const [every, setEvery] = useState(editing ? editing.every : 7);
   const [light, setLight] = useState(editing ? editing.light || '' : '');
+  const [care, setCare] = useState(editing ? editing.care || '' : '');
+  const [fact, setFact] = useState(editing ? editing.fact || '' : '');
+  const [lastWatered, setLastWatered] = useState(editing ? (editing.days || 0) : 0);
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSpecies, setLoadingSpecies] = useState(false);
   const fileRef = useRef(null);
@@ -228,6 +303,8 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
         setPresetImage(care.image);
         setEvery(care.every);
         setLight(care.light || '');
+        setCare(care.care || '');
+        setFact(care.fact || '');
         if (care.czech) setCzech(care.czech);
         setSource(sp._source || 'Perenual');
         setIdentified(true);
@@ -237,8 +314,8 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
     }
   };
 
-  const displayImage = userPhoto || presetImage;
-  const hasPhoto = !!displayImage;
+  const formGallery = [...photos, ...(presetImage && !photos.includes(presetImage) ? [presetImage] : [])];
+  const hasPhoto = formGallery.length > 0;
 
   const commitTyped = () => {
     const v = typed.trim();
@@ -250,31 +327,33 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
 
   const processFile = async (f) => {
     window._filePickerOpen = false;
-    const preview = URL.createObjectURL(f);
-    setUserPhoto(preview);
-    setIdentified(false);
     const reader = new FileReader();
     reader.onload = async (ev) => {
-      const dataUrl = ev.target.result;
-      setUserPhoto(dataUrl);
+      const dataUrl = await compressImage(ev.target.result);
+      setPhotos(prev => [...prev, dataUrl]); // keep the user's shot; never replaced
       if (photoModeRef.current === 'identify') {
+        setIdentified(false);
         setIdentifying(true);
         const sp = await identifySpecies(dataUrl);
+        setIdentifying(false);
+        if (!sp) { setSource('failed'); return; }
         const care = speciesCare(sp);
         setName(sp.common_name || '');
         setLatin(Array.isArray(sp.scientific_name) ? sp.scientific_name[0] : (sp.scientific_name || ''));
         setCzech((sp.czech_names && sp.czech_names[0]) || sp.czech || care.czech || '');
         setSpecies(sp);
-        setPresetImage(care.image);
+        setPresetImage(care.image); // wiki/preset becomes an extra gallery slide
         setEvery(care.every);
         setLight(care.light || '');
+        setCare(care.care || '');
+        setFact(care.fact || '');
         setSource(sp._source || 'PlantNet');
-        setIdentifying(false);
         setIdentified(true);
       }
     };
     reader.readAsDataURL(f);
   };
+  const removePhoto = (i) => setPhotos(prev => prev.filter((_, idx) => idx !== i));
 
   const openPicker = async (mode = 'photo') => {
     photoModeRef.current = mode;
@@ -318,33 +397,30 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
         <div style={{ padding:'10px 18px 14px', position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:12 }}>
           {/* photo area — input lives outside conditional so it never remounts */}
           <input ref={fileRef} id="caulis-file-input" type="file" accept="image/*" style={{ display:'none' }}/>
+          {(() => { const addPhoto = () => { if (identifying) return; isDesktop ? openPicker('photo') : setSheet(true); }; return (<>
           <div style={{ position:'relative' }}>
-            {isDesktop ? (
-            <div onClick={()=>{ if (identifying) return; openPicker('photo'); }} style={{ cursor: identifying ? 'default' : 'pointer' }}>
-              <Specimen tint={TINTS[0]} height={120} radius={20} leafSize={60} image={displayImage}
-                caption={identifying ? '' : (hasPhoto ? '' : 'click to add a photo')}/>
-            </div>
+            {hasPhoto ? (
+              <PhotoCarousel images={formGallery} tint={TINTS[0]} height={120} radius={20}/>
             ) : (
-            <div onClick={()=>{ if (identifying) return; setSheet(true); }} style={{ cursor: identifying ? 'default' : 'pointer' }}>
-              <Specimen tint={TINTS[0]} height={120} radius={20} leafSize={60} image={displayImage}
-                caption={identifying ? '' : (hasPhoto ? '' : 'tap to add a photo')}/>
-            </div>
+              <div onClick={addPhoto} style={{ cursor: identifying ? 'default' : 'pointer' }}>
+                <Specimen tint={TINTS[0]} height={120} radius={20} leafSize={60} image={null}
+                  caption={identifying ? '' : (isDesktop ? 'click to add a photo' : 'tap to add a photo')}/>
+              </div>
             )}
             {!identifying && (
-              <div style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', pointerEvents:'none' }}>
+              <div onClick={addPhoto} style={{ position:'absolute', top:12, right:12, width:36, height:36, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
                 <CameraIcon s={19}/>
               </div>
             )}
             {identified && !identifying && (
-              <div style={{ position:'absolute', bottom:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:C.forest, borderRadius:999, padding:'5px 11px', pointerEvents:'none' }}>
+              <div style={{ position:'absolute', top:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:C.forest, borderRadius:999, padding:'5px 11px', pointerEvents:'none' }}>
                 <SparkIcon s={13} c="#fff"/>
                 <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:'#fff' }}>{source === 'demo' ? 'Demo match' : `Identified via ${source || 'Perenual'}`}</span>
               </div>
             )}
-            {userPhoto && !identifying && (
-              <div style={{ position:'absolute', bottom:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:'rgba(42,42,38,0.7)', borderRadius:999, padding:'5px 11px', pointerEvents:'none' }}>
-                <CameraIcon s={13} c="#fff"/>
-                <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:'#fff' }}>Your photo</span>
+            {source === 'failed' && !identifying && (
+              <div style={{ position:'absolute', top:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:'#B4472E', borderRadius:999, padding:'5px 11px', pointerEvents:'none' }}>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:'#fff' }}>Couldn't identify</span>
               </div>
             )}
             {identifying && (
@@ -354,6 +430,24 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
               </div>
             )}
           </div>
+          {/* thumbnail strip — your photos, removable */}
+          {photos.length > 0 && (
+            <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:2 }}>
+              {photos.map((img, i) => (
+                <div key={i} onClick={()=> i!==0 && setPhotos(prev => [prev[i], ...prev.filter((_,idx)=>idx!==i)])} style={{ position:'relative', flexShrink:0, cursor: i!==0 ? 'pointer' : 'default' }}>
+                  <img src={img} alt="" style={{ width:54, height:54, borderRadius:11, objectFit:'cover', border: i===0 ? `2px solid ${C.forest}` : C.hair }}/>
+                  {i===0 && <span style={{ position:'absolute', bottom:3, left:3, fontFamily:FONT_SANS, fontSize:8, fontWeight:700, color:'#fff', background:'rgba(45,80,22,0.85)', borderRadius:5, padding:'1px 5px', letterSpacing:0.3 }}>COVER</span>}
+                  <div onClick={(e)=>{ e.stopPropagation(); removePhoto(i); }} style={{ position:'absolute', top:-5, right:-5, width:20, height:20, borderRadius:999, background:C.ink, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }}>
+                    <svg width="9" height="9" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                  </div>
+                </div>
+              ))}
+              <div onClick={addPhoto} style={{ flexShrink:0, width:54, height:54, borderRadius:11, border:'1.5px dashed rgba(45,80,22,0.3)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                <IconPlus s={18} c={C.forest}/>
+              </div>
+            </div>
+          )}
+          </>); })()}
 
           <Field label="Common name">
             <input value={name} onChange={e=>onNameChange(e.target.value)} placeholder="e.g. Monstera" style={inputStyle()}/>
@@ -447,12 +541,25 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
           <Field label="Light">
             <input value={light} onChange={e=>setLight(e.target.value)} placeholder="e.g. Bright, indirect" style={inputStyle()}/>
           </Field>
+          <Field label="Care notes">
+            <textarea value={care} onChange={e=>setCare(e.target.value)} placeholder="e.g. Water when the top 5cm of soil is dry." rows={2} style={{ ...inputStyle(), height:'auto', minHeight:56, paddingTop:12, paddingBottom:12, resize:'vertical', lineHeight:1.5 }}/>
+          </Field>
+          <Field label="Fun fact">
+            <textarea value={fact} onChange={e=>setFact(e.target.value)} placeholder="Something interesting about this plant…" rows={2} style={{ ...inputStyle(), height:'auto', minHeight:56, paddingTop:12, paddingBottom:12, resize:'vertical', lineHeight:1.5 }}/>
+          </Field>
+          <Field label="Last watered">
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <div onClick={()=>setLastWatered(d=>Math.max(0, d-1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>−</div>
+              <span style={{ flex:1, textAlign:'center', fontFamily:FONT_SANS, fontSize:15, fontWeight:600, color:C.ink }}>{offsetLabel(lastWatered)}</span>
+              <div onClick={()=>setLastWatered(d=>Math.min(365, d+1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>+</div>
+            </div>
+          </Field>
         </div>
       </div>
 
       {/* save bar */}
       <div style={{ flexShrink:0, padding:'12px 18px 26px', borderTop:'0.5px solid rgba(45,80,22,0.1)', background:C.bg+'F2', backdropFilter:'blur(14px)' }}>
-        <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, userImage:userPhoto, every, light:light.trim() }) : undefined}
+        <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, photos, every, light:light.trim(), care:care.trim(), fact:fact.trim(), days:lastWatered }) : undefined}
           style={{
             height:52, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
             background: canSave ? C.forest : 'rgba(45,80,22,0.18)', color:'#fff',
