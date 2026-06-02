@@ -452,7 +452,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime }) {
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [housePlantsInput, setHousePlantsInput] = useState('');
@@ -474,8 +474,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
   const [settingPassword, setSettingPassword] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
-  const [joinPassRequired, setJoinPassRequired] = useState(false);
-  const [joinPassError, setJoinPassError] = useState(false);
+  const [joinStatus, setJoinStatus] = useState('idle'); // 'idle' | 'checking' | 'notFound'
 
   const copyKey = () => {
     navigator.clipboard.writeText(gardenKey).catch(()=>{});
@@ -500,18 +499,18 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
     if (ok) setTimeout(() => { setRenaming(false); setRenameKey(''); setRenameStatus('idle'); }, 1200);
   };
 
-  const resetJoin = () => { setJoining(false); setJoinKey(''); setJoinPassword(''); setJoinPassRequired(false); setJoinPassError(false); };
+  const resetJoin = () => { setJoining(false); setJoinKey(''); setJoinPassword(''); setJoinStatus('idle'); };
 
   // single step: key + (optional) password derive the node. If nothing is
   // stored there, the key/password pair is wrong or the garden is empty.
-  const submitJoin = async () => {
+  const submitJoin = async (force = false) => {
     const k = joinKey.trim();
     if (!k) return;
-    setJoinPassError(false);
-    if (FIREBASE_READY) {
+    if (FIREBASE_READY && !force) {
+      setJoinStatus('checking');
       const node = await gardenNodeId(k, joinPassword);
       const data = await fetchGardenOnce(node);
-      if (!data) { setJoinPassError(true); return; }
+      if (!data) { setJoinStatus('notFound'); return; }
     }
     onSetGardenKey(k, joinPassword); resetJoin();
   };
@@ -822,7 +821,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
               {!renaming && !joining && (
                 <div style={{ display:'flex', gap:8 }}>
                   <div onClick={()=>{ setRenaming(true); setRenameKey(''); setRenameStatus('idle'); }} style={{ flex:1, height:38, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Rename</div>
-                  <div onClick={()=>{ setJoining(true); setJoinKey(''); setJoinPassword(''); setJoinPassRequired(false); setJoinPassError(false); }} style={{ flex:1, height:38, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join garden</div>
+                  <div onClick={()=>{ setJoining(true); setJoinKey(''); setJoinPassword(''); setJoinStatus('idle'); }} style={{ flex:1, height:38, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join garden</div>
                 </div>
               )}
               {renaming && (
@@ -850,16 +849,38 @@ function SettingsScreen({ plants, isDesktop, gardenKey, onSetGardenKey, onRename
               )}
               {joining && (
                 <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>Enter the garden key and its password (if any). Your current plants will be replaced.</div>
-                  <input value={joinKey} onChange={e=>{ setJoinKey(e.target.value); setJoinPassError(false); }} placeholder="garden-key"
-                    style={{ boxSizing:'border-box', height:42, borderRadius:10, border: joinPassError ? '1px solid #B4472E' : C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-                  <input type="password" value={joinPassword} onChange={e=>{ setJoinPassword(e.target.value); setJoinPassError(false); }} onKeyDown={e=>{ if(e.key==='Enter') submitJoin(); }} placeholder="Password (leave empty if none)"
-                    style={{ boxSizing:'border-box', height:42, borderRadius:10, border: joinPassError ? '1px solid #B4472E' : C.hair, background:C.input, padding:'0 12px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
-                  {joinPassError && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>⚠ No garden found — check the key and password</div>}
+                  <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>
+                    {joinStatus==='notFound' ? "No garden found. Create it now?" : "Enter the garden key and its password (if any). Your current plants will be replaced."}
+                  </div>
+                  <input value={joinKey} onChange={e=>{ setJoinKey(e.target.value); setJoinStatus('idle'); }} placeholder="garden-key"
+                    style={{ boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                  <input type="password" value={joinPassword} onChange={e=>{ setJoinPassword(e.target.value); setJoinStatus('idle'); }} onKeyDown={e=>{ if(e.key==='Enter') submitJoin(); }} placeholder="Password (leave empty if none)"
+                    style={{ boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
+                  {joinStatus==='checking' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>Checking…</div>}
                   <div style={{ display:'flex', gap:8 }}>
                     <div onClick={resetJoin} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
-                    <div onClick={submitJoin} style={{ flex:2, height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join</div>
+                    <div onClick={()=>submitJoin(joinStatus==='notFound')} style={{ flex:2, height:38, borderRadius:10, background:joinStatus==='notFound'?'#C98A2B':C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>
+                      {joinStatus==='notFound'?'Create Garden':'Join'}
+                    </div>
                   </div>
+                </div>
+              )}
+              {gardenHistory && gardenHistory.length > 1 && !joining && !renaming && (
+                <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.5, textTransform:'uppercase', letterSpacing:0.5 }}>Previous Gardens</div>
+                  {gardenHistory.map(h => (
+                    <div key={h.key} style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <div onClick={()=>onSetGardenKey(h.key, h.password)} style={{ flex:1, height:34, padding:'0 12px', borderRadius:8, background:'rgba(45,80,22,0.05)', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
+                        <span style={{ fontFamily:'ui-monospace,Menlo,monospace', fontSize:11, color:h.key===gardenKey?C.forest:C.ink, fontWeight:h.key===gardenKey?600:400 }}>{h.key}</span>
+                        {h.key === gardenKey && <span style={{ width:6, height:6, borderRadius:999, background:C.sage }}/>}
+                      </div>
+                      {h.key !== gardenKey && (
+                        <div onClick={()=>onRemoveHistory(h.key)} style={{ width:34, height:34, borderRadius:8, background:'rgba(180,71,46,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                          <span style={{ fontSize:16, color:'#B4472E', opacity:0.5 }}>×</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
               <div style={{ display:'flex', alignItems:'center', gap:6 }}>

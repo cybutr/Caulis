@@ -44,6 +44,15 @@ function App() {
   const [monochromePrint, setMonochromePrintRaw] = useState(() => lsGet('caulis_print_mono', false));
   const [gardenPassword, setGardenPassword] = useState(() => { try { return localStorage.getItem('caulis_garden_pw') || ''; } catch(e) { return ''; } });
   const [gardenNode, setGardenNode] = useState(null);
+  const [gardenHistory, setGardenHistory] = useState(() => {
+    const hist = lsGet('caulis_gardens', []);
+    const currentKey = localStorage.getItem('caulis_garden_key');
+    const currentPw = localStorage.getItem('caulis_garden_pw') || '';
+    if (currentKey && !hist.find(h => h.key === currentKey)) {
+      return [{ key: currentKey, password: currentPw }, ...hist].slice(0, 10);
+    }
+    return hist;
+  });
   const [perenualKey, setPerenualKeyState] = useState(() => { try { return localStorage.getItem('caulis_perenual_key') || ''; } catch(e) { return ''; } });
   const [plantIdKey, setPlantIdKeyState] = useState(() => { try { return localStorage.getItem('caulis_plantid_key') || ''; } catch(e) { return ''; } });
   const [housePlantsKey, setHousePlantsKeyState] = useState(() => { try { return localStorage.getItem('caulis_houseplants_key') || ''; } catch(e) { return ''; } });
@@ -318,6 +327,9 @@ function App() {
       localStorage.setItem('caulis_garden_key', k);
       localStorage.setItem('caulis_garden_pw', pw || '');
       localStorage.removeItem('caulis_garden_node');
+      const hist = [{ key: k, password: pw }, ...gardenHistory.filter(h => h.key !== k)].slice(0, 10);
+      setGardenHistory(hist);
+      lsSet('caulis_gardens', hist);
     } catch(e) {}
     switchingGardenRef.current = true;
     setGardenNode(null);
@@ -325,6 +337,12 @@ function App() {
     setGardenPassword(pw || '');
     setPlants([]);
     setQueue([]);
+  };
+
+  const removeGardenFromHistory = (key) => {
+    const hist = gardenHistory.filter(h => h.key !== key);
+    setGardenHistory(hist);
+    lsSet('caulis_gardens', hist);
   };
 
   const renameGardenKey = async (newKey) => {
@@ -587,7 +605,7 @@ window.onload=()=>{
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
