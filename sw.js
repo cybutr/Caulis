@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v60';
+const CACHE = 'caulis-v63';
 const SHELL = [
   './',
   './index.html',

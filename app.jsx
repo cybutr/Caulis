@@ -62,6 +62,7 @@ function App() {
   const [perenualKey, setPerenualKeyState] = useState(() => { try { return localStorage.getItem('caulis_perenual_key') || ''; } catch(e) { return ''; } });
   const [plantIdKey, setPlantIdKeyState] = useState(() => { try { return localStorage.getItem('caulis_plantid_key') || ''; } catch(e) { return ''; } });
   const [housePlantsKey, setHousePlantsKeyState] = useState(() => { try { return localStorage.getItem('caulis_houseplants_key') || ''; } catch(e) { return ''; } });
+  const [anthropicKey, setAnthropicKeyState] = useState(() => { try { return localStorage.getItem('caulis_anthropic_key') || ''; } catch(e) { return ''; } });
   const [identifyLang, setIdentifyLangState] = useState(() => { try { return localStorage.getItem('caulis_identify_lang') || 'en'; } catch(e) { return 'en'; } });
   const [googleClientId, setGoogleClientIdState] = useState(() => { try { return localStorage.getItem('caulis_gcal_cid') || ''; } catch(e) { return ''; } });
   const [googleToken, setGoogleToken] = useState(null);
@@ -80,7 +81,7 @@ function App() {
     const newNode = await gardenNodeId(gardenKey, next);
     if (oldNode && newNode && oldNode !== newNode) {
       switchingGardenRef.current = true;
-      await renameGarden(oldNode, newNode, { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null });
+      await renameGarden(oldNode, newNode, { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null});
       setGardenNode(newNode);
       try { localStorage.setItem('caulis_garden_node', newNode); } catch(e) {}
     }
@@ -259,6 +260,7 @@ function App() {
   const savePerenualKey = (k) => { setApiKey(k); setPerenualKeyState(k || ''); };
   const savePlantIdKey = (k) => { setPlantIdKey(k); setPlantIdKeyState(k || ''); };
   const saveHousePlantsKey = (k) => { setHousePlantsKey(k); setHousePlantsKeyState(k || ''); };
+  const saveAnthropicKey = (k) => { setAnthropicKey(k); setAnthropicKeyState(k || ''); };
   const saveIdentifyLang = (lang) => { setIdentifyLang(lang); setIdentifyLangState(lang); };
   const genKey = () => {
     const adj  = ['green','mossy','sunny','leafy','dewy','wild','quiet','calm','bright','soft','deep','cool'];
@@ -353,7 +355,7 @@ function App() {
 
   const renameGardenKey = async (newKey) => {
     const newNode = await gardenNodeId(newKey, gardenPassword);
-    const data = { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null };
+    const data = { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null};
     const ok = gardenNode ? await renameGarden(gardenNode, newNode, data) : true;
     if (ok) {
       try {
@@ -436,6 +438,7 @@ function App() {
       if (data.perenualKey) { setApiKey(data.perenualKey); setPerenualKeyState(data.perenualKey); }
       if (data.plantIdKey) { setPlantIdKey(data.plantIdKey); setPlantIdKeyState(data.plantIdKey); }
       if (data.housePlantsKey) { setHousePlantsKey(data.housePlantsKey); setHousePlantsKeyState(data.housePlantsKey); }
+      if (data.anthropicKey) { setAnthropicKey(data.anthropicKey); setAnthropicKeyState(data.anthropicKey); }
     });
     return unsubscribe;
   }, [gardenNode]);
@@ -446,10 +449,10 @@ function App() {
     if (fromRemoteRef.current) { fromRemoteRef.current = false; return; }
     if (switchingGardenRef.current) { switchingGardenRef.current = false; return; }
     const timer = setTimeout(() => {
-      pushGarden(gardenNode, { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null });
+      pushGarden(gardenNode, { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null});
     }, 800);
     return () => clearTimeout(timer);
-  }, [plants, locations, queue, gardenNode, perenualKey, plantIdKey, housePlantsKey]);
+  }, [plants, locations, queue, gardenNode, perenualKey, plantIdKey, housePlantsKey, anthropicKey]);
 
   const updateApp = async () => {
     try {
@@ -463,6 +466,25 @@ function App() {
   };
 
   const tintFor = (id) => TINTS[(id - 1) % TINTS.length];
+
+  // swipe between tabs on mobile — ignored over overlays and horizontally-
+  // scrollable / swipeable zones (marked data-noswipe)
+  const TAB_ORDER = ['garden', 'needs', 'scanner', 'print', 'settings'];
+  const swipeRef = useRef(null);
+  const onSwipeStart = (e) => {
+    if (detail || form || moveTarget || menuPlant || guestView) { swipeRef.current = null; return; }
+    if (e.target.closest && e.target.closest('[data-noswipe]')) { swipeRef.current = null; return; }
+    swipeRef.current = { x: e.clientX, y: e.clientY };
+  };
+  const onSwipeEnd = (e) => {
+    const s = swipeRef.current; swipeRef.current = null;
+    if (!s) return;
+    const dx = e.clientX - s.x, dy = e.clientY - s.y;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+    const i = TAB_ORDER.indexOf(tab);
+    const ni = dx < 0 ? Math.min(TAB_ORDER.length - 1, i + 1) : Math.max(0, i - 1);
+    if (ni !== i) setTab(TAB_ORDER[ni]);
+  };
 
   // ── actions ──
   const openDetail = (id, fromScan = false) => setDetail({ id, fromScan });
@@ -613,10 +635,38 @@ window.onload=()=>{
         species_id:care.species_id,
         image: data.presetImage != null ? data.presetImage : care.image,
         photos: data.photos || [],
+        aiV: APP_VERSION,
       }]);
       setTab('garden');
     }
     setForm(null);
+  };
+
+  const [aiRecheck, setAiRecheck] = useState({ busy: false, done: 0, total: 0 });
+  const recheckAllAI = async () => {
+    if (aiRecheck.busy || !hasAnthropicKey()) return;
+    const targets = plants.filter(p => !p.aiV);
+    const withLatin = targets.filter(p => p.latin && p.latin !== '—');
+    setAiRecheck({ busy: true, done: 0, total: withLatin.length });
+    for (const p of withLatin) {
+      try {
+        const rec = await aiReviewCare({
+          common_name: p.name, scientific_name: [p.latin], czech: p.czech || '',
+          watering: p.watering || null, _aiEvery: p.every || undefined,
+          watering_general_benchmark: p.every ? { value: String(p.every), unit: 'days' } : undefined,
+          sunlight: p.sunlight || [], _care: p.care || '', _fact: p.fact || '', _source: 'recheck',
+        });
+        const care = speciesCare(rec);
+        setPlants(ps => ps.map(x => x.id === p.id ? {
+          ...x, every: care.every, light: care.light, care: care.care, fact: care.fact,
+          watering: care.watering, benchmark: care.benchmark, sunlight: care.sunlight,
+          czech: x.czech || care.czech || '', aiV: APP_VERSION,
+        } : x));
+      } catch (e) {}
+      setAiRecheck(r => ({ ...r, done: r.done + 1 }));
+    }
+    setPlants(ps => ps.map(x => x.aiV ? x : { ...x, aiV: APP_VERSION }));
+    setAiRecheck({ busy: false, done: 0, total: 0 });
   };
 
   const exportGarden = () => {
@@ -712,7 +762,7 @@ window.onload=()=>{
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
@@ -764,7 +814,7 @@ window.onload=()=>{
   // ════════════════════════════════════════
   return (
     <div style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', background:C.bg, overflow:'hidden' }}>
-      <div style={{ flex:1, overflowY:'auto', overflowX:'hidden', position:'relative', WebkitOverflowScrolling:'touch' }}>
+      <div onPointerDown={onSwipeStart} onPointerUp={onSwipeEnd} onPointerCancel={()=>{ swipeRef.current = null; }} style={{ flex:1, overflowY:'auto', overflowX:'hidden', position:'relative', WebkitOverflowScrolling:'touch' }}>
         {screen}
       </div>
       <BottomNav tab={tab} setTab={setTab}/>

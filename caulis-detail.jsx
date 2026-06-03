@@ -586,7 +586,10 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
           <Field label="Watering">
             <div style={{ display:'flex', alignItems:'center', gap:10 }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, opacity:0.65 }}>Every</span>
-              <input type="number" min="1" max="365" value={every} onChange={e=>setEvery(Math.max(1,parseInt(e.target.value)||7))} style={{ ...inputStyle(), width:88 }}/>
+              <input type="number" min="1" max="365" value={every}
+                onChange={e=>{ const v=e.target.value; if(v==='') return setEvery(''); const n=parseInt(v,10); if(!isNaN(n)) setEvery(Math.min(365, Math.max(1, n))); }}
+                onBlur={()=>{ if(every==='' || every<1) setEvery(7); }}
+                style={{ ...inputStyle(), width:88 }}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, opacity:0.65 }}>days</span>
             </div>
           </Field>

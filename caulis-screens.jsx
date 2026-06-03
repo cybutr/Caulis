@@ -118,7 +118,7 @@ function ScreenHead({ eyebrow, title, isDesktop }) {
 function GardenFilterBar({ sort, setSort, sidePad = 22 }) {
   const filters = [['all','All'],['urgent','Needs water'],['location','Location']];
   return (
-    <div style={{ display:'flex', gap:8, overflowX:'auto', padding:`14px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
+    <div data-noswipe="1" style={{ display:'flex', gap:8, overflowX:'auto', padding:`14px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
       {filters.map(([key,label]) => {
         const on = sort === key;
         return (
@@ -195,18 +195,24 @@ function EmptyGarden({ onAdd }) {
 function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode }) {
   const [sort, setSort] = useState('all');
   const [q, setQ] = useState('');
+  const [fStatus, setFStatus] = useState('all');
+  const [fLoc, setFLoc] = useState(null);
   const re = useReorder(onReorder);
   const needs = plants.filter(p => statusOf(p.days,p.every) !== 'ok').length;
   const tintFor = id => TINTS[(id-1)%TINTS.length];
   const empty = plants.length === 0;
+  const rooms = [...new Set(plants.map(p => p.location).filter(Boolean))].sort();
   const sidePad = isDesktop ? 28 : 18;
   const topPad  = isDesktop ? 32 : 56;
   const gridCols = isDesktop ? 'repeat(auto-fill, minmax(185px, 1fr))' : '1fr 1fr';
 
   const nq = q.trim().toLowerCase();
-  const matched = nq
-    ? plants.filter(p => [p.name, p.czech, p.latin, p.location].some(v => (v||'').toLowerCase().includes(nq)))
-    : plants;
+  const matched = plants.filter(p => {
+    if (nq && ![p.name, p.czech, p.latin, p.location].some(v => (v||'').toLowerCase().includes(nq))) return false;
+    if (fStatus !== 'all' && statusOf(p.days, p.every) !== fStatus) return false;
+    if (fLoc && p.location !== fLoc) return false;
+    return true;
+  });
 
   let groups = null, flat = null;
   if (sort === 'location') {
@@ -260,10 +266,41 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
 
       {!empty && <GardenFilterBar sort={sort} setSort={setSort} sidePad={sidePad}/>}
 
+      {!empty && (
+        <div data-noswipe="1" style={{ display:'flex', alignItems:'center', gap:8, overflowX:'auto', padding:`10px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0, opacity:0.55 }}><path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z" stroke={C.brown} strokeWidth="1.7" strokeLinejoin="round"/></svg>
+          {[['all','All'],['needs','Needs'],['soon','Soon'],['ok','Healthy']].map(([k,l]) => {
+            const on = fStatus === k;
+            const col = k === 'all' ? C.forest : STATUS[k].dot;
+            return (
+              <div key={k} onClick={()=>setFStatus(k)} style={{
+                flexShrink:0, cursor:'pointer', whiteSpace:'nowrap', borderRadius:999, padding:'6px 13px',
+                background: on ? (k==='all' ? C.forest : STATUS[k].soft) : C.panel,
+                border: on ? `1px solid ${col}` : '0.5px solid rgba(45,80,22,0.14)',
+                color: on ? (k==='all' ? '#fff' : col) : C.ink,
+                fontFamily:FONT_SANS, fontSize:12, fontWeight: on?600:500, transition:'all 140ms ease',
+              }}>{l}</div>
+            );
+          })}
+          {rooms.length > 0 && <div style={{ flexShrink:0, width:'0.5px', height:20, background:'rgba(45,80,22,0.14)', margin:'0 2px' }}/>}
+          {rooms.map(r => {
+            const on = fLoc === r;
+            return (
+              <div key={r} onClick={()=>setFLoc(on ? null : r)} style={{
+                flexShrink:0, cursor:'pointer', whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'6px 12px',
+                background: on ? 'rgba(122,158,78,0.16)' : C.panel,
+                border: on ? '1px solid rgba(110,154,62,0.5)' : '0.5px solid rgba(45,80,22,0.14)',
+                color: on ? C.forest : C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight: on?600:500, transition:'all 140ms ease',
+              }}><IconPin s={11} c={on?C.forest:C.brown}/> {r}</div>
+            );
+          })}
+        </div>
+      )}
+
       {!empty && matched.length === 0 && (
         <div style={{ textAlign:'center', padding:'48px 30px', position:'relative', zIndex:2 }}>
           <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:20, color:C.forest }}>No matches</div>
-          <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Nothing matches "{q}".</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>{nq ? `Nothing matches "${q}".` : 'No plants match these filters.'}</div>
         </div>
       )}
 
@@ -281,7 +318,7 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
       )}
 
       {!empty && sort !== 'location' && (() => {
-        const dragEnabled = sort === 'all' && !nq;
+        const dragEnabled = sort === 'all' && !nq && fStatus === 'all' && !fLoc;
         return (
           <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:14, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
             {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i}/>)}
@@ -331,7 +368,7 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, czechMode }) {
   const doSnooze = (e) => { e.stopPropagation(); onSnooze && onSnooze(plant.id, 2); openRef.current = false; setX(0); };
 
   return (
-    <div style={{ position:'relative', borderRadius:18, overflow:'hidden' }}>
+    <div data-noswipe="1" style={{ position:'relative', borderRadius:18, overflow:'hidden' }}>
       <div onClick={doSnooze} style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:22, background:STATUS.soon.soft, cursor:'pointer' }}>
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.soon.dot }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke={STATUS.soon.dot} strokeWidth="1.7"/><path d="M12 9.5V13l2.5 1.5M9 3.5h6" stroke={STATUS.soon.dot} strokeWidth="1.7" strokeLinecap="round"/></svg>
@@ -552,13 +589,15 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport }) {
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [housePlantsInput, setHousePlantsInput] = useState('');
   const [housePlantsSaved, setHousePlantsSaved] = useState(false);
   const [plantIdInput, setPlantIdInput] = useState('');
   const [plantIdSaved, setPlantIdSaved] = useState(false);
+  const [anthropicInput, setAnthropicInput] = useState('');
+  const [anthropicSaved, setAnthropicSaved] = useState(false);
   const [gcalInput, setGcalInput] = useState('');
   const [gcalSaved, setGcalSaved] = useState(false);
   const [gcalSyncing, setGcalSyncing] = useState(false);
@@ -775,6 +814,35 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                 <span style={{ width:7, height:7, borderRadius:999, background: plantIdKey ? C.sage : C.brown, opacity: plantIdKey ? 1 : 0.4, flexShrink:0 }}/>
                 <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>{plantIdKey ? 'Identification active' : 'No key — using demo mode'}</span>
               </div>
+            </div>
+            <div style={{ height:'0.5px', background:'rgba(45,80,22,0.08)' }}/>
+            <div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:4 }}>Claude — AI care review</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5, marginBottom:8 }}>Anthropic API key. Claude reviews &amp; corrects species care data on identify — filling gaps and fixing wrong watering intervals. Key is stored on this device; expose only in a prototype.</div>
+              <div style={{ display:'flex', gap:8 }}>
+                <input value={anthropicInput} onChange={e=>setAnthropicInput(e.target.value)} placeholder="sk-ant-…"
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSaveAnthropicKey(anthropicInput.trim()); setAnthropicSaved(true); setTimeout(()=>setAnthropicSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: anthropicSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  {anthropicSaved && <IconCheck s={14}/>}
+                  <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{anthropicSaved?'Saved':'Save'}</span>
+                </div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:8 }}>
+                <span style={{ width:7, height:7, borderRadius:999, background: anthropicKey ? C.sage : C.brown, opacity: anthropicKey ? 1 : 0.4, flexShrink:0 }}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6 }}>{anthropicKey ? 'AI review active' : 'No key — using raw source data'}</span>
+              </div>
+              {anthropicKey && (plants || []).some(p => !p.aiV) && (() => {
+                const pending = (plants || []).filter(p => !p.aiV).length;
+                const busy = aiRecheck && aiRecheck.busy;
+                return (
+                  <div onClick={busy ? undefined : onRecheckAI} style={{ marginTop:12, padding:'11px 14px', borderRadius:12, border:`1px solid ${C.forest}`, background:'transparent', display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor: busy?'default':'pointer', opacity: busy?0.65:1 }}>
+                    <LeafOutline size={14} color={C.forest} sw={1.7}/>
+                    <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:C.forest }}>
+                      {busy ? `Reviewing… ${aiRecheck.done}/${aiRecheck.total}` : `Recheck ${pending} older plant${pending===1?'':'s'} with AI`}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
             <div style={{ height:'0.5px', background:'rgba(45,80,22,0.08)' }}/>
             <div>

@@ -153,6 +153,13 @@ Content-Type: application/json
 → 200 OK
 { "id": 1, "days": 0, "history": ["2026-05-27", "2026-06-01", "2026-06-03"] }</code></pre>
 
+  <h2>AI care review</h2>
+  <p>Plant data sources (Perenual, House&nbsp;Plants, Wikipedia, PlantNet) are inconsistent — they often omit the fun fact or care notes, sometimes the watering interval, and occasionally return values that are botanically wrong (a cactus tagged "Frequent"). When an <strong>Anthropic API key</strong> is set in Settings → API keys, Caulis runs each resolved species record through <code>claude-haiku-4-5</code> before it reaches the form.</p>
+  <p>The model is told to <strong>keep plausible values and only fill blanks or fix clearly-wrong ones</strong> — succulents/cacti get a long watering interval, ferns and carnivorous plants a short one. It returns a watering interval (days), watering label, light, care notes, a fun fact, and the Czech common name when none was found from the other sources. Results are cached per species in <code>localStorage</code> (<code>caulis_ai_care</code>), so each species costs one call.</p>
+  <p>This only ever touches <em>care fields</em> — never a plant's <code>id</code>, so QR codes are unaffected. The pass is fully optional: with no key, or on any network/parse error, Caulis falls back to the raw source data and built-in heuristics.</p>
+  <p>Plants added before AI review existed can be upgraded in bulk: Settings → API keys shows a <strong>“Recheck older plants with AI”</strong> button (only when a key is set and such plants exist) that re-runs each one through the model and stamps it so it won't be re-processed.</p>
+  <p><strong>Key caveat:</strong> the prototype calls the Anthropic API directly from the browser (<code>anthropic-dangerous-direct-browser-access</code>), so the key lives in <code>localStorage</code> on the device. As with the other API keys, a production build must route this through a serverless proxy and never expose the key client-side.</p>
+
   <footer>Caulis · grown with care</footer>
 </div>
 </body>

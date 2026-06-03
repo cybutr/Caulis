@@ -115,7 +115,7 @@ const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 function speciesCare(sp) {
   const sunlight = sp.sunlight || [];
   return {
-    every:     WATER_DAYS[sp.watering] || 7,
+    every:     sp._aiEvery || WATER_DAYS[sp.watering] || 7,
     light:     sunlight.slice(0, 2).map(titleCase).join(' · ') || 'Bright, indirect',
     care:      sp._care || sp.description || 'Water when the top of the soil feels dry.',
     fact:      sp._fact || `${sp.common_name} — care data via Perenual.`,
@@ -187,6 +187,11 @@ function setIdentifyLang(lang) { IDENTIFY_LANG = lang || 'en'; try { localStorag
 let HOUSE_PLANTS_KEY = '';
 try { HOUSE_PLANTS_KEY = localStorage.getItem('caulis_houseplants_key') || ''; } catch(e) {}
 function setHousePlantsKey(k) { HOUSE_PLANTS_KEY = k || ''; try { localStorage.setItem('caulis_houseplants_key', HOUSE_PLANTS_KEY); } catch(e) {} }
+
+let ANTHROPIC_KEY = '';
+try { ANTHROPIC_KEY = localStorage.getItem('caulis_anthropic_key') || ''; } catch(e) {}
+function setAnthropicKey(k) { ANTHROPIC_KEY = k || ''; try { localStorage.setItem('caulis_anthropic_key', ANTHROPIC_KEY); } catch(e) {} }
+function hasAnthropicKey() { return !!ANTHROPIC_KEY; }
 
 const _wait = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -260,6 +265,98 @@ function _heuristicCare(latinName) {
   return { watering: 'Average', sunlight: ['Bright indirect light'] };
 }
 
+// ── AI care review: Claude evaluates the resolved record, fills gaps,
+//    corrects botanically wrong values (e.g. a cactus marked "Frequent") ──
+const WATER_LABELS = ['Frequent', 'Average', 'Minimum', 'None'];
+
+function _aiCacheGet(latin) {
+  try {
+    const all = JSON.parse(localStorage.getItem('caulis_ai_care') || '{}');
+    return all[latin] || null;
+  } catch(e) { return null; }
+}
+function _aiCacheSet(latin, result) {
+  try {
+    const all = JSON.parse(localStorage.getItem('caulis_ai_care') || '{}');
+    all[latin] = result;
+    localStorage.setItem('caulis_ai_care', JSON.stringify(all));
+  } catch(e) {}
+}
+
+function _applyAiCare(record, ai) {
+  const out = { ...record };
+  if (Number.isFinite(ai.every)) {
+    out._aiEvery = Math.min(365, Math.max(1, Math.round(ai.every)));
+    out.watering_general_benchmark = { value: String(out._aiEvery), unit: 'days' };
+  }
+  if (ai.watering && WATER_LABELS.includes(ai.watering)) out.watering = ai.watering;
+  if (Array.isArray(ai.sunlight) && ai.sunlight.length) out.sunlight = ai.sunlight;
+  if (ai.care) out._care = ai.care;
+  if (ai.fact) out._fact = ai.fact;
+  if (ai.czech && !out.czech) out.czech = ai.czech;
+  out._source = (out._source || 'library') + ' · AI';
+  return out;
+}
+
+async function aiReviewCare(record) {
+  if (!ANTHROPIC_KEY || !record) return record;
+  const latin = (Array.isArray(record.scientific_name) ? record.scientific_name[0] : record.scientific_name) || '';
+  if (!latin) return record;
+  const key = latin.toLowerCase();
+
+  const cached = _aiCacheGet(key);
+  if (cached) return _applyAiCare(record, cached);
+
+  const current = {
+    common_name: record.common_name || '',
+    scientific_name: latin,
+    watering: record.watering || null,
+    interval_days: record.watering_general_benchmark ? record.watering_general_benchmark.value : null,
+    sunlight: record.sunlight || [],
+    care: record._care || record.description || null,
+    fact: record._fact || null,
+    czech: record.czech || null,
+  };
+
+  try {
+    const sys = 'You are a horticulture expert correcting plant-care metadata for a houseplant tracker. ' +
+      'You are given a plant and its current (often unreliable) care data. Keep values that are botanically plausible. ' +
+      'Only fill fields that are missing AND correct values that are clearly wrong for the species ' +
+      '(e.g. a cactus or succulent should have a long watering interval; ferns and carnivorous plants a short one). ' +
+      'Reply with ONLY a JSON object, no prose, no code fences, with keys: ' +
+      'every (integer days between waterings), watering (one of "Frequent","Average","Minimum","None"), ' +
+      'light (short phrase), care (one or two concise sentences), fact (one short interesting sentence), ' +
+      'sunlight (array of short light strings), czech (the Czech common name of the species — only if you are confident, otherwise empty string).';
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 400,
+        temperature: 0,
+        system: sys,
+        messages: [{ role: 'user', content: 'Current data:\n' + JSON.stringify(current, null, 2) }],
+      }),
+    });
+    if (!r.ok) return record;
+    const j = await r.json();
+    let text = (j?.content || []).map(b => b.text || '').join('').trim();
+    text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const start = text.indexOf('{'), end = text.lastIndexOf('}');
+    if (start === -1 || end === -1) return record;
+    const ai = JSON.parse(text.slice(start, end + 1));
+    _aiCacheSet(key, ai);
+    return _applyAiCare(record, ai);
+  } catch(e) {
+    return record;
+  }
+}
+
 // fetch real care data by latin name from the live services
 async function _careByLatin(latinName) {
   if (HOUSE_PLANTS_KEY) {
@@ -304,22 +401,22 @@ async function getSpeciesDetails(id, latinNameHint) {
   if (API_KEY) {
     try {
       const r = await fetch(`https://perenual.com/api/v2/species/details/${id}?key=${API_KEY}`);
-      if (r.ok) { const j = await r.json(); if (j?.id) return { ...j, _source: 'Perenual' }; }
+      if (r.ok) { const j = await r.json(); if (j?.id) return await aiReviewCare({ ...j, _source: 'Perenual' }); }
     } catch (e) {}
   }
   const local = PERENUAL.find(p => p.id === id);
   const latinName = (Array.isArray(local?.scientific_name) ? local.scientific_name[0] : local?.scientific_name) || latinNameHint;
   if (HOUSE_PLANTS_KEY && latinName) {
     const hp = await _hpGetByName(latinName);
-    if (hp) return { ...hp, _source: 'House Plants' };
+    if (hp) return await aiReviewCare({ ...hp, _source: 'House Plants' });
   }
   if (latinName) {
     const img = await _wikiImage(latinName);
-    if (img) return local
+    if (img) return await aiReviewCare(local
       ? { ...local, default_image: { regular_url: img }, _source: 'Wikipedia' }
-      : { id, common_name: latinNameHint || latinName, scientific_name: [latinName], watering: 'Average', sunlight: [], default_image: { regular_url: img }, _source: 'Wikipedia' };
+      : { id, common_name: latinNameHint || latinName, scientific_name: [latinName], watering: 'Average', sunlight: [], default_image: { regular_url: img }, _source: 'Wikipedia' });
   }
-  return local ? { ...local, _source: 'library' } : null;
+  return local ? await aiReviewCare({ ...local, _source: 'library' }) : null;
 }
 
 async function _plantNetIdentify(blob, lang) {
@@ -348,15 +445,15 @@ async function resolveSpecies(scientificName, englishName, score) {
   if (exact) {
     let czech = (exact.czech_names && exact.czech_names[0]) || '';
     if (!czech) czech = await _czechName(scientificName);
-    return { ...exact, common_name: englishName || exact.common_name, scientific_name: [scientificName], czech, _source: 'PlantNet', _score: score };
+    return await aiReviewCare({ ...exact, common_name: englishName || exact.common_name, scientific_name: [scientificName], czech, _source: 'PlantNet', _score: score });
   }
   const enrich = await _careByLatin(scientificName);
   const img = (enrich && enrich.default_image?.regular_url) || await _wikiImage(scientificName);
   const base = enrich || _heuristicCare(scientificName);
   const czech = await _czechName(scientificName);
-  return { ...base, common_name: englishName || scientificName, scientific_name: [scientificName], czech,
+  return await aiReviewCare({ ...base, common_name: englishName || scientificName, scientific_name: [scientificName], czech,
     default_image: img ? { regular_url: img } : base.default_image,
-    _source: enrich ? `PlantNet + ${enrich._via}` : 'PlantNet', _score: score };
+    _source: enrich ? `PlantNet + ${enrich._via}` : 'PlantNet', _score: score });
 }
 
 async function identifySpecies(dataUrl) {
@@ -823,4 +920,5 @@ const INDOOR_PLANTS = [
 Object.assign(window, {
   PERENUAL, INDOOR_PLANTS, speciesCare, searchSpecies, searchLocalPlants, getSpeciesDetails, identifySpecies, resolveSpecies, setPlantIdKey, setIdentifyLang, setHousePlantsKey,
   setApiKey, hasApiKey, SEED_PLANTS,
+  setAnthropicKey, hasAnthropicKey, aiReviewCare,
 });
