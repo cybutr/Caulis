@@ -235,7 +235,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
       {/* floating Undo pill */}
       {justWatered && (
         <div style={{ position:'absolute', bottom:24, left:0, right:0, display:'flex', justifyContent:'center', zIndex:40, animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
-          <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, background:C.ink, borderRadius:999, padding:'10px 12px 10px 18px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+          <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, background:C.toast, borderRadius:999, padding:'10px 12px 10px 18px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
             <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:500, color:'#fff' }}>{plant.name} watered</span>
             <div onClick={undo} style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, background:'rgba(255,255,255,0.16)', borderRadius:999, padding:'6px 13px' }}>
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M5 3 2 6l3 3M2 6h6.5a3.5 3.5 0 010 7H6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -472,7 +472,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
                 <div key={i} onClick={()=> i!==0 && setPhotos(prev => [prev[i], ...prev.filter((_,idx)=>idx!==i)])} style={{ position:'relative', flexShrink:0, cursor: i!==0 ? 'pointer' : 'default' }}>
                   <img src={img} alt="" style={{ width:54, height:54, borderRadius:11, objectFit:'cover', border: i===0 ? `2px solid ${C.forest}` : C.hair }}/>
                   {i===0 && <span style={{ position:'absolute', bottom:3, left:3, fontFamily:FONT_SANS, fontSize:8, fontWeight:700, color:'#fff', background:'rgba(45,80,22,0.85)', borderRadius:5, padding:'1px 5px', letterSpacing:0.3 }}>COVER</span>}
-                  <div onClick={(e)=>{ e.stopPropagation(); removePhoto(i); }} style={{ position:'absolute', top:-5, right:-5, width:20, height:20, borderRadius:999, background:C.ink, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }}>
+                  <div onClick={(e)=>{ e.stopPropagation(); removePhoto(i); }} style={{ position:'absolute', top:-5, right:-5, width:20, height:20, borderRadius:999, background:C.toast, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }}>
                     <svg width="9" height="9" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
                   </div>
                 </div>

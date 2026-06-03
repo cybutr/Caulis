@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '59'; // keep in sync with sw.js CACHE
+const APP_VERSION = '60'; // keep in sync with sw.js CACHE
 
 const C = {
   bg:     '#FAFAF7',
@@ -25,7 +25,7 @@ const C = {
   line:   'rgba(45,80,22,0.08)',
   hair:   '0.5px solid rgba(45,80,22,0.08)',
 };
-const C_LIGHT = { ...C, input: '#F2F2EE' };
+const C_LIGHT = { ...C, input: '#F2F2EE', toast: '#2A2A26' };
 const C_DARK = {
   bg:     '#111610',
   panel:  '#192115',
@@ -36,8 +36,10 @@ const C_DARK = {
   line:   'rgba(255,255,255,0.07)',
   hair:   '0.5px solid rgba(255,255,255,0.08)',
   input:  '#1E2A1A',
+  toast:  '#243019',
 };
 C.input = C_LIGHT.input;
+C.toast = C_LIGHT.toast;
 
 const FONT_SERIF = '"Cormorant Garamond", serif';
 const FONT_SANS  = '"DM Sans", sans-serif';

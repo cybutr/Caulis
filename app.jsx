@@ -684,7 +684,7 @@ window.onload=()=>{
 
   const undoDeleteEl = undoDelete && (
     <div style={{ position:'fixed', bottom: isDesktop?24:86, left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
-      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, background:C.ink, borderRadius:999, padding:'10px 12px 10px 18px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, background:C.toast, borderRadius:999, padding:'10px 12px 10px 18px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
         <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:500, color:'#fff' }}>{undoDelete.plant.name} removed</span>
         <div onClick={undoRemove} style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, background:'rgba(255,255,255,0.16)', borderRadius:999, padding:'6px 13px' }}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M5 3 2 6l3 3M2 6h6.5a3.5 3.5 0 010 7H6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
