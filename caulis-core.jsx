@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '63'; // keep in sync with sw.js CACHE
+const APP_VERSION = '64'; // keep in sync with sw.js CACHE
 
 const C = {
   bg:     '#FAFAF7',

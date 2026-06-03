@@ -472,15 +472,20 @@ function App() {
   const TAB_ORDER = ['garden', 'needs', 'scanner', 'print', 'settings'];
   const swipeRef = useRef(null);
   const onSwipeStart = (e) => {
+    if (e.pointerType === 'mouse') { swipeRef.current = null; return; }
     if (detail || form || moveTarget || menuPlant || guestView) { swipeRef.current = null; return; }
     if (e.target.closest && e.target.closest('[data-noswipe]')) { swipeRef.current = null; return; }
-    swipeRef.current = { x: e.clientX, y: e.clientY };
+    swipeRef.current = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY };
   };
-  const onSwipeEnd = (e) => {
+  const onSwipeMove = (e) => {
+    const s = swipeRef.current; if (!s) return;
+    s.lx = e.clientX; s.ly = e.clientY;
+  };
+  const onSwipeEnd = () => {
     const s = swipeRef.current; swipeRef.current = null;
     if (!s) return;
-    const dx = e.clientX - s.x, dy = e.clientY - s.y;
-    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.8) return;
+    const dx = s.lx - s.x, dy = s.ly - s.y;
+    if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
     const i = TAB_ORDER.indexOf(tab);
     const ni = dx < 0 ? Math.min(TAB_ORDER.length - 1, i + 1) : Math.max(0, i - 1);
     if (ni !== i) setTab(TAB_ORDER[ni]);
@@ -814,7 +819,7 @@ window.onload=()=>{
   // ════════════════════════════════════════
   return (
     <div style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', background:C.bg, overflow:'hidden' }}>
-      <div onPointerDown={onSwipeStart} onPointerUp={onSwipeEnd} onPointerCancel={()=>{ swipeRef.current = null; }} style={{ flex:1, overflowY:'auto', overflowX:'hidden', position:'relative', WebkitOverflowScrolling:'touch' }}>
+      <div onPointerDown={onSwipeStart} onPointerMove={onSwipeMove} onPointerUp={onSwipeEnd} onPointerCancel={onSwipeEnd} style={{ flex:1, overflowY:'auto', overflowX:'hidden', position:'relative', WebkitOverflowScrolling:'touch', touchAction:'pan-y' }}>
         {screen}
       </div>
       <BottomNav tab={tab} setTab={setTab}/>
