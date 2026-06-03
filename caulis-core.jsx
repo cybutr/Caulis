@@ -13,6 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
+const APP_VERSION = '59'; // keep in sync with sw.js CACHE
 
 const C = {
   bg:     '#FAFAF7',
@@ -101,6 +102,19 @@ function agoLabel(days) {
   if (days <= 0) return 'Watered today';
   if (days === 1) return 'Watered yesterday';
   return `Watered ${days} days ago`;
+}
+
+// local YYYY-MM-DD (never UTC — avoids off-by-one in +UTC timezones)
+function fmtLocalDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// watering log summary from an array of 'YYYY-MM-DD' strings (newest last)
+function wateringStats(history) {
+  const h = Array.isArray(history) ? history : [];
+  const cutoff = new Date(); cutoff.setHours(0,0,0,0); cutoff.setDate(cutoff.getDate() - 30);
+  const count30 = h.filter(s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d) >= cutoff; }).length;
+  return { total: h.length, count30, last: h.length ? h[h.length-1] : null };
 }
 
 // live weekday + part-of-day, e.g. "Saturday morning"
@@ -283,10 +297,10 @@ const SEED_LOCATIONS = ['Living room','Bedroom','Kitchen windowsill','Bathroom',
 
 // export to window for other babel scripts -------------------
 Object.assign(window, {
-  C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting,
+  C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
   Leaf, LeafOutline, Sprig,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
-  useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme,
+  useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION,
 });

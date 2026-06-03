@@ -3,8 +3,49 @@
 // ════════════════════════════════════════════════════════════
 const PRINT_SIZES = [['S', 30], ['M', 40], ['L', 55]];
 
+// pointer-based reorder via a drag handle — nearest-center targeting works for
+// both vertical lists and grids. Reorders by array position only; ids untouched.
+function useReorder(onReorder) {
+  const containerRef = useRef(null);
+  const dragRef = useRef(null), overRef = useRef(null);
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+  const start = (i) => (e) => {
+    e.stopPropagation();
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
+    dragRef.current = i; overRef.current = i; setDragIdx(i); setOverIdx(i);
+  };
+  const move = (e) => {
+    if (dragRef.current == null) return;
+    const cont = containerRef.current; if (!cont) return;
+    let target = dragRef.current, best = Infinity;
+    [...cont.children].forEach((el, k) => {
+      const r = el.getBoundingClientRect();
+      const dx = e.clientX - (r.left + r.width/2), dy = e.clientY - (r.top + r.height/2);
+      const d = dx*dx + dy*dy;
+      if (d < best) { best = d; target = k; }
+    });
+    overRef.current = target; setOverIdx(target);
+  };
+  const end = () => {
+    const from = dragRef.current, to = overRef.current;
+    dragRef.current = null; overRef.current = null; setDragIdx(null); setOverIdx(null);
+    if (from != null && to != null && from !== to) onReorder(from, to);
+  };
+  const grip = (i) => ({ onPointerDown: start(i), onPointerMove: move, onPointerUp: end, onPointerCancel: end });
+  return { containerRef, dragIdx, overIdx, grip };
+}
+
+function GripIcon({ c = C.brown }) {
+  return (<svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ display:'block' }}>
+    <circle cx="5.5" cy="4" r="1.1" fill={c}/><circle cx="10.5" cy="4" r="1.1" fill={c}/>
+    <circle cx="5.5" cy="8" r="1.1" fill={c}/><circle cx="10.5" cy="8" r="1.1" fill={c}/>
+    <circle cx="5.5" cy="12" r="1.1" fill={c}/><circle cx="10.5" cy="12" r="1.1" fill={c}/>
+  </svg>);
+}
+
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress, czechMode }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over }) {
   const [press, setPress] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
@@ -21,13 +62,19 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode }) {
       style={{
         background:C.panel, borderRadius:22, padding:12,
         boxShadow: press ? '0 1px 3px rgba(43,42,38,0.06)' : '0 1px 2px rgba(43,42,38,0.04), 0 8px 22px rgba(45,80,22,0.05)',
-        border:'0.5px solid rgba(45,80,22,0.06)',
+        border: over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)',
         transform: press ? 'scale(0.975)' : 'scale(1)',
-        transition:'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease',
+        opacity: dragging ? 0.5 : 1,
+        transition:'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease, opacity 140ms ease, border-color 140ms ease',
         cursor:'pointer', position:'relative', userSelect:'none', WebkitUserSelect:'none',
       }}>
       <div style={{ position:'relative' }}>
         <Specimen tint={tint} height={96} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/>
+        {grip && (
+          <div {...grip} onClick={e=>e.stopPropagation()} style={{ position:'absolute', top:9, left:9, width:24, height:24, borderRadius:999, background:C.panel, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 2px rgba(43,42,38,0.12)', cursor:'grab', touchAction:'none' }}>
+            <GripIcon/>
+          </div>
+        )}
         <div style={{
           position:'absolute', top:9, right:9, width:18, height:18, borderRadius:999, background:C.panel,
           display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 2px rgba(43,42,38,0.12)',
@@ -145,9 +192,10 @@ function EmptyGarden({ onAdd }) {
   );
 }
 
-function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop, czechMode }) {
+function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode }) {
   const [sort, setSort] = useState('all');
   const [q, setQ] = useState('');
+  const re = useReorder(onReorder);
   const needs = plants.filter(p => statusOf(p.days,p.every) !== 'ok').length;
   const tintFor = id => TINTS[(id-1)%TINTS.length];
   const empty = plants.length === 0;
@@ -232,11 +280,14 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop, czechMode
         </div>
       )}
 
-      {!empty && sort !== 'location' && (
-        <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:14, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
-          {flat.map(p => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps}/>)}
-        </div>
-      )}
+      {!empty && sort !== 'location' && (() => {
+        const dragEnabled = sort === 'all' && !nq;
+        return (
+          <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:14, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
+            {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i}/>)}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -244,31 +295,66 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, isDesktop, czechMode
 // ════════════════════════════════════════════════════════════
 //  NEEDS WATER
 // ════════════════════════════════════════════════════════════
-function NeedsRow({ plant, tint, onOpen, onLongPress, czechMode }) {
+function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, czechMode }) {
   const [press, setPress] = useState(false);
+  const [dx, setDx] = useState(0);
   const timer = useRef(null);
   const longed = useRef(false);
+  const startX = useRef(0), startY = useRef(0);
+  const swiping = useRef(false), openRef = useRef(false), dxRef = useRef(0);
   const status = statusOf(plant.days, plant.every);
-  const start = () => { setPress(true); longed.current = false; timer.current = setTimeout(() => { longed.current = true; setPress(false); onLongPress && onLongPress(plant); }, 480); };
-  const end = () => { setPress(false); if (timer.current) clearTimeout(timer.current); };
-  const click = () => { if (longed.current) { longed.current = false; return; } onOpen(plant.id); };
+  const OPEN = -84;
+  const setX = (v) => { dxRef.current = v; setDx(v); };
+
+  const start = (e) => {
+    setPress(true); longed.current = false; swiping.current = false;
+    startX.current = e.clientX; startY.current = e.clientY;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
+    timer.current = setTimeout(() => { longed.current = true; setPress(false); onLongPress && onLongPress(plant); }, 480);
+  };
+  const move = (e) => {
+    const mx = e.clientX - startX.current, my = e.clientY - startY.current;
+    if (!swiping.current && Math.abs(mx) > 8 && Math.abs(mx) > Math.abs(my)) {
+      swiping.current = true; if (timer.current) clearTimeout(timer.current); setPress(false);
+    }
+    if (swiping.current) setX(Math.max(OPEN, Math.min(0, (openRef.current ? OPEN : 0) + mx)));
+  };
+  const end = () => {
+    setPress(false); if (timer.current) clearTimeout(timer.current);
+    if (swiping.current) { const open = dxRef.current < OPEN/2; openRef.current = open; setX(open ? OPEN : 0); swiping.current = false; }
+  };
+  const click = () => {
+    if (longed.current) { longed.current = false; return; }
+    if (openRef.current || dxRef.current !== 0) { openRef.current = false; setX(0); return; }
+    onOpen(plant.id);
+  };
+  const doSnooze = (e) => { e.stopPropagation(); onSnooze && onSnooze(plant.id, 2); openRef.current = false; setX(0); };
+
   return (
-    <div onPointerDown={start} onPointerUp={end} onPointerLeave={end} onClick={click} style={{
-      display:'flex', alignItems:'center', gap:13, background:C.panel, borderRadius:18, padding:10,
-      border:'0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)',
-      cursor:'pointer', userSelect:'none', WebkitUserSelect:'none',
-      transform: press ? 'scale(0.985)' : 'scale(1)', transition:'transform 160ms ease',
-    }}>
-      <div style={{ width:62, height:62, flexShrink:0 }}><Specimen tint={tint} height={62} radius={13} leafSize={28} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/></div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.forest, lineHeight:1.1 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
-        <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6, marginTop:3 }}>{agoLabel(plant.days)} · {plant.location}</div>
+    <div style={{ position:'relative', borderRadius:18, overflow:'hidden' }}>
+      <div onClick={doSnooze} style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:22, background:STATUS.soon.soft, cursor:'pointer' }}>
+        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.soon.dot }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke={STATUS.soon.dot} strokeWidth="1.7"/><path d="M12 9.5V13l2.5 1.5M9 3.5h6" stroke={STATUS.soon.dot} strokeWidth="1.7" strokeLinecap="round"/></svg>
+          <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700 }}>+2d</span>
+        </div>
       </div>
-      <StatusTag status={status}/>
+      <div onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onClick={click} style={{
+        position:'relative', display:'flex', alignItems:'center', gap:13, background:C.panel, borderRadius:18, padding:10,
+        border:'0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)',
+        cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y',
+        transform: `translateX(${dx}px) scale(${press ? 0.985 : 1})`, transition: swiping.current ? 'none' : 'transform 220ms cubic-bezier(.2,.8,.2,1)',
+      }}>
+        <div style={{ width:62, height:62, flexShrink:0 }}><Specimen tint={tint} height={62} radius={13} leafSize={28} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/></div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.forest, lineHeight:1.1 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6, marginTop:3 }}>{agoLabel(plant.days)} · {plant.location}</div>
+        </div>
+        <StatusTag status={status}/>
+      </div>
     </div>
   );
 }
-function NeedsWaterScreen({ plants, onOpen, onLongPress, isDesktop, czechMode }) {
+function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, isDesktop, czechMode }) {
   const order = { needs:0, soon:1 };
   const list = plants.filter(p=>statusOf(p.days,p.every)!=='ok')
     .sort((a,b)=> order[statusOf(a.days,a.every)] - order[statusOf(b.days,b.every)]);
@@ -287,7 +373,7 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, isDesktop, czechMode })
             <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Every plant is happily hydrated.</div>
           </div>
         )}
-        {list.map((p,i)=> <NeedsRow key={p.id} plant={p} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress} czechMode={czechMode}/>)}
+        {list.map((p,i)=> <NeedsRow key={p.id} plant={p} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress} onSnooze={onSnooze} czechMode={czechMode}/>)}
       </div>
     </div>
   );
@@ -313,16 +399,24 @@ function Viewfinder() {
   );
 }
 
-function ScannerScreen({ plants, onScan, isDesktop }) {
+function ScannerScreen({ plants, onScan, isDesktop, paused }) {
   const [camError, setCamError] = useState(null);
   const [scanning, setScanning] = useState(false);
   const scannedRef = useRef(false);
-  const target = plants.find(p=>statusOf(p.days,p.every)==='needs') || plants[0];
+  const scannerRef = useRef(null);
+
+  useEffect(() => {
+    if (isDesktop) return;
+    const s = scannerRef.current; if (!s) return;
+    try { paused ? s.pause(true) : s.resume(); } catch(e) {}
+    if (!paused) scannedRef.current = false;
+  }, [paused]);
 
   useEffect(() => {
     if (isDesktop) return;
     scannedRef.current = false;
     const scanner = new Html5Qrcode('caulis-qr-reader');
+    scannerRef.current = scanner;
     scanner.start(
       { facingMode: 'environment' },
       { fps: 10, qrbox: { width: 220, height: 220 } },
@@ -335,29 +429,8 @@ function ScannerScreen({ plants, onScan, isDesktop }) {
       () => {}
     ).then(() => setScanning(true)).catch(() => setCamError('Camera access denied'));
 
-    return () => { scanner.stop().then(() => scanner.clear()).catch(() => {}); };
+    return () => { scannerRef.current = null; scanner.stop().then(() => scanner.clear()).catch(() => {}); };
   }, [isDesktop]);
-
-  if (isDesktop) {
-    return (
-      <div style={{ height:'100vh', position:'relative', background:'#20301A', overflow:'hidden' }}>
-        <div style={{ position:'absolute', inset:0, background:'radial-gradient(120% 90% at 50% 35%, #2E4322 0%, #1B2814 70%, #141E0F 100%)' }}/>
-        <div style={{ position:'absolute', inset:0, opacity:0.5, backgroundImage:'repeating-linear-gradient(135deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 7px)' }}/>
-        <Leaf size={150} color="#fff" opacity={0.04}/>
-        <div style={{ position:'absolute', top:62, left:0, right:0, textAlign:'center', zIndex:3 }}>
-          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:24, color:'#fff' }}>Scan a plant tag</div>
-          <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:'rgba(255,255,255,0.72)', marginTop:3 }}>Use your phone to scan — or simulate below</div>
-        </div>
-        <Viewfinder/>
-        <div style={{ position:'absolute', bottom:34, left:0, right:0, display:'flex', flexDirection:'column', alignItems:'center', gap:14, zIndex:3 }}>
-          {target && <div onClick={()=>onScan(target.id)} style={{ cursor:'pointer', width:74, height:74, borderRadius:999, background:'rgba(255,255,255,0.16)', border:'2px solid rgba(255,255,255,0.85)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <div style={{ width:58, height:58, borderRadius:999, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center' }}><IconScan s={28} c={C.forest}/></div>
-          </div>}
-          <div style={{ fontFamily:FONT_SANS, fontSize:11, color:'rgba(255,255,255,0.6)', letterSpacing:0.3 }}>Tap to simulate a scan</div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div style={{ height:'100%', position:'relative', background:'#111', overflow:'hidden' }}>
@@ -377,9 +450,10 @@ function ScannerScreen({ plants, onScan, isDesktop }) {
 // ════════════════════════════════════════════════════════════
 //  PRINT QUEUE
 // ════════════════════════════════════════════════════════════
-function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechMode }) {
+function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechMode, grip, dragging, over }) {
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:12, background:C.panel, borderRadius:18, padding:12, border:'0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)' }}>
+    <div style={{ display:'flex', alignItems:'center', gap:10, background:C.panel, borderRadius:18, padding:12, border: over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)', opacity: dragging ? 0.5 : 1, transition:'opacity 140ms ease, border-color 140ms ease' }}>
+      <div {...grip} style={{ flexShrink:0, width:22, display:'flex', alignItems:'center', justifyContent:'center', cursor:'grab', touchAction:'none', opacity:0.45 }}><GripIcon/></div>
       <div style={{ width:48, height:48, flexShrink:0 }}><Specimen tint={TINTS[(plant.id-1)%TINTS.length]} height={48} radius={11} leafSize={22} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/></div>
       <div onClick={()=>onOpen(plant.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest, lineHeight:1.05, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
@@ -409,8 +483,9 @@ function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechM
     </div>
   );
 }
-function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed, isDesktop, globalPrintSize, onSetGlobalSize, queueSizes, onSetSize, monochromePrint, onToggleMono, czechMode }) {
+function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed, isDesktop, globalPrintSize, onSetGlobalSize, queueSizes, onSetSize, onReorder, monochromePrint, onToggleMono, czechMode }) {
   const items = queue.map(id => plants.find(p=>p.id===id)).filter(Boolean);
+  const re = useReorder(onReorder);
   const sp = isDesktop ? 28 : 22;
   const tp = isDesktop ? 32 : 56;
   return (
@@ -458,17 +533,17 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
           </div>
         </div>
       )}
-      <div style={{ display:'flex', flexDirection:'column', gap:12, padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
-        {items.length===0 && (
-          <div style={{ textAlign:'center', padding:'56px 30px' }}>
-            <div style={{ display:'inline-flex', width:64, height:64, borderRadius:999, background:'rgba(107,76,42,0.1)', alignItems:'center', justifyContent:'center' }}>
-              <IconPrint s={28} c={C.brown}/>
-            </div>
-            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, marginTop:16 }}>Queue is empty</div>
-            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Open a plant and tap "Add to print queue" to label it.</div>
+      {items.length===0 && (
+        <div style={{ textAlign:'center', padding:'56px 30px', position:'relative', zIndex:2 }}>
+          <div style={{ display:'inline-flex', width:64, height:64, borderRadius:999, background:'rgba(107,76,42,0.1)', alignItems:'center', justifyContent:'center' }}>
+            <IconPrint s={28} c={C.brown}/>
           </div>
-        )}
-        {items.map(p => <QueueRow key={p.id} plant={p} onOpen={onOpen} onRemove={onRemove} sizeMm={queueSizes[p.id]||null} globalMm={globalPrintSize} onSetSize={onSetSize} czechMode={czechMode}/>)}
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, marginTop:16 }}>Queue is empty</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Open a plant and tap "Add to print queue" to label it.</div>
+        </div>
+      )}
+      <div ref={re.containerRef} style={{ display:'flex', flexDirection:'column', gap:12, padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
+        {items.map((p,i) => <QueueRow key={p.id} plant={p} onOpen={onOpen} onRemove={onRemove} sizeMm={queueSizes[p.id]||null} globalMm={globalPrintSize} onSetSize={onSetSize} czechMode={czechMode} grip={re.grip(i)} dragging={re.dragIdx===i} over={re.overIdx===i && re.dragIdx!==i}/>)}
       </div>
     </div>
   );
@@ -477,7 +552,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport }) {
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [housePlantsInput, setHousePlantsInput] = useState('');
@@ -487,6 +562,23 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   const [gcalInput, setGcalInput] = useState('');
   const [gcalSaved, setGcalSaved] = useState(false);
   const [gcalSyncing, setGcalSyncing] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [importData, setImportData] = useState(null);
+  const [importErr, setImportErr] = useState(false);
+  const [imported, setImported] = useState(false);
+  const importRef = useRef(null);
+  const onImportFile = (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    setImportErr(false);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try { const d = JSON.parse(ev.target.result); if (!d || !Array.isArray(d.plants)) throw 0; setImportData(d); }
+      catch(_) { setImportErr(true); }
+    };
+    reader.readAsText(f);
+  };
+  const doImport = (mode) => { if (onImport(importData, mode)) { setImportData(null); setImported(true); setTimeout(()=>setImported(false), 1800); } };
   const handleGcalSync = async () => { setGcalSyncing(true); await onSyncCalendar(); setGcalSyncing(false); };
   const sp = isDesktop ? 28 : 18;
 
@@ -914,6 +1006,54 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
               </div>
             </div>
           )}
+        </div>
+        <div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>Backup</div>
+          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Export your whole garden (plants, photos, queue) to a JSON file, or restore from one.</div>
+            <input ref={importRef} type="file" accept="application/json,.json" onChange={onImportFile} style={{ display:'none' }}/>
+            <div style={{ display:'flex', gap:8 }}>
+              <div onClick={onExport} style={{ flex:1, height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M12 15l-4-4M12 15l4-4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 20h14" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/></svg>
+                <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Export</span>
+              </div>
+              <div onClick={()=>{ setImportErr(false); importRef.current && importRef.current.click(); }} style={{ flex:1, height:42, borderRadius:12, background: imported?C.sage:'rgba(45,80,22,0.08)', color: imported?'#fff':C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', transition:'background 200ms' }}>
+                {imported ? <IconCheck s={15}/> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15V3M12 3l-4 4M12 3l4 4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 20h14" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/></svg>}
+                <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>{imported?'Imported':'Import'}</span>
+              </div>
+            </div>
+            {importErr && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Not a valid Caulis export file.</div>}
+            {importData && (
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', borderRadius:12, background:'rgba(45,80,22,0.05)' }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.75, lineHeight:1.5 }}>{importData.plants.length} plants in file. Merge keeps your current plants; Replace overwrites them.</div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <div onClick={()=>setImportData(null)} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
+                  <div onClick={()=>doImport('merge')} style={{ flex:1, height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Merge</div>
+                  <div onClick={()=>doImport('replace')} style={{ flex:1, height:38, borderRadius:10, background:'#B4472E', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Replace</div>
+                </div>
+              </div>
+            )}
+            <a href="docs.html" target="_blank" rel="noopener" style={{ textDecoration:'none', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8 }}>View format &amp; API docs ↗</a>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', padding:'0 6px 8px' }}>About</div>
+          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+            <Row label="Version" value={`v${APP_VERSION}`}/>
+            <div onClick={updating ? undefined : async ()=>{ setUpdating(true); await onUpdateApp(); }} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor: updating?'default':'pointer' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Check for updates</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Clear cache & reload latest version</div>
+              </div>
+              <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:11, background:'rgba(45,80,22,0.08)', color:C.forest }}>
+                {updating
+                  ? <div style={{ width:15, height:15, borderRadius:999, border:`2px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/>
+                  : <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 018-8 8 8 0 016.9 4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/><path d="M20 12a8 8 0 01-8 8 8 8 0 01-6.9-4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/><path d="M18 4l2 3h-3M6 20l-2-3h3" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                }
+                <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{updating?'Updating…':'Update'}</span>
+              </div>
+            </div>
+          </div>
         </div>
         <div style={{ textAlign:'center', fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.brown, opacity:0.5, marginTop:4 }}>Caulis · grown with care</div>
       </div>

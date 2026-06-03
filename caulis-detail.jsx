@@ -181,6 +181,26 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
             </div>
             {plant.care && <InfoTile icon={<LeafOutline size={14} color={C.sage} sw={1.7}/>} label="Care">{plant.care}</InfoTile>}
             {plant.fact && <InfoTile icon={<span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:14, color:C.sage }}>i</span>} label="Fun fact">{plant.fact}</InfoTile>}
+            {(() => {
+              const st = wateringStats(plant.history);
+              const fmt = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d).toLocaleDateString('en-US', { month:'short', day:'numeric' }); };
+              const recent = [...(plant.history || [])].slice(-6).reverse();
+              return (
+                <InfoTile icon={<IconDrop s={14} c={C.sage}/>} label="Watering log">
+                  {st.total ? (<>
+                    <div style={{ display:'flex', gap:16, marginBottom: recent.length ? 8 : 0 }}>
+                      <span><span style={{ fontWeight:700, color:C.ink }}>{st.total}</span> total</span>
+                      <span><span style={{ fontWeight:700, color:C.ink }}>{st.count30}</span> in 30 days</span>
+                    </div>
+                    {recent.length > 0 && (
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                        {recent.map((s,i) => <span key={i} style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, background:'rgba(107,76,42,0.08)', borderRadius:999, padding:'3px 9px' }}>{fmt(s)}</span>)}
+                      </div>
+                    )}
+                  </>) : <span style={{ opacity:0.6 }}>No history yet — mark this plant watered to start logging.</span>}
+                </InfoTile>
+              );
+            })()}
             <div style={{ display:'flex', alignItems:'center', gap:6, padding:'2px 4px' }}>
               <LeafOutline size={11} color={C.brown} sw={1.5}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.55, letterSpacing:0.2 }}>Care data &amp; photo via Perenual, House Plants &amp; Wikipedia</span>

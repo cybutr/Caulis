@@ -13,12 +13,12 @@ function scheduleWatering(plants) {
     for (let i = -1; i <= 4; i++) {
       const d = new Date(due); d.setDate(d.getDate() + i);
       if (d < today) continue;
-      const ds = d.toISOString().split('T')[0];
+      const ds = fmtLocalDate(d);
       const dow = d.getDay();
       const score = ((dow===0||dow===6)?2:0) - Math.abs(i)*0.5 - (tally[ds]||0)*1.5 - (i<0?0.5:0);
       if (score > bestScore) { bestScore = score; best = d; }
     }
-    if (best) { const ds = best.toISOString().split('T')[0]; tally[ds]=(tally[ds]||0)+1; result[p.id]=ds; }
+    if (best) { const ds = fmtLocalDate(best); tally[ds]=(tally[ds]||0)+1; result[p.id]=ds; }
   }
   return result;
 }
@@ -28,12 +28,13 @@ function App() {
   const isDesktop = vw >= DESKTOP_BP;
 
   const lsGet = (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } };
-  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e) { if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014)) setStorageFull(true); return false; } };
+  const [storageFull, setStorageFull] = useState(false);
 
   const [plants, setPlants]       = useState(() => lsGet('caulis_plants', []).map(p => {
     const photos = lsGet('caulis_imgs_' + p.id, null);
     const legacy = lsGet('caulis_img_' + p.id, null);
-    return { ...p, photos: photos || (legacy ? [legacy] : (p.photos || [])) };
+    return { ...p, history: Array.isArray(p.history) ? p.history : [], photos: photos || (legacy ? [legacy] : (p.photos || [])) };
   }));
   const locations = [...new Set(plants.map(p => p.location).filter(Boolean))].sort();
   const [tab, setTab]             = useState('garden');
@@ -450,6 +451,17 @@ function App() {
     return () => clearTimeout(timer);
   }, [plants, locations, queue, gardenNode, perenualKey, plantIdKey, housePlantsKey]);
 
+  const updateApp = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.update()));
+      }
+      if (window.caches) { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); }
+    } catch(e) {}
+    window.location.reload();
+  };
+
   const tintFor = (id) => TINTS[(id - 1) % TINTS.length];
 
   // ── actions ──
@@ -458,7 +470,9 @@ function App() {
 
   const water = (id, daysAgo = 0) => {
     const d = Math.max(0, daysAgo || 0);
-    setPlants(ps => ps.map(p => p.id === id ? { ...p, days: d } : p));
+    const when = new Date(); when.setHours(0,0,0,0); when.setDate(when.getDate() - d);
+    const stamp = fmtLocalDate(when);
+    setPlants(ps => ps.map(p => p.id === id ? { ...p, days: d, history: [...(p.history||[]), stamp].slice(-60) } : p));
     if (googleToken) {
       const plant = plants.find(p => p.id === id);
       if (plant) {
@@ -470,7 +484,8 @@ function App() {
       }
     }
   };
-  const undoWater = (id, prevDays) => setPlants(ps => ps.map(p => p.id === id ? { ...p, days: prevDays } : p));
+  const undoWater = (id, prevDays) => setPlants(ps => ps.map(p => p.id === id ? { ...p, days: prevDays, history: (p.history||[]).slice(0, -1) } : p));
+  const snooze = (id, n = 2) => setPlants(ps => ps.map(p => p.id === id ? { ...p, days: Math.max(0, p.days - n) } : p));
 
   const toggleQueue = (id) => { setQueue(q => q.includes(id) ? q.filter(x => x !== id) : [...q, id]); setPrinted(false); };
   const removeQueue = (id) => {
@@ -565,6 +580,8 @@ window.onload=()=>{
     return () => clearTimeout(t);
   }, [undoDelete]);
   const movePlant   = (id, room) => setPlants(ps => ps.map(p => p.id === id ? { ...p, location: room } : p));
+  const reorderQueue = (from, to) => setQueue(q => { if (from===to||from<0||to<0||from>=q.length||to>=q.length) return q; const n=[...q]; const [x]=n.splice(from,1); n.splice(to,0,x); return n; });
+  const reorderPlants = (from, to) => setPlants(ps => { if (from===to||from<0||to<0||from>=ps.length||to>=ps.length) return ps; const n=[...ps]; const [x]=n.splice(from,1); n.splice(to,0,x); return n; });
 
   const savePlant = (data) => {
     if (data.id) {
@@ -600,6 +617,43 @@ window.onload=()=>{
       setTab('garden');
     }
     setForm(null);
+  };
+
+  const exportGarden = () => {
+    const data = { version: APP_VERSION, exportedAt: new Date().toISOString(), gardenKey, locations, queue, plants };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `caulis-${gardenKey}-${fmtLocalDate(new Date())}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const importGarden = (data, mode) => {
+    if (!data || !Array.isArray(data.plants)) return false;
+    const incoming = data.plants.filter(Boolean).map(p => ({
+      ...p, history: Array.isArray(p.history) ? p.history : [], photos: Array.isArray(p.photos) ? p.photos : [],
+    }));
+    if (mode === 'replace') {
+      setPlants(incoming);
+      setQueue(Array.isArray(data.queue) ? data.queue.filter(id => incoming.some(p => p.id === id)) : []);
+      return true;
+    }
+    // merge — reindex colliding ids so existing plants (and their QRs) are untouched
+    let nextId = Math.max(0, ...plants.map(p => p.id), ...incoming.map(p => p.id || 0)) + 1;
+    const existing = new Set(plants.map(p => p.id));
+    const remap = {};
+    const added = incoming.map(p => {
+      let id = p.id;
+      if (existing.has(id)) { remap[p.id] = nextId; id = nextId; nextId++; }
+      existing.add(id);
+      return { ...p, id };
+    });
+    setPlants([...plants, ...added]);
+    const importedQueue = (Array.isArray(data.queue) ? data.queue : []).map(id => remap[id] != null ? remap[id] : id);
+    const allIds = new Set([...plants, ...added].map(p => p.id));
+    setQueue(q => [...q, ...importedQueue.filter(id => !q.includes(id) && allIds.has(id))]);
+    return true;
   };
 
   // ── shared overlay elements ──
@@ -640,14 +694,25 @@ window.onload=()=>{
     </div>
   );
 
+  const storageFullEl = storageFull && (
+    <div style={{ position:'fixed', bottom: isDesktop?24:86, left:0, right:0, display:'flex', justifyContent:'center', zIndex:70, padding:'0 18px', animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#B4472E', borderRadius:18, padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+        <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:500, color:'#fff', lineHeight:1.4 }}>Device storage full — recent photos may not be saved. Remove some photos or back up your garden.</span>
+        <div onClick={()=>setStorageFull(false)} style={{ cursor:'pointer', flexShrink:0, width:26, height:26, borderRadius:999, background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+  );
+
   // ── active screen ──
   const screenProps = { isDesktop };
   let screen = null;
-  if (tab === 'garden')   screen = <GardenScreen plants={plants} onOpen={id=>openDetail(id)} onAdd={()=>setForm({mode:'add'})} onLongPress={p=>setMenuPlant(p)} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'scanner')  screen = <ScannerScreen plants={plants} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
-  if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} {...screenProps}/>;
+  if (tab === 'garden')   screen = <GardenScreen plants={plants} onOpen={id=>openDetail(id)} onAdd={()=>setForm({mode:'add'})} onLongPress={p=>setMenuPlant(p)} onReorder={reorderPlants} czechMode={identifyLang === 'cs'} {...screenProps}/>;
+  if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} czechMode={identifyLang === 'cs'} {...screenProps}/>;
+  if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
+  if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
@@ -683,6 +748,7 @@ window.onload=()=>{
         )}
         {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
         {undoDeleteEl}
+        {storageFullEl}
         {guestView === 'loading' && <div style={{ position:'fixed', inset:0, zIndex:50, background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', animation:'fade 160ms ease' }}><div style={{ width:38, height:38, borderRadius:999, border:`3px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/></div>}
         {guestView && guestView !== 'loading' && (
           <DesktopModal onClose={()=>setGuestView(null)} maxWidth={520}>
