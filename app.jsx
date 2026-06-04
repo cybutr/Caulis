@@ -554,6 +554,11 @@ function App() {
   }, [plants, locations, queue, gardenNode, perenualKey, plantIdKey, housePlantsKey, anthropicKey]);
 
   const updateApp = async () => {
+    // Force a sync of any pending changes before wiping caches and reloading
+    if (gardenNode) {
+      pushGarden(gardenNode, { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null });
+    }
+    
     try {
       if ('serviceWorker' in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();

@@ -299,6 +299,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSpecies, setLoadingSpecies] = useState(false);
   const [candidates, setCandidates] = useState([]);
+  const [rechecking, setRechecking] = useState(false);
   const fileRef = useRef(null);
   const photoModeRef = useRef('photo');
 
@@ -323,6 +324,34 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
     const full = await resolveSpecies(cand.scientificName, cand.commonName || cand.scientificName, cand.score);
     setIdentifying(false);
     applyIdentified(full);
+  };
+
+  const runAiRecheck = async () => {
+    if (rechecking || !latin) return;
+    setRechecking(true);
+    try {
+      const record = species ? { ...species } : {
+        scientific_name: latin,
+        common_name: name,
+        czech: czech,
+        _care: care,
+        _fact: fact
+      };
+      const aiRecord = await aiReviewCare(record);
+      if (!aiRecord) return;
+      const c = speciesCare(aiRecord);
+      setEvery(c.every);
+      if (c.light) setLight(c.light);
+      if (c.care) setCare(c.care);
+      if (c.fact) setFact(c.fact);
+      if (c.czech && !czech) setCzech(c.czech);
+      setSource((source || 'Manual') + ' · AI Reviewed');
+      if (aiRecord.common_name && !name) setName(aiRecord.common_name);
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setRechecking(false);
+    }
   };
 
   const fmtName = n => n.replace(/-/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -609,6 +638,25 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
               <div onClick={()=>setLastWatered(d=>Math.min(365, d+1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>+</div>
             </div>
           </Field>
+
+          {hasAnthropicKey() && (
+            <div onClick={runAiRecheck} style={{
+              marginTop: 10,
+              height: 48, borderRadius: 14, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+              background: 'rgba(122,158,78,0.1)', border: `1px solid rgba(122,158,78,0.3)`,
+              cursor: rechecking || !latin ? 'default' : 'pointer',
+              opacity: !latin ? 0.5 : 1, transition:'all 200ms ease'
+            }}>
+              {rechecking ? (
+                <div style={{ width:16, height:16, borderRadius:999, border:'2px solid rgba(45,80,22,0.2)', borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/>
+              ) : (
+                <SparkIcon s={16} c={C.forest}/>
+              )}
+              <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.forest }}>
+                {rechecking ? 'Enhancing with AI…' : 'Recheck care info with AI'}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
