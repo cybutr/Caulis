@@ -433,7 +433,8 @@ function App() {
 
   const renameGardenKey = async (newKey) => {
     const newNode = await gardenNodeId(newKey, gardenPassword);
-    const data = { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null};
+    const cleanPlants = plants.map(({ photos, ...rest }) => rest);
+    const data = { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null};
     const ok = gardenNode ? await renameGarden(gardenNode, newNode, data) : true;
     if (ok) {
       try {
@@ -530,6 +531,16 @@ function App() {
           const local = prev.find(lp => lp.id === p.id);
           // prefer synced photos; fall back to whatever this device already had
           const photos = (p.photos && p.photos.length) ? p.photos : (local ? (local.photos || []) : []);
+          
+          if (!photos.length) {
+            // Lazy load from discrete photo node
+            fetchPhotos(gardenNode, p.id).then(ph => {
+              if (ph && ph.length) {
+                setPlants(curr => curr.map(cp => cp.id === p.id && (!cp.photos || !cp.photos.length) ? { ...cp, photos: ph } : cp));
+              }
+            });
+          }
+
           return { ...p, photos };
         }));
       }
@@ -548,7 +559,8 @@ function App() {
     if (fromRemoteRef.current) { fromRemoteRef.current = false; return; }
     if (switchingGardenRef.current) { switchingGardenRef.current = false; return; }
     const timer = setTimeout(() => {
-      pushGarden(gardenNode, { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null});
+      const cleanPlants = plants.map(({ photos, ...rest }) => rest);
+      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null});
     }, 800);
     return () => clearTimeout(timer);
   }, [plants, locations, queue, gardenNode, perenualKey, plantIdKey, housePlantsKey, anthropicKey]);
@@ -556,7 +568,8 @@ function App() {
   const updateApp = async () => {
     // Force a sync of any pending changes before wiping caches and reloading
     if (gardenNode) {
-      pushGarden(gardenNode, { plants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null });
+      const cleanPlants = plants.map(({ photos, ...rest }) => rest);
+      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null });
     }
     
     try {
@@ -589,7 +602,16 @@ function App() {
         if (data) {
           const toArr = v => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
           const incoming = toArr(data.plants).filter(Boolean);
-          if (incoming.length) setPlants(prev => incoming.map(p => { const local = prev.find(lp => lp.id === p.id); const photos = (p.photos && p.photos.length) ? p.photos : (local ? (local.photos || []) : []); return { ...p, photos }; }));
+          if (incoming.length) setPlants(prev => incoming.map(p => {
+             const local = prev.find(lp => lp.id === p.id);
+             const photos = (p.photos && p.photos.length) ? p.photos : (local ? (local.photos || []) : []);
+             if (!photos.length) {
+                fetchPhotos(gardenNode, p.id).then(ph => {
+                   if (ph && ph.length) setPlants(curr => curr.map(cp => cp.id === p.id && (!cp.photos || !cp.photos.length) ? { ...cp, photos: ph } : cp));
+                });
+             }
+             return { ...p, photos };
+          }));
           if (data.queue) setQueue(toArr(data.queue).filter(Boolean));
         }
       }
@@ -734,6 +756,7 @@ window.onload=()=>{
     setQueue(q => q.filter(x => x !== id));
     if (p) setUndoDelete({ plant: p, queued: queue.includes(id) });
     idbDel(id);
+    if (gardenNode) deletePhotos(gardenNode, id);
   };
   const requestRemove = (id) => { if (confirmDelete) setConfirmRemove(id); else removePlant(id); };
   const undoRemove = () => {
@@ -772,12 +795,14 @@ window.onload=()=>{
         next.photos = data.photos || [];
         next.image = data.presetImage != null ? data.presetImage : p.image;
         delete next.userImage;
+        if (gardenNode) pushPhoto(gardenNode, next.id, next.photos);
         return next;
       }));
     } else {
       const id = Math.max(0, ...plants.map(p => p.id)) + 1;
       const sp = data.species;
       const care = sp ? speciesCare(sp) : { every:defaultEvery, light:'Bright, indirect', care:'Water when the top of the soil feels dry.', fact:'Freshly added — identify it to enrich its care notes.', watering:'Average', benchmark:`${defaultEvery} days`, sunlight:[], image:null, species_id:null };
+      if (gardenNode) pushPhoto(gardenNode, id, data.photos || []);
       setPlants(ps => [...ps, {
         id, name: data.name, czech: data.czech || '', latin: data.latin, location: data.location, days: data.days || 0,
         every: data.every || care.every, light: data.light || care.light, care: data.care || care.care, fact: data.fact || care.fact,
@@ -837,6 +862,11 @@ window.onload=()=>{
     if (mode === 'replace') {
       setPlants(incoming);
       setQueue(Array.isArray(data.queue) ? data.queue.filter(id => incoming.some(p => p.id === id)) : []);
+      if (gardenNode) {
+         incoming.forEach(p => {
+             if (p.photos && p.photos.length) pushPhoto(gardenNode, p.id, p.photos);
+         });
+      }
       return true;
     }
     // merge — reindex colliding ids so existing plants (and their QRs) are untouched
@@ -850,6 +880,11 @@ window.onload=()=>{
       return { ...p, id };
     });
     setPlants([...plants, ...added]);
+    if (gardenNode) {
+       added.forEach(p => {
+           if (p.photos && p.photos.length) pushPhoto(gardenNode, p.id, p.photos);
+       });
+    }
     const importedQueue = (Array.isArray(data.queue) ? data.queue : []).map(id => remap[id] != null ? remap[id] : id);
     const allIds = new Set([...plants, ...added].map(p => p.id));
     setQueue(q => [...q, ...importedQueue.filter(id => !q.includes(id) && allIds.has(id))]);

@@ -509,6 +509,10 @@ function ScannerScreen({ plants, onScan, isDesktop, paused }) {
 
   useEffect(() => {
     if (isDesktop) return;
+    if (typeof Html5Qrcode === 'undefined') {
+      setCamError('QR scanner script was blocked by the browser. Please check ad/tracker blockers.');
+      return;
+    }
     scannedRef.current = false;
     const scanner = new Html5Qrcode('caulis-qr-reader');
     scannerRef.current = scanner;

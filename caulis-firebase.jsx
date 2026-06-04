@@ -86,6 +86,27 @@ async function fetchGardenOnce(key) {
   try { const snap = await ref.once('value'); return snap.exists() ? snap.val() : null; } catch(e) { return null; }
 }
 
+function pushPhoto(key, plantId, photos) {
+  const db = getDb();
+  if (!db || !key) return;
+  db.ref(`gardenPhotos/${encodeURIComponent(key)}/${plantId}`).set(photos || null).catch(()=>{});
+}
+
+function deletePhotos(key, plantId) {
+  const db = getDb();
+  if (!db || !key) return;
+  db.ref(`gardenPhotos/${encodeURIComponent(key)}/${plantId}`).remove().catch(()=>{});
+}
+
+async function fetchPhotos(key, plantId) {
+  const db = getDb();
+  if (!db || !key) return [];
+  try {
+    const snap = await db.ref(`gardenPhotos/${encodeURIComponent(key)}/${plantId}`).once('value');
+    return snap.exists() ? snap.val() : [];
+  } catch(e) { return []; }
+}
+
 async function getGardenPasswordOnly(key) {
   const ref = gardenRef(key);
   if (!ref) return null;
@@ -95,4 +116,4 @@ async function getGardenPasswordOnly(key) {
   } catch(e) { return null; }
 }
 
-Object.assign(window, { listenGarden, pushGarden, gardenExists, renameGarden, fetchGardenOnce, getGardenPasswordOnly, gardenNodeId, FIREBASE_READY });
+Object.assign(window, { listenGarden, pushGarden, gardenExists, renameGarden, fetchGardenOnce, getGardenPasswordOnly, gardenNodeId, FIREBASE_READY, pushPhoto, fetchPhotos, deletePhotos });
