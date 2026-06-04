@@ -532,7 +532,7 @@ function ScannerScreen({ plants, onScan, isDesktop, paused }) {
   }, [isDesktop]);
 
   return (
-    <div style={{ height:'100%', position:'relative', background:'#111', overflow:'hidden' }}>
+    <div style={{ position:'absolute', inset:0, background:'#111', overflow:'hidden' }}>
       <div id="caulis-qr-reader" style={{ position:'absolute', inset:0, width:'100%', height:'100%' }}/>
       <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.35)', pointerEvents:'none' }}/>
       <div style={{ position:'absolute', top:62, left:0, right:0, textAlign:'center', zIndex:3, pointerEvents:'none' }}>
