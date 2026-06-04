@@ -40,6 +40,26 @@ function fireHaptic(kind = 'light') {
   }
 }
 
+// ── photo storage: IndexedDB (huge quota, handles base64 blobs).
+// Local cache only — sync still flows through Firebase. ──────────
+const _IDB_NAME = 'caulis', _IDB_STORE = 'photos';
+let _idbP = null;
+function _idb() {
+  if (_idbP) return _idbP;
+  _idbP = new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open(_IDB_NAME, 1);
+      r.onupgradeneeded = () => { const db = r.result; if (!db.objectStoreNames.contains(_IDB_STORE)) db.createObjectStore(_IDB_STORE); };
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  });
+  return _idbP;
+}
+async function idbSet(key, val) { const db = await _idb(); return new Promise((res, rej) => { const tx = db.transaction(_IDB_STORE, 'readwrite'); tx.objectStore(_IDB_STORE).put(val, key); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+async function idbDel(key) { try { const db = await _idb(); return await new Promise((res) => { const tx = db.transaction(_IDB_STORE, 'readwrite'); tx.objectStore(_IDB_STORE).delete(key); tx.oncomplete = () => res(); tx.onerror = () => res(); }); } catch (e) {} }
+async function idbGetAll() { const db = await _idb(); return new Promise((res) => { const tx = db.transaction(_IDB_STORE, 'readonly'); const store = tx.objectStore(_IDB_STORE); const kq = store.getAllKeys(), vq = store.getAll(); const out = {}; tx.oncomplete = () => { const ks = kq.result || [], vs = vq.result || []; ks.forEach((k, i) => { out[k] = vs[i]; }); res(out); }; tx.onerror = () => res({}); }); }
+
 function scheduleWatering(plants) {
   const today = new Date(); today.setHours(0,0,0,0);
   const tally = {}, result = {};
@@ -75,6 +95,7 @@ function App() {
     return { ...p, history: Array.isArray(p.history) ? p.history : [], photos: photos || (legacy ? [legacy] : (p.photos || [])) };
   }));
   const locations = [...new Set(plants.map(p => p.location).filter(Boolean))].sort();
+  const photosReady = useRef(false);
   const [tab, setTab]             = useState(() => lsGet('caulis_default_tab', 'garden'));
   const [detail, setDetail]       = useState(null);
   const [form, setForm]           = useState(null);
@@ -437,17 +458,38 @@ function App() {
     return () => { cancelled = true; };
   }, [gardenKey, gardenPassword]);
 
-  // ── Persist to localStorage (photos stored separately, off the main blob) ──
+  // ── Persist: plant blob (photos stripped) to localStorage, photos to
+  //    IndexedDB (big quota). Sync still goes through Firebase separately. ──
   useEffect(() => {
     lsSet('caulis_plants', plants.map(({ photos, userImage, ...rest }) => rest));
+    if (!photosReady.current) return; // wait until initial photo load/migration done
     plants.forEach(p => {
-      try {
-        if (p.photos && p.photos.length) lsSet('caulis_imgs_' + p.id, p.photos);
-        else try { localStorage.removeItem('caulis_imgs_' + p.id); } catch(e) {}
-        try { localStorage.removeItem('caulis_img_' + p.id); } catch(e) {} // drop legacy single
-      } catch(e) {}
+      if (p.photos && p.photos.length) idbSet(p.id, p.photos).catch(()=>{});
+      else idbDel(p.id);
     });
   }, [plants]);
+  // load photos from IndexedDB once, migrating any left in localStorage
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let all = {};
+      try { all = await idbGetAll(); } catch (e) {}
+      try {
+        const legacyKeys = [];
+        for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf('caulis_imgs_') === 0) legacyKeys.push(k); }
+        for (const k of legacyKeys) {
+          const id = +k.slice('caulis_imgs_'.length);
+          try { const v = JSON.parse(localStorage.getItem(k)); if (v && v.length && !(all[id] && all[id].length)) { await idbSet(id, v); all[id] = v; } } catch (e) {}
+          try { localStorage.removeItem(k); } catch (e) {}
+        }
+      } catch (e) {}
+      if (!cancelled && Object.keys(all).length) {
+        setPlants(ps => ps.map(p => (all[p.id] && all[p.id].length && !(p.photos && p.photos.length)) ? { ...p, photos: all[p.id] } : p));
+      }
+      photosReady.current = true;
+    })();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => { lsSet('caulis_queue', queue); }, [queue]);
   useEffect(() => { lsSet('caulis_queue_sizes', queueSizes); }, [queueSizes]);
   useEffect(() => { lsSet('caulis_default_every', defaultEvery); }, [defaultEvery]);
@@ -686,6 +728,7 @@ window.onload=()=>{
     setPlants(ps => ps.filter(x => x.id !== id));
     setQueue(q => q.filter(x => x !== id));
     if (p) setUndoDelete({ plant: p, queued: queue.includes(id) });
+    idbDel(id);
   };
   const requestRemove = (id) => { if (confirmDelete) setConfirmRemove(id); else removePlant(id); };
   const undoRemove = () => {
@@ -703,7 +746,7 @@ window.onload=()=>{
   const movePlant   = (id, room) => setPlants(ps => ps.map(p => p.id === id ? { ...p, location: room } : p));
   const bulkWater  = (ids) => ids.forEach(id => water(id, 0));
   const bulkQueue  = (ids) => { haptic('medium'); setQueue(q => { const s = new Set(q); ids.forEach(id => s.add(id)); return [...s]; }); setPrinted(false); };
-  const doBulkRemove = () => { const ids = bulkRemoveIds || []; haptic('warning'); setPlants(ps => ps.filter(p => !ids.includes(p.id))); setQueue(q => q.filter(id => !ids.includes(id))); setBulkRemoveIds(null); };
+  const doBulkRemove = () => { const ids = bulkRemoveIds || []; haptic('warning'); setPlants(ps => ps.filter(p => !ids.includes(p.id))); setQueue(q => q.filter(id => !ids.includes(id))); ids.forEach(id => idbDel(id)); setBulkRemoveIds(null); };
   const reorderQueue = (from, to) => setQueue(q => { if (from===to||from<0||to<0||from>=q.length||to>=q.length) return q; const n=[...q]; const [x]=n.splice(from,1); n.splice(to,0,x); return n; });
   const reorderPlants = (from, to) => setPlants(ps => { if (from===to||from<0||to<0||from>=ps.length||to>=ps.length) return ps; const n=[...ps]; const [x]=n.splice(from,1); n.splice(to,0,x); return n; });
 
