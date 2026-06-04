@@ -13,7 +13,14 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '64'; // keep in sync with sw.js CACHE
+const APP_VERSION = '70'; // keep in sync with sw.js CACHE
+
+// motion tokens — one scale for every transition so the app feels consistent
+const MOTION = {
+  out:    'cubic-bezier(.2,.8,.2,1)',     // standard ease-out
+  spring: 'cubic-bezier(.34,1.56,.64,1)', // playful overshoot
+  fast: 160, base: 240, slow: 320,
+};
 
 const C = {
   bg:     '#FAFAF7',
@@ -260,6 +267,14 @@ function StatusTag({ status }) {
 // Specimen image placeholder OR real photo (tinted block w/ leaf motif) ---
 function Specimen({ tint, height, radius = 15, leafSize = 46, caption, image }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const imgRef = useRef(null);
+  // cached images can finish loading before React attaches onLoad — catch that
+  useEffect(() => {
+    setLoaded(false);
+    const el = imgRef.current;
+    if (el && el.complete && el.naturalWidth > 0) setLoaded(true);
+  }, [image]);
   const showImg = image && !failed;
   return (
     <div style={{
@@ -273,9 +288,11 @@ function Specimen({ tint, height, radius = 15, leafSize = 46, caption, image }) 
       <Leaf size={leafSize} color={C.forest} opacity={0.16}/>
       {showImg && (
         <img
-          src={image} alt="" draggable={false}
-          onError={()=>setFailed(true)}
-          style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block' }}/>
+          key={image} ref={imgRef} src={image} alt="" draggable={false}
+          onError={()=>setFailed(true)} onLoad={()=>setLoaded(true)}
+          style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block',
+            opacity: loaded?1:0, transform: loaded?'none':'scale(1.06)', filter: loaded?'none':'blur(14px)',
+            transition:`opacity ${MOTION.base}ms ${MOTION.out}, transform ${MOTION.slow}ms ${MOTION.out}, filter ${MOTION.slow}ms ${MOTION.out}` }}/>
       )}
       {showImg && (
         <div style={{ position:'absolute', inset:0, boxShadow:'inset 0 0 0 0.5px rgba(45,80,22,0.10)', borderRadius:radius, pointerEvents:'none',
@@ -304,5 +321,5 @@ Object.assign(window, {
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
-  useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION,
+  useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION, MOTION,
 });

@@ -2,6 +2,44 @@
 //  Caulis — App router & state
 // ════════════════════════════════════════════════════════════
 
+// ── haptics ──────────────────────────────────────────────────
+// Android/desktop use navigator.vibrate. iOS Safari has no vibrate
+// API, so we trigger the Taptic Engine via a hidden <input switch>
+// toggle (iOS 17.4+) — clicked inside a user gesture. (technique:
+// haptics.lochie.me)
+const _IS_IOS = typeof navigator !== 'undefined' && /iP(hone|ad|od)/.test(navigator.userAgent) && !window.MSStream;
+let _hapticSwitch = null;
+function _getHapticSwitch() {
+  if (_hapticSwitch || typeof document === 'undefined') return _hapticSwitch;
+  try {
+    const label = document.createElement('label');
+    label.setAttribute('aria-hidden', 'true');
+    label.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none;z-index:-1;';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.setAttribute('switch', '');
+    label.appendChild(input);
+    document.body.appendChild(label);
+    _hapticSwitch = input;
+  } catch (e) {}
+  return _hapticSwitch;
+}
+// kind: 'light' | 'medium' | 'heavy' | 'success' | 'warning'
+function fireHaptic(kind = 'light') {
+  if (_IS_IOS) {
+    const sw = _getHapticSwitch();
+    if (sw) {
+      const taps = kind === 'success' ? 2 : kind === 'warning' ? 3 : 1;
+      try { sw.click(); for (let i = 1; i < taps; i++) setTimeout(() => sw.click(), i * 90); } catch (e) {}
+      return;
+    }
+  }
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    const pat = { light: 8, medium: 16, heavy: 28, success: [12, 60, 12], warning: [10, 40, 10, 40, 10] }[kind] || 10;
+    try { navigator.vibrate(pat); } catch (e) {}
+  }
+}
+
 function scheduleWatering(plants) {
   const today = new Date(); today.setHours(0,0,0,0);
   const tally = {}, result = {};
@@ -37,7 +75,7 @@ function App() {
     return { ...p, history: Array.isArray(p.history) ? p.history : [], photos: photos || (legacy ? [legacy] : (p.photos || [])) };
   }));
   const locations = [...new Set(plants.map(p => p.location).filter(Boolean))].sort();
-  const [tab, setTab]             = useState('garden');
+  const [tab, setTab]             = useState(() => lsGet('caulis_default_tab', 'garden'));
   const [detail, setDetail]       = useState(null);
   const [form, setForm]           = useState(null);
   const [moveTarget, setMoveTarget] = useState(null);
@@ -47,6 +85,25 @@ function App() {
   const [printed, setPrinted]     = useState(false);
   const [globalPrintSize, setGlobalPrintSizeRaw] = useState(() => lsGet('caulis_print_size', 40));
   const [queueSizes, setQueueSizes] = useState(() => lsGet('caulis_queue_sizes', {}));
+  const [cardDensity, setCardDensityRaw] = useState(() => lsGet('caulis_density', 'comfy'));
+  const setCardDensity = (v) => { setCardDensityRaw(v); lsSet('caulis_density', v); };
+  const [hideHealthy, setHideHealthyRaw] = useState(() => lsGet('caulis_hide_healthy', false));
+  const setHideHealthy = (v) => { setHideHealthyRaw(v); lsSet('caulis_hide_healthy', v); };
+  const [reduceMotion, setReduceMotionRaw] = useState(() => lsGet('caulis_reduce_motion', false));
+  const setReduceMotion = (v) => { setReduceMotionRaw(v); lsSet('caulis_reduce_motion', v); };
+  const [confirmDelete, setConfirmDeleteRaw] = useState(() => lsGet('caulis_confirm_delete', false));
+  const setConfirmDelete = (v) => { setConfirmDeleteRaw(v); lsSet('caulis_confirm_delete', v); };
+  const [haptics, setHapticsRaw] = useState(() => lsGet('caulis_haptics', true));
+  const setHaptics = (v) => { setHapticsRaw(v); lsSet('caulis_haptics', v); };
+  const [defaultTab, setDefaultTabRaw] = useState(() => lsGet('caulis_default_tab', 'garden'));
+  const setDefaultTab = (v) => { setDefaultTabRaw(v); lsSet('caulis_default_tab', v); };
+  const [swipeNav, setSwipeNavRaw] = useState(() => lsGet('caulis_swipe_nav', true));
+  const setSwipeNav = (v) => { setSwipeNavRaw(v); lsSet('caulis_swipe_nav', v); };
+  const [confirmRemove, setConfirmRemove] = useState(null);
+  const [bulkMove, setBulkMove] = useState(null);
+  const [bulkRemoveIds, setBulkRemoveIds] = useState(null);
+  useEffect(() => { try { document.documentElement.setAttribute('data-rm', reduceMotion ? '1' : '0'); } catch(e) {} }, [reduceMotion]);
+  const haptic = (kind = 'light') => { if (haptics) fireHaptic(kind); };
   const [monochromePrint, setMonochromePrintRaw] = useState(() => lsGet('caulis_print_mono', false));
   const [gardenPassword, setGardenPassword] = useState(() => { try { return localStorage.getItem('caulis_garden_pw') || ''; } catch(e) { return ''; } });
   const [gardenNode, setGardenNode] = useState(null);
@@ -467,35 +524,70 @@ function App() {
 
   const tintFor = (id) => TINTS[(id - 1) % TINTS.length];
 
-  // swipe between tabs on mobile — ignored over overlays and horizontally-
-  // scrollable / swipeable zones (marked data-noswipe)
+  // unified mobile gesture: horizontal swipe = change tab (if enabled),
+  // vertical pull at scroll-top = pull-to-refresh. Ignored over overlays
+  // and horizontally-scrollable zones (marked data-noswipe).
   const TAB_ORDER = ['garden', 'needs', 'scanner', 'print', 'settings'];
+  const PULL_MAX = 88, PULL_TRIG = 62;
   const swipeRef = useRef(null);
+  const [pull, setPull] = useState(0);
+  const [pulling, setPulling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const doRefresh = async () => {
+    setRefreshing(true); setPull(PULL_TRIG); haptic('medium');
+    const start = Date.now();
+    try {
+      if (FIREBASE_READY && gardenNode) {
+        const data = await fetchGardenOnce(gardenNode);
+        if (data) {
+          const toArr = v => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
+          const incoming = toArr(data.plants).filter(Boolean);
+          if (incoming.length) setPlants(prev => incoming.map(p => { const local = prev.find(lp => lp.id === p.id); const photos = (p.photos && p.photos.length) ? p.photos : (local ? (local.photos || []) : []); return { ...p, photos }; }));
+          if (data.queue) setQueue(toArr(data.queue).filter(Boolean));
+        }
+      }
+    } catch (e) {}
+    setTimeout(() => { setRefreshing(false); setPull(0); }, Math.max(0, 650 - (Date.now() - start)));
+  };
   const onSwipeStart = (e) => {
-    if (e.pointerType === 'mouse') { swipeRef.current = null; return; }
-    if (detail || form || moveTarget || menuPlant || guestView) { swipeRef.current = null; return; }
-    if (e.target.closest && e.target.closest('[data-noswipe]')) { swipeRef.current = null; return; }
-    swipeRef.current = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY };
+    if (e.pointerType === 'mouse' || refreshing) { swipeRef.current = null; return; }
+    if (detail || form || moveTarget || menuPlant || guestView || confirmRemove != null || bulkMove || bulkRemoveIds) { swipeRef.current = null; return; }
+    const noswipe = !!(e.target.closest && e.target.closest('[data-noswipe]'));
+    swipeRef.current = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, top: e.currentTarget.scrollTop <= 0, noswipe, mode: null };
   };
   const onSwipeMove = (e) => {
     const s = swipeRef.current; if (!s) return;
     s.lx = e.clientX; s.ly = e.clientY;
+    const dx = s.lx - s.x, dy = s.ly - s.y;
+    if (!s.mode) {
+      if (s.top && dy > 8 && dy > Math.abs(dx) * 1.3) s.mode = 'pull';
+      else if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy)) s.mode = 'swipe';
+    }
+    if (s.mode === 'pull') { if (!pulling) setPulling(true); setPull(Math.min(PULL_MAX, dy * 0.5)); }
   };
   const onSwipeEnd = () => {
     const s = swipeRef.current; swipeRef.current = null;
+    setPulling(false);
     if (!s) return;
+    if (s.mode === 'pull') { if ((s.ly - s.y) * 0.5 >= PULL_TRIG) doRefresh(); else setPull(0); return; }
+    if (!swipeNav || s.noswipe) return;
     const dx = s.lx - s.x, dy = s.ly - s.y;
     if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
     const i = TAB_ORDER.indexOf(tab);
     const ni = dx < 0 ? Math.min(TAB_ORDER.length - 1, i + 1) : Math.max(0, i - 1);
     if (ni !== i) setTab(TAB_ORDER[ni]);
   };
+  const prevTabRef = useRef(tab);
+  const tabDir = TAB_ORDER.indexOf(tab) >= TAB_ORDER.indexOf(prevTabRef.current) ? 1 : -1;
+  useEffect(() => { prevTabRef.current = tab; }, [tab]);
+  const tabAnim = reduceMotion ? undefined : `${tabDir > 0 ? 'slideFromR' : 'slideFromL'} 280ms cubic-bezier(.2,.8,.2,1)`;
 
   // ── actions ──
   const openDetail = (id, fromScan = false) => setDetail({ id, fromScan });
   const closeDetail = () => setDetail(null);
 
   const water = (id, daysAgo = 0) => {
+    haptic('light');
     const d = Math.max(0, daysAgo || 0);
     const when = new Date(); when.setHours(0,0,0,0); when.setDate(when.getDate() - d);
     const stamp = fmtLocalDate(when);
@@ -512,7 +604,7 @@ function App() {
     }
   };
   const undoWater = (id, prevDays) => setPlants(ps => ps.map(p => p.id === id ? { ...p, days: prevDays, history: (p.history||[]).slice(0, -1) } : p));
-  const snooze = (id, n = 2) => setPlants(ps => ps.map(p => p.id === id ? { ...p, days: Math.max(0, p.days - n) } : p));
+  const snooze = (id, n = 2) => { haptic('light'); setPlants(ps => ps.map(p => p.id === id ? { ...p, days: Math.max(0, p.days - n) } : p)); };
 
   const toggleQueue = (id) => { setQueue(q => q.includes(id) ? q.filter(x => x !== id) : [...q, id]); setPrinted(false); };
   const removeQueue = (id) => {
@@ -589,11 +681,13 @@ window.onload=()=>{
   };
 
   const removePlant = (id) => {
+    haptic('heavy');
     const p = plants.find(x => x.id === id);
     setPlants(ps => ps.filter(x => x.id !== id));
     setQueue(q => q.filter(x => x !== id));
     if (p) setUndoDelete({ plant: p, queued: queue.includes(id) });
   };
+  const requestRemove = (id) => { if (confirmDelete) setConfirmRemove(id); else removePlant(id); };
   const undoRemove = () => {
     if (!undoDelete) return;
     const { plant, queued } = undoDelete;
@@ -607,6 +701,9 @@ window.onload=()=>{
     return () => clearTimeout(t);
   }, [undoDelete]);
   const movePlant   = (id, room) => setPlants(ps => ps.map(p => p.id === id ? { ...p, location: room } : p));
+  const bulkWater  = (ids) => ids.forEach(id => water(id, 0));
+  const bulkQueue  = (ids) => { haptic('medium'); setQueue(q => { const s = new Set(q); ids.forEach(id => s.add(id)); return [...s]; }); setPrinted(false); };
+  const doBulkRemove = () => { const ids = bulkRemoveIds || []; haptic('warning'); setPlants(ps => ps.filter(p => !ids.includes(p.id))); setQueue(q => q.filter(id => !ids.includes(id))); setBulkRemoveIds(null); };
   const reorderQueue = (from, to) => setQueue(q => { if (from===to||from<0||to<0||from>=q.length||to>=q.length) return q; const n=[...q]; const [x]=n.splice(from,1); n.splice(to,0,x); return n; });
   const reorderPlants = (from, to) => setPlants(ps => { if (from===to||from<0||to<0||from>=ps.length||to>=ps.length) return ps; const n=[...ps]; const [x]=n.splice(from,1); n.splice(to,0,x); return n; });
 
@@ -760,14 +857,44 @@ window.onload=()=>{
     </div>
   );
 
+  const confirmRemoveEl = confirmRemove != null && (() => {
+    const p = plants.find(x => x.id === confirmRemove);
+    if (!p) return null;
+    return (
+      <div onClick={()=>setConfirmRemove(null)} style={{ position:'fixed', inset:0, zIndex:80, background:'rgba(20,30,12,0.42)', display:'flex', alignItems:'center', justifyContent:'center', padding:24, animation:'fade 160ms ease' }}>
+        <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:320, background:C.panel, borderRadius:22, padding:'22px 22px 16px', boxShadow:'0 18px 48px rgba(0,0,0,0.3)', animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)' }}>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.ink }}>Delete {p.name}?</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.6, marginTop:6, lineHeight:1.5 }}>This removes the plant from your garden. You can undo right after.</div>
+          <div style={{ display:'flex', gap:10, marginTop:20 }}>
+            <div onClick={()=>setConfirmRemove(null)} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:'rgba(45,80,22,0.07)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, cursor:'pointer' }}>Cancel</div>
+            <div onClick={()=>{ removePlant(confirmRemove); setConfirmRemove(null); }} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:'#B4472E', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer' }}>Delete</div>
+          </div>
+        </div>
+      </div>
+    );
+  })();
+
+  const bulkRemoveEl = bulkRemoveIds && bulkRemoveIds.length > 0 && (
+    <div onClick={()=>setBulkRemoveIds(null)} style={{ position:'fixed', inset:0, zIndex:80, background:'rgba(20,30,12,0.42)', display:'flex', alignItems:'center', justifyContent:'center', padding:24, animation:'fade 160ms ease' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:320, background:C.panel, borderRadius:22, padding:'22px 22px 16px', boxShadow:'0 18px 48px rgba(0,0,0,0.3)', animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)' }}>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.ink }}>Delete {bulkRemoveIds.length} plant{bulkRemoveIds.length===1?'':'s'}?</div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.6, marginTop:6, lineHeight:1.5 }}>This removes them from your garden and cannot be undone.</div>
+        <div style={{ display:'flex', gap:10, marginTop:20 }}>
+          <div onClick={()=>setBulkRemoveIds(null)} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:'rgba(45,80,22,0.07)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, cursor:'pointer' }}>Cancel</div>
+          <div onClick={doBulkRemove} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:'#B4472E', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer' }}>Delete</div>
+        </div>
+      </div>
+    </div>
+  );
+
   // ── active screen ──
   const screenProps = { isDesktop };
   let screen = null;
-  if (tab === 'garden')   screen = <GardenScreen plants={plants} onOpen={id=>openDetail(id)} onAdd={()=>setForm({mode:'add'})} onLongPress={p=>setMenuPlant(p)} onReorder={reorderPlants} czechMode={identifyLang === 'cs'} {...screenProps}/>;
+  if (tab === 'garden')   screen = <GardenScreen plants={plants} onOpen={id=>openDetail(id)} onAdd={()=>setForm({mode:'add'})} onLongPress={p=>setMenuPlant(p)} onReorder={reorderPlants} density={cardDensity} hideHealthy={hideHealthy} onBulkWater={bulkWater} onBulkQueue={bulkQueue} onBulkMove={setBulkMove} onBulkRemove={setBulkRemoveIds} onHaptic={()=>haptic('light')} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
@@ -777,7 +904,7 @@ window.onload=()=>{
       <div style={{ display:'flex', minHeight:'100vh', background:C.bg }}>
         <DesktopSidebar tab={tab} setTab={setTab}/>
         <div style={{ flex:1, height:'100vh', overflowY:'auto', overflowX:'hidden', position:'relative' }}>
-          {screen}
+          <div key={tab} style={{ animation: tabAnim, minHeight:'100%' }}>{screen}</div>
         </div>
 
         {detailPlant && (
@@ -793,17 +920,22 @@ window.onload=()=>{
         {moving && (
           <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={()=>{}} isDesktop/>
         )}
+        {bulkMove && bulkMove.length > 0 && (
+          <MoveSheet ids={bulkMove} locations={locations} onClose={()=>setBulkMove(null)} onPick={movePlant} onAddLocation={()=>{}} isDesktop/>
+        )}
         {menuPlant && (
           <ContextMenu
             plant={menuPlant} onClose={()=>setMenuPlant(null)}
             onEdit={p=>setForm({mode:'edit', plant:p})}
             onMove={p=>setMoveTarget(p)}
-            onRemove={removePlant}
+            onRemove={requestRemove}
             isDesktop/>
         )}
         {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
         {undoDeleteEl}
         {storageFullEl}
+        {confirmRemoveEl}
+        {bulkRemoveEl}
         {guestView === 'loading' && <div style={{ position:'fixed', inset:0, zIndex:50, background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', animation:'fade 160ms ease' }}><div style={{ width:38, height:38, borderRadius:999, border:`3px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/></div>}
         {guestView && guestView !== 'loading' && (
           <DesktopModal onClose={()=>setGuestView(null)} maxWidth={520}>
@@ -820,7 +952,16 @@ window.onload=()=>{
   return (
     <div style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', background:C.bg, overflow:'hidden' }}>
       <div onPointerDown={onSwipeStart} onPointerMove={onSwipeMove} onPointerUp={onSwipeEnd} onPointerCancel={onSwipeEnd} style={{ flex:1, overflowY:'auto', overflowX:'hidden', position:'relative', WebkitOverflowScrolling:'touch', touchAction:'pan-y' }}>
-        {screen}
+        {(pull > 0 || refreshing) && (
+          <div style={{ position:'absolute', top:0, left:0, right:0, height:0, display:'flex', justifyContent:'center', pointerEvents:'none', zIndex:5 }}>
+            <div style={{ marginTop: Math.max(6, pull - 24), opacity: Math.min(1, pull / PULL_TRIG), transform:`scale(${Math.min(1, 0.55 + pull / PULL_MAX)})`, width:32, height:32, borderRadius:999, background:C.panel, boxShadow:'0 4px 16px rgba(45,80,22,0.2)', display:'flex', alignItems:'center', justifyContent:'center', transition: pulling ? 'none' : `margin-top ${MOTION.base}ms ${MOTION.out}, opacity ${MOTION.base}ms ${MOTION.out}` }}>
+              <div style={{ width:15, height:15, borderRadius:999, border:'2px solid rgba(45,80,22,0.18)', borderTopColor:C.forest, animation: refreshing ? 'spin 0.8s linear infinite' : 'none', transform: refreshing ? 'none' : `rotate(${pull * 3}deg)` }}/>
+            </div>
+          </div>
+        )}
+        <div style={{ transform: pull > 0 ? `translateY(${pull}px)` : undefined, transition: pulling ? 'none' : `transform ${MOTION.base}ms ${MOTION.out}` }}>
+          <div key={tab} style={{ animation: tabAnim, minHeight:'100%' }}>{screen}</div>
+        </div>
       </div>
       <BottomNav tab={tab} setTab={setTab}/>
 
@@ -829,15 +970,21 @@ window.onload=()=>{
       {moving && (
         <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={()=>{}}/>
       )}
+      {bulkMove && bulkMove.length > 0 && (
+        <MoveSheet ids={bulkMove} locations={locations} onClose={()=>setBulkMove(null)} onPick={movePlant} onAddLocation={()=>{}}/>
+      )}
       {menuPlant && (
         <ContextMenu
           plant={menuPlant} onClose={()=>setMenuPlant(null)}
           onEdit={p=>setForm({mode:'edit', plant:p})}
           onMove={p=>setMoveTarget(p)}
-          onRemove={removePlant}/>
+          onRemove={requestRemove}/>
       )}
       {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
       {undoDeleteEl}
+      {storageFullEl}
+      {confirmRemoveEl}
+      {bulkRemoveEl}
       {guestView === 'loading' && <div style={{ position:'fixed', inset:0, zIndex:50, background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', animation:'fade 160ms ease' }}><div style={{ width:38, height:38, borderRadius:999, border:`3px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/></div>}
       {guestView && guestView !== 'loading' && <PlantDetail plant={guestView.plant} tint={tintFor(guestView.plant.id)} fromScan readonly inQueue={false} onBack={()=>setGuestView(null)} onWater={()=>{}} onUndoWater={()=>{}} onToggleQueue={()=>{}} onGoQueue={()=>{}} onEdit={()=>{}} isDesktop={false} czechMode={identifyLang === 'cs'}/>}
     </div>

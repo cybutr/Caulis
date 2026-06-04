@@ -41,6 +41,12 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideFromR { from { transform: translateX(26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes slideFromL { from { transform: translateX(-26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  html[data-rm="1"] *, html[data-rm="1"] *::before, html[data-rm="1"] *::after {
+    animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+  }
   ::-webkit-scrollbar { width: 0; height: 0; }
   #caulis-qr-reader { border: none !important; padding: 0 !important; }
   #caulis-qr-reader video { position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; object-fit:cover !important; }
