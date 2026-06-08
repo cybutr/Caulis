@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '78'; // keep in sync with sw.js CACHE
+const APP_VERSION = '79'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
@@ -123,6 +123,17 @@ const DAY_MS = 86400000;
 function todayMidnight() { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
 function midnightFromStamp(stamp) { const [y,m,d] = String(stamp).split('-').map(Number); const dt = new Date(y, (m||1)-1, d||1); dt.setHours(0,0,0,0); return dt.getTime(); }
 function daysSinceMidnight(ms) { return Math.max(0, Math.round((todayMidnight() - ms) / DAY_MS)); }
+// absolute watered timestamp for a plant. trust an existing wateredAt only once
+// the plant carries the current schema marker (wv) — earlier builds wrote a bad
+// "today" stamp, so unmarked plants are recomputed from history, else from days
+// plus a 5-day legacy backfill. idempotent: re-runs until the marker is stamped.
+const WATER_SCHEMA = 2;
+function deriveWateredAt(p) {
+  if (p.wv === WATER_SCHEMA && typeof p.wateredAt === 'number') return p.wateredAt;
+  const h = Array.isArray(p.history) ? p.history : [];
+  if (h.length) return midnightFromStamp(h[h.length - 1]);
+  return todayMidnight() - ((p.days || 0) + 5) * DAY_MS;
+}
 
 // watering log summary from an array of 'YYYY-MM-DD' strings (newest last)
 function wateringStats(history) {
@@ -323,7 +334,7 @@ const SEED_LOCATIONS = ['Living room','Bedroom','Kitchen windowsill','Bathroom',
 // export to window for other babel scripts -------------------
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
-  todayMidnight, midnightFromStamp, daysSinceMidnight,
+  todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   Leaf, LeafOutline, Sprig,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin,
   StatusDot, LocationPill, StatusTag, Specimen,
