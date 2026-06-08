@@ -89,11 +89,19 @@ function App() {
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e) { if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014)) setStorageFull(true); return false; } };
   const [storageFull, setStorageFull] = useState(false);
 
-  const [plants, setPlants]       = useState(() => lsGet('caulis_plants', []).map(p => {
-    const photos = lsGet('caulis_imgs_' + p.id, null);
-    const legacy = lsGet('caulis_img_' + p.id, null);
-    return { ...p, history: Array.isArray(p.history) ? p.history : [], photos: photos || (legacy ? [legacy] : (p.photos || [])) };
-  }));
+  const [plants, setPlants]       = useState(() => {
+    const bumped = lsGet('caulis_bump5_done', false);
+    return lsGet('caulis_plants', []).map(p => {
+      const photos = lsGet('caulis_imgs_' + p.id, null);
+      const legacy = lsGet('caulis_img_' + p.id, null);
+      const history = Array.isArray(p.history) ? p.history : [];
+      let wateredAt = typeof p.wateredAt === 'number' ? p.wateredAt
+        : history.length ? midnightFromStamp(history[history.length - 1])
+        : todayMidnight() - (p.days || 0) * 86400000;
+      if (!bumped) wateredAt -= 5 * 86400000;
+      return { ...p, history, wateredAt, days: daysSinceMidnight(wateredAt), photos: photos || (legacy ? [legacy] : (p.photos || [])) };
+    });
+  });
   const locations = [...new Set(plants.map(p => p.location).filter(Boolean))].sort();
   const photosReady = useRef(false);
   const [tab, setTab]             = useState(() => lsGet('caulis_default_tab', 'garden'));
@@ -459,6 +467,22 @@ function App() {
     return () => { cancelled = true; };
   }, [gardenKey, gardenPassword]);
 
+  // one-time +5 bump applied in load mapper; flag it so it never repeats
+  useEffect(() => { lsSet('caulis_bump5_done', true); }, []);
+
+  // recompute days from the absolute watered timestamp when the day rolls
+  // over or the tab regains focus (a left-open tab would otherwise freeze)
+  useEffect(() => {
+    const sync = () => setPlants(ps => ps.map(p => {
+      const d = daysSinceMidnight(p.wateredAt);
+      return d === p.days ? p : { ...p, days: d };
+    }));
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('focus', sync);
+    const t = setInterval(sync, 3600000);
+    return () => { document.removeEventListener('visibilitychange', sync); window.removeEventListener('focus', sync); clearInterval(t); };
+  }, []);
+
   // ── Persist: plant blob (photos stripped) to localStorage, photos to
   //    IndexedDB (big quota). Sync still goes through Firebase separately. ──
   useEffect(() => {
@@ -541,7 +565,11 @@ function App() {
             });
           }
 
-          return { ...p, photos };
+          const history = Array.isArray(p.history) ? p.history : [];
+          const wateredAt = typeof p.wateredAt === 'number' ? p.wateredAt
+            : history.length ? midnightFromStamp(history[history.length - 1])
+            : todayMidnight() - (p.days || 0) * 86400000;
+          return { ...p, history, wateredAt, days: daysSinceMidnight(wateredAt), photos };
         }));
       }
       if (data.queue)     setQueue(toArr(data.queue).filter(Boolean));
@@ -610,7 +638,11 @@ function App() {
                    if (ph && ph.length) setPlants(curr => curr.map(cp => cp.id === p.id && (!cp.photos || !cp.photos.length) ? { ...cp, photos: ph } : cp));
                 });
              }
-             return { ...p, photos };
+             const history = Array.isArray(p.history) ? p.history : [];
+             const wateredAt = typeof p.wateredAt === 'number' ? p.wateredAt
+               : history.length ? midnightFromStamp(history[history.length - 1])
+               : todayMidnight() - (p.days || 0) * 86400000;
+             return { ...p, history, wateredAt, days: daysSinceMidnight(wateredAt), photos };
           }));
           if (data.queue) setQueue(toArr(data.queue).filter(Boolean));
         }
@@ -660,7 +692,7 @@ function App() {
     const d = Math.max(0, daysAgo || 0);
     const when = new Date(); when.setHours(0,0,0,0); when.setDate(when.getDate() - d);
     const stamp = fmtLocalDate(when);
-    setPlants(ps => ps.map(p => p.id === id ? { ...p, days: d, history: [...(p.history||[]), stamp].slice(-60) } : p));
+    setPlants(ps => ps.map(p => p.id === id ? { ...p, wateredAt: when.getTime(), days: d, history: [...(p.history||[]), stamp].slice(-60) } : p));
     if (googleToken) {
       const plant = plants.find(p => p.id === id);
       if (plant) {
@@ -672,8 +704,8 @@ function App() {
       }
     }
   };
-  const undoWater = (id, prevDays) => setPlants(ps => ps.map(p => p.id === id ? { ...p, days: prevDays, history: (p.history||[]).slice(0, -1) } : p));
-  const snooze = (id, n = 2) => { haptic('light'); setPlants(ps => ps.map(p => p.id === id ? { ...p, days: Math.max(0, p.days - n) } : p)); };
+  const undoWater = (id, prevDays) => setPlants(ps => ps.map(p => p.id === id ? { ...p, wateredAt: todayMidnight() - prevDays * 86400000, days: prevDays, history: (p.history||[]).slice(0, -1) } : p));
+  const snooze = (id, n = 2) => { haptic('light'); setPlants(ps => ps.map(p => { if (p.id !== id) return p; const wa = Math.min(todayMidnight(), (p.wateredAt ?? todayMidnight()) + n * 86400000); return { ...p, wateredAt: wa, days: daysSinceMidnight(wa) }; })); };
 
   const toggleQueue = (id) => { setQueue(q => q.includes(id) ? q.filter(x => x !== id) : [...q, id]); setPrinted(false); };
   const removeQueue = (id) => {
@@ -791,7 +823,7 @@ window.onload=()=>{
         if (data.light) next.light = data.light;
         if (data.care) next.care = data.care;
         if (data.fact) next.fact = data.fact;
-        if (data.days != null) next.days = data.days;
+        if (data.days != null) { next.days = data.days; next.wateredAt = todayMidnight() - data.days * 86400000; }
         next.photos = data.photos || [];
         next.image = data.presetImage != null ? data.presetImage : p.image;
         delete next.userImage;
@@ -804,7 +836,7 @@ window.onload=()=>{
       const care = sp ? speciesCare(sp) : { every:defaultEvery, light:'Bright, indirect', care:'Water when the top of the soil feels dry.', fact:'Freshly added — identify it to enrich its care notes.', watering:'Average', benchmark:`${defaultEvery} days`, sunlight:[], image:null, species_id:null };
       if (gardenNode) pushPhoto(gardenNode, id, data.photos || []);
       setPlants(ps => [...ps, {
-        id, name: data.name, czech: data.czech || '', latin: data.latin, location: data.location, days: data.days || 0,
+        id, name: data.name, czech: data.czech || '', latin: data.latin, location: data.location, days: data.days || 0, wateredAt: todayMidnight() - (data.days || 0) * 86400000,
         every: data.every || care.every, light: data.light || care.light, care: data.care || care.care, fact: data.fact || care.fact,
         watering:care.watering, benchmark: data.every ? `${data.every} days` : care.benchmark, sunlight:care.sunlight,
         species_id:care.species_id,

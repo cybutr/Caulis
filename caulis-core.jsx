@@ -118,6 +118,12 @@ function fmtLocalDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
+// ── elapsed-days from an absolute watered timestamp (the real clock) ──
+const DAY_MS = 86400000;
+function todayMidnight() { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
+function midnightFromStamp(stamp) { const [y,m,d] = String(stamp).split('-').map(Number); const dt = new Date(y, (m||1)-1, d||1); dt.setHours(0,0,0,0); return dt.getTime(); }
+function daysSinceMidnight(ms) { return Math.max(0, Math.round((todayMidnight() - ms) / DAY_MS)); }
+
 // watering log summary from an array of 'YYYY-MM-DD' strings (newest last)
 function wateringStats(history) {
   const h = Array.isArray(history) ? history : [];
@@ -317,6 +323,7 @@ const SEED_LOCATIONS = ['Living room','Bedroom','Kitchen windowsill','Bathroom',
 // export to window for other babel scripts -------------------
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
+  todayMidnight, midnightFromStamp, daysSinceMidnight,
   Leaf, LeafOutline, Sprig,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin,
   StatusDot, LocationPill, StatusTag, Specimen,
