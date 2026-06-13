@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '79'; // keep in sync with sw.js CACHE
+const APP_VERSION = '80'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
@@ -127,12 +127,12 @@ function daysSinceMidnight(ms) { return Math.max(0, Math.round((todayMidnight() 
 // the plant carries the current schema marker (wv) — earlier builds wrote a bad
 // "today" stamp, so unmarked plants are recomputed from history, else from days
 // plus a 5-day legacy backfill. idempotent: re-runs until the marker is stamped.
-const WATER_SCHEMA = 2;
+const WATER_SCHEMA = 3;
 function deriveWateredAt(p) {
   if (p.wv === WATER_SCHEMA && typeof p.wateredAt === 'number') return p.wateredAt;
   const h = Array.isArray(p.history) ? p.history : [];
   if (h.length) return midnightFromStamp(h[h.length - 1]);
-  return todayMidnight() - ((p.days || 0) + 5) * DAY_MS;
+  return todayMidnight() - (p.days || 0) * DAY_MS;
 }
 
 // watering log summary from an array of 'YYYY-MM-DD' strings (newest last)
