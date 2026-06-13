@@ -449,15 +449,25 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, czechMode }) {
     </div>
   );
 }
-function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, isDesktop, czechMode }) {
+function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, confirmDelete, isDesktop, czechMode }) {
   const order = { needs:0, soon:1 };
   const list = plants.filter(p=>statusOf(p.days,p.every)!=='ok')
     .sort((a,b)=> order[statusOf(a.days,a.every)] - order[statusOf(b.days,b.every)]);
   const sp = isDesktop ? 28 : 18;
+  const [confirming, setConfirming] = useState(false);
+  const doWaterAll = () => { if (confirming) { onWaterAll && onWaterAll(); setConfirming(false); } else { setConfirming(true); setTimeout(()=>setConfirming(false), 3200); } };
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
       <Sprig opacity={0.16}/>
       <ScreenHead eyebrow="Today's round" title={list.length ? `${list.length} plants are thirsty` : 'All caught up'} isDesktop={isDesktop}/>
+      {plants.length > 0 && (
+        <div style={{ display:'flex', justifyContent:'flex-end', padding:`0 ${sp}px`, marginTop:-8, position:'relative', zIndex:3 }}>
+          <div onClick={doWaterAll} style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'9px 15px', borderRadius:999, cursor:'pointer', background: confirming?C.forest:'rgba(45,80,22,0.08)', color: confirming?'#fff':C.forest, transition:'background 180ms' }}>
+            <IconDrop s={15} c={confirming?'#fff':C.forest}/>
+            <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{confirming ? `Water all ${plants.length}?` : 'Water all'}</span>
+          </div>
+        </div>
+      )}
       <div style={{ display:'flex', flexDirection:'column', gap:12, padding:`22px ${sp}px 0`, position:'relative', zIndex:2 }}>
         {list.length === 0 && (
           <div style={{ textAlign:'center', padding:'60px 30px', position:'relative', zIndex:2 }}>
@@ -651,7 +661,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevLoadNode, onDevPushNode }) {
   const [openSecs, setOpenSecs] = useState(() => GS.get('caulis_set_open', {}));
   const isOpen = (id) => openSecs[id] !== false;
   const toggleSec = (id) => setOpenSecs(s => { const n = { ...s, [id]: s[id] === false }; GS.set('caulis_set_open', n); return n; });
@@ -696,6 +706,51 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   const [newPassword, setNewPassword] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
   const [joinStatus, setJoinStatus] = useState('idle'); // 'idle' | 'checking' | 'notFound'
+
+  const [devRevealed, setDevRevealed] = useState(() => { try { return localStorage.getItem('caulis_dev_revealed') === '1'; } catch(e) { return false; } });
+  const [verTaps, setVerTaps] = useState(0);
+  const verTapTimer = useRef(null);
+  const tapVersion = () => {
+    if (devRevealed) return;
+    if (verTapTimer.current) clearTimeout(verTapTimer.current);
+    verTapTimer.current = setTimeout(() => setVerTaps(0), 1500);
+    setVerTaps(t => { const n = t + 1; if (n >= 7) { try { localStorage.setItem('caulis_dev_revealed', '1'); } catch(e) {} setDevRevealed(true); } return n; });
+  };
+  const [devAuthed, setDevAuthed] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinErr, setPinErr] = useState(false);
+  const submitPin = () => {
+    let stored = ''; try { stored = localStorage.getItem('caulis_dev_pin') || ''; } catch(e) {}
+    if (!stored) { try { localStorage.setItem('caulis_dev_pin', pinInput); } catch(e) {} setDevAuthed(true); setPinInput(''); return; }
+    if (pinInput === stored) { setDevAuthed(true); setPinInput(''); setPinErr(false); } else { setPinErr(true); }
+  };
+  const lockDev = () => { try { localStorage.removeItem('caulis_dev_revealed'); } catch(e) {} setDevRevealed(false); setDevAuthed(false); setVerTaps(0); };
+  const [devOffsetN, setDevOffsetN] = useState(1);
+  const [nodeKey, setNodeKey] = useState('');
+  const [nodePw, setNodePw] = useState('');
+  const [nodeLoaded, setNodeLoaded] = useState(null); // { node, data, plants }
+  const [nodeStatus, setNodeStatus] = useState('idle'); // idle|loading|loaded|empty|error|pushing|pushed
+  const [nodeOffsetN, setNodeOffsetN] = useState(1);
+  const loadNode = async () => {
+    if (!nodeKey.trim()) return;
+    setNodeStatus('loading');
+    try {
+      const { node, data } = await onDevLoadNode(nodeKey.trim(), nodePw);
+      if (!data || !Array.isArray(data.plants)) { setNodeLoaded({ node, data: data || {}, plants: [] }); setNodeStatus('empty'); return; }
+      setNodeLoaded({ node, data, plants: data.plants.map(p => ({ ...p })) });
+      setNodeStatus('loaded');
+    } catch(e) { setNodeStatus('error'); }
+  };
+  const nodeShiftAll = (n) => setNodeLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = (typeof p.wateredAt === 'number' ? p.wateredAt : todayMidnight()) - n * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: daysSinceMidnight(wa) }; }) }));
+  const nodeWaterAll = () => setNodeLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = todayMidnight(); return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), fmtLocalDate(new Date())].slice(-60) }; }) }));
+  const nodeSetDays = (id, d) => setNodeLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { if (p.id !== id) return p; const dd = Math.max(0, d | 0); const wa = todayMidnight() - dd * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: dd }; }) }));
+  const pushNode = () => {
+    if (!nodeLoaded) return;
+    setNodeStatus('pushing');
+    const clean = nodeLoaded.plants.map(({ photos, userImage, ...rest }) => rest);
+    onDevPushNode(nodeLoaded.node, { ...nodeLoaded.data, plants: clean });
+    setNodeStatus('pushed'); setTimeout(() => setNodeStatus('loaded'), 1800);
+  };
 
   const copyKey = () => {
     navigator.clipboard.writeText(gardenKey).catch(()=>{});
@@ -1233,9 +1288,108 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             <a href="docs.html" target="_blank" rel="noopener" style={{ textDecoration:'none', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8 }}>View format &amp; API docs ↗</a>
           </div>
         </SettingsSection>
+        {devRevealed && (() => {
+          let pinIsSet = false; try { pinIsSet = !!localStorage.getItem('caulis_dev_pin'); } catch(e) {}
+          const dInput = { width:'100%', padding:'11px 13px', borderRadius:12, border:`1px solid ${C.line}`, background:C.bg, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', boxSizing:'border-box' };
+          const dBtn = (filled) => ({ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'10px 16px', borderRadius:12, cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, border:`1px solid ${C.forest}`, background: filled?C.forest:'transparent', color: filled?'#fff':C.forest, userSelect:'none' });
+          const grpLabel = { fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', marginBottom:2 };
+          const stepper = (val, set) => (
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div onClick={()=>set(Math.max(1, val-1))} style={{ ...dBtn(false), padding:'6px 12px', fontSize:16 }}>−</div>
+              <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600, color:C.ink, minWidth:46, textAlign:'center' }}>{val}d</span>
+              <div onClick={()=>set(val+1)} style={{ ...dBtn(false), padding:'6px 12px', fontSize:16 }}>+</div>
+            </div>
+          );
+          const plantEditor = (rows, onSet) => (
+            <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:240, overflowY:'auto' }}>
+              {rows.map(p => (
+                <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 10px', borderRadius:11, background:C.bg }}>
+                  <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14.5, color:C.forest, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+                    <div onClick={()=>onSet(p.id, Math.max(0,(p.days||0)-1))} style={{ ...dBtn(false), padding:'4px 11px', fontSize:15 }}>−</div>
+                    <input value={p.days||0} onChange={e=>onSet(p.id, parseInt(e.target.value)||0)} style={{ ...dInput, width:52, padding:'6px 4px', textAlign:'center' }}/>
+                    <div onClick={()=>onSet(p.id,(p.days||0)+1)} style={{ ...dBtn(false), padding:'4px 11px', fontSize:15 }}>+</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+          return (
+          <SettingsSection title="Developer" open={isOpen('dev')} onToggle={()=>toggleSec('dev')}>
+            <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:16, display:'flex', flexDirection:'column', gap:18 }}>
+              {!devAuthed ? (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.brown, opacity:0.75 }}>{pinIsSet ? 'Enter developer PIN' : 'Set a developer PIN to protect these tools'}</div>
+                  <input type="password" inputMode="numeric" value={pinInput} onChange={e=>{ setPinInput(e.target.value); setPinErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') submitPin(); }} placeholder="PIN" style={dInput}/>
+                  {pinErr && <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:STATUS.needs.dot }}>Wrong PIN</div>}
+                  <div style={{ display:'flex', gap:10 }}>
+                    <div onClick={submitPin} style={dBtn(true)}>{pinIsSet ? 'Unlock' : 'Set PIN'}</div>
+                    <div onClick={lockDev} style={{ ...dBtn(false), border:'none', color:C.brown, opacity:0.6 }}>Hide panel</div>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                    <div style={grpLabel}>This garden · {plants.length} plants</div>
+                    <div onClick={onWaterAll} style={dBtn(true)}><IconDrop s={15} c="#fff"/> Water all to today</div>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+                      <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Shift every plant</span>
+                      {stepper(devOffsetN, setDevOffsetN)}
+                    </div>
+                    <div style={{ display:'flex', gap:10 }}>
+                      <div onClick={()=>onDevOffsetDays(-devOffsetN)} style={{ ...dBtn(false), flex:1 }}>− {devOffsetN}d fresher</div>
+                      <div onClick={()=>onDevOffsetDays(devOffsetN)} style={{ ...dBtn(false), flex:1 }}>+ {devOffsetN}d older</div>
+                    </div>
+                    <div style={grpLabel}>Per plant · days since watered</div>
+                    {plantEditor(plants, onDevSetDays)}
+                  </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <div style={grpLabel}>Manage another node</div>
+                    <input value={nodeKey} onChange={e=>setNodeKey(e.target.value)} placeholder="Garden key" style={dInput}/>
+                    <input type="password" value={nodePw} onChange={e=>setNodePw(e.target.value)} placeholder="Garden password (if any)" style={dInput}/>
+                    <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+                      <div onClick={loadNode} style={dBtn(false)}>{nodeStatus==='loading' ? 'Loading…' : 'Load node'}</div>
+                      {nodeStatus==='error' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:STATUS.needs.dot }}>Load failed</span>}
+                      {nodeStatus==='empty' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>No plants at that node</span>}
+                    </div>
+                    {nodeLoaded && nodeLoaded.plants.length > 0 && (
+                      <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:4, padding:12, borderRadius:14, background:C.bg }}>
+                        <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{nodeLoaded.plants.length} plants loaded · edits stay local until pushed</div>
+                        <div onClick={nodeWaterAll} style={dBtn(true)}><IconDrop s={15} c="#fff"/> Water all to today</div>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+                          <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Shift every plant</span>
+                          {stepper(nodeOffsetN, setNodeOffsetN)}
+                        </div>
+                        <div style={{ display:'flex', gap:10 }}>
+                          <div onClick={()=>nodeShiftAll(-nodeOffsetN)} style={{ ...dBtn(false), flex:1 }}>− {nodeOffsetN}d</div>
+                          <div onClick={()=>nodeShiftAll(nodeOffsetN)} style={{ ...dBtn(false), flex:1 }}>+ {nodeOffsetN}d</div>
+                        </div>
+                        {plantEditor(nodeLoaded.plants, nodeSetDays)}
+                        <div onClick={pushNode} style={{ ...dBtn(true), marginTop:2 }}>{nodeStatus==='pushed' ? 'Pushed ✓' : nodeStatus==='pushing' ? 'Pushing…' : 'Push to node'}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.55 }}>schema v{WATER_SCHEMA} · app v{APP_VERSION}</span>
+                    <div onClick={lockDev} style={{ ...dBtn(false), border:'none', color:C.brown, opacity:0.6, padding:'6px 10px' }}>Lock &amp; hide</div>
+                  </div>
+                </>
+              )}
+            </div>
+          </SettingsSection>
+          );
+        })()}
         <SettingsSection title="About" open={isOpen('about')} onToggle={()=>toggleSec('about')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
-            <Row label="Version" value={`v${APP_VERSION}`}/>
+            <div onClick={tapVersion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:C.hair, cursor:'default', userSelect:'none' }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Version</span>
+              <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.brown, opacity:0.7 }}>{`v${APP_VERSION}`}{!devRevealed && verTaps >= 3 && verTaps < 7 ? ` · ${7-verTaps} more` : ''}</span>
+            </div>
             <div onClick={updating ? undefined : async ()=>{ setUpdating(true); await onUpdateApp(); }} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor: updating?'default':'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Check for updates</div>

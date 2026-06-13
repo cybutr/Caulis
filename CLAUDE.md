@@ -77,8 +77,16 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v80.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v81.
 Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
+
+## Watering Model
+
+`wateredAt` (absolute midnight epoch) is the source of truth; `days` is derived via `daysSinceMidnight()`. `deriveWateredAt(p)` in `caulis-core.jsx` trusts a stored `wateredAt` only when `p.wv === WATER_SCHEMA`, else recomputes from the last `history` stamp, else `today - days`. Bump `WATER_SCHEMA` to invalidate previously-stamped data after a model change. Never re-introduce a synthetic day offset in the derive — it corrupts waterings synced from un-updated clients.
+
+## Developer Panel
+
+Hidden in Settings → About: tap the Version row 7× to reveal a "Developer" section, gated by a PIN (`localStorage caulis_dev_pin`, set on first use). Tools: water-all, bulk day shift, per-plant day set for the current garden, plus cross-garden node management (load any garden by key+password, edit dates in memory, push back). Client-side obscurity only — not real auth. "Lock & hide" clears `caulis_dev_revealed`.
 
 ## Animations
 
