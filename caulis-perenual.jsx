@@ -367,9 +367,42 @@ const DOCTOR_SYSTEM =
   'paragraphs — specific, and kind. If you genuinely cannot tell from the image, say so plainly and ask one ' +
   'clarifying question. Skip hedging disclaimers and do not repeat the question back.';
 
-async function doctorAsk({ messages, plantContext, model, key }) {
+// Tools the doctor can call. Kept terse on purpose — schemas are resent every
+// loop turn, so every word here is recurring token cost.
+const DOCTOR_TOOLS = [
+  {
+    name: 'list_garden_plants',
+    description: 'List the plants already saved in the user\'s garden (id, name, latin, location). Call this only when you need to find or compare against a saved plant — it is not needed for general care questions.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'suggest_correction',
+    description: 'Propose a correction to a saved plant when its stored data looks wrong for what you see in the photo (e.g. mislabeled species, wrong watering interval). The user reviews and accepts it; do not claim it is applied.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        plant_id: { type: 'string', description: 'id of the plant to correct (from list_garden_plants, or the plant in context)' },
+        changes: {
+          type: 'object',
+          description: 'Only the fields that should change.',
+          properties: {
+            name: { type: 'string' }, latin: { type: 'string' }, location: { type: 'string' },
+            every: { type: 'integer', description: 'days between waterings' }, light: { type: 'string' },
+          },
+        },
+        reason: { type: 'string', description: 'one short sentence on why' },
+      },
+      required: ['plant_id', 'changes', 'reason'],
+    },
+  },
+];
+
+async function doctorAsk({ messages, plantContext, model, key, withTools }) {
   if (!key) throw new Error('No Anthropic API key. Add one in Settings.');
-  const system = plantContext ? `${DOCTOR_SYSTEM}\n\nKnown details about this plant:\n${plantContext}` : DOCTOR_SYSTEM;
+  const system = (plantContext ? `${DOCTOR_SYSTEM}\n\nKnown details about this plant:\n${plantContext}` : DOCTOR_SYSTEM)
+    + (withTools ? '\n\nYou can use tools to inspect the garden and propose data corrections. Only reach for them when the conversation is actually about a saved plant being wrong — never for routine advice.' : '');
+  const body = { model: model || 'claude-haiku-4-5', max_tokens: 1024, system, messages };
+  if (withTools) body.tools = DOCTOR_TOOLS;
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -378,14 +411,20 @@ async function doctorAsk({ messages, plantContext, model, key }) {
       'anthropic-version': '2023-06-01',
       'anthropic-dangerous-direct-browser-access': 'true',
     },
-    body: JSON.stringify({ model: model || 'claude-haiku-4-5', max_tokens: 1024, system, messages }),
+    body: JSON.stringify(body),
   });
   if (!r.ok) {
     let msg = ''; try { msg = (await r.json())?.error?.message; } catch(e) {}
     throw new Error(msg || `Request failed (${r.status})`);
   }
   const j = await r.json();
-  return (j?.content || []).map(b => b.text || '').join('').trim();
+  const content = j?.content || [];
+  return {
+    content,
+    stop_reason: j?.stop_reason,
+    text: content.filter(b => b.type === 'text').map(b => b.text || '').join('').trim(),
+    toolUses: content.filter(b => b.type === 'tool_use'),
+  };
 }
 
 // fetch real care data by latin name from the live services

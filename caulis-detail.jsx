@@ -722,8 +722,8 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
 // ════════════════════════════════════════════════════════════
 function splitDataUrl(d) { const m = /^data:([^;]+);base64,(.*)$/.exec(d || ''); return m ? { media_type: m[1], data: m[2] } : null; }
 
-function DoctorOverlay({ plant, anthropicKey, model, onBack, isDesktop }) {
-  const [thread, setThread] = useState([]); // { role, text, image? }
+function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, onBack, isDesktop }) {
+  const [thread, setThread] = useState([]); // { role:'user'|'assistant'|'card', text?, image?, correction? }
   const [pendingImage, setPendingImage] = useState(null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -749,14 +749,34 @@ function DoctorOverlay({ plant, anthropicKey, model, onBack, isDesktop }) {
   const hasPhoto = pendingImage || thread.some(m => m.image);
   const canSend = !busy && (pendingImage || (input.trim() && hasPhoto));
 
+  // execute a tool call locally; returns the string result fed back to the model
+  const runTool = (name, input) => {
+    if (name === 'list_garden_plants') {
+      return JSON.stringify((plants || []).map(p => ({ id: p.id, name: p.name, latin: p.latin || '', location: p.location || '' })));
+    }
+    if (name === 'suggest_correction') {
+      const target = (plants || []).find(p => String(p.id) === String(input.plant_id)) || plant;
+      if (!target) return 'No matching plant found in the garden.';
+      const changes = {};
+      for (const k of ['name','latin','location','every','light']) {
+        if (input.changes && input.changes[k] != null && String(input.changes[k]) !== String(target[k] ?? '')) changes[k] = input.changes[k];
+      }
+      if (!Object.keys(changes).length) return 'No effective change — the stored data already matches.';
+      setThread(t => [...t, { role: 'card', correction: { plantId: target.id, plantName: target.name, changes, reason: input.reason, status: 'pending' } }]);
+      return 'Correction shown to the user for review.';
+    }
+    return 'Unknown tool.';
+  };
+
   const send = async () => {
     if (!hasPhoto) { setError('Add a photo of the plant first.'); return; }
     if (!canSend) return;
     const userMsg = { role: 'user', text: input.trim() || 'What’s going on with this plant?', image: pendingImage };
     const next = [...thread, userMsg];
     setThread(next); setInput(''); setPendingImage(null); setError(''); setBusy(true);
-    const recent = next.slice(-6);
-    const messages = recent.map(m => {
+    // resend only the last 3 exchanges of text/image — tool plumbing is never persisted
+    const recent = next.filter(m => m.role === 'user' || (m.role === 'assistant' && m.text)).slice(-6);
+    let messages = recent.map(m => {
       if (m.role === 'user' && m.image) {
         const img = splitDataUrl(m.image);
         const content = [];
@@ -767,14 +787,71 @@ function DoctorOverlay({ plant, anthropicKey, model, onBack, isDesktop }) {
       return { role: m.role, content: m.text };
     });
     const plantContext = plant
-      ? `Name: ${plant.name}\nLatin: ${plant.latin || 'unknown'}\nLocation: ${plant.location || 'unknown'}\nWaters every ${plant.every} days; last watered ${plant.days} day(s) ago.\nLight: ${plant.light || 'unknown'}\nCare notes: ${plant.care || 'none'}`
+      ? `This conversation is about a saved plant.\nid: ${plant.id}\nName: ${plant.name}\nLatin: ${plant.latin || 'unknown'}\nLocation: ${plant.location || 'unknown'}\nWaters every ${plant.every} days; last watered ${plant.days} day(s) ago.\nLight: ${plant.light || 'unknown'}\nCare notes: ${plant.care || 'none'}`
       : null;
     try {
-      const reply = await doctorAsk({ messages, plantContext, model, key: anthropicKey });
-      setThread(t => [...t, { role: 'assistant', text: reply || 'I couldn’t read that — try another photo?' }]);
+      let finalText = '';
+      for (let hop = 0; hop < 4; hop++) {
+        const res = await doctorAsk({ messages, plantContext, model, key: anthropicKey, withTools: true });
+        if (res.stop_reason === 'tool_use' && res.toolUses.length) {
+          messages = [...messages, { role: 'assistant', content: res.content }];
+          const results = res.toolUses.map(tu => ({ type: 'tool_result', tool_use_id: tu.id, content: runTool(tu.name, tu.input || {}) }));
+          messages = [...messages, { role: 'user', content: results }];
+          if (res.text) setThread(t => [...t, { role: 'assistant', text: res.text }]);
+          continue;
+        }
+        finalText = res.text; break;
+      }
+      setThread(t => [...t, { role: 'assistant', text: finalText || 'I couldn’t read that — try another photo?' }]);
     } catch (e) {
       setThread(t => [...t, { role: 'assistant', text: '', error: String(e.message || e) }]);
     } finally { setBusy(false); }
+  };
+
+  const FIELD_LABELS = { name:'Name', latin:'Latin name', location:'Location', every:'Water every', light:'Light' };
+  const acceptCorrection = (i) => {
+    setThread(t => t.map((m, idx) => {
+      if (idx !== i || m.role !== 'card') return m;
+      onApplyCorrection && onApplyCorrection(m.correction.plantId, m.correction.changes);
+      return { ...m, correction: { ...m.correction, status: 'accepted' } };
+    }));
+  };
+  const dismissCorrection = (i) => setThread(t => t.map((m, idx) => (idx === i && m.role === 'card') ? { ...m, correction: { ...m.correction, status: 'dismissed' } } : m));
+
+  const correctionCard = (m, i) => {
+    const c = m.correction; const done = c.status !== 'pending';
+    return (
+      <div key={i} style={{ display:'flex', justifyContent:'flex-start', marginBottom:10 }}>
+        <div style={{ maxWidth:'90%', width:'100%', background:C.panel, border:`1px solid ${c.status==='accepted'?'rgba(110,154,62,0.5)':C.line}`, borderRadius:20, padding:'14px 15px', boxShadow:'0px 8px 32px rgba(45,80,22,0.07)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+            <div style={{ width:26, height:26, borderRadius:999, background:'rgba(110,154,62,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M13 3.5l3.5 3.5L7 16.5H3.5V13L13 3.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round"/></svg>
+            </div>
+            <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:16, color:C.forest }}>Suggested correction</span>
+            <span style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, marginLeft:'auto' }}>{c.plantName}</span>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+            {Object.entries(c.changes).map(([k, v]) => (
+              <div key={k} style={{ display:'flex', alignItems:'baseline', gap:8, fontFamily:FONT_SANS, fontSize:13 }}>
+                <span style={{ minWidth:88, color:C.brown, opacity:0.7, fontSize:11.5, fontWeight:600, textTransform:'uppercase', letterSpacing:0.4 }}>{FIELD_LABELS[k] || k}</span>
+                <span style={{ color:C.ink, fontWeight:600 }}>{k==='every'?`${v} days`:String(v)}</span>
+              </div>
+            ))}
+          </div>
+          {c.reason && <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.6, marginTop:10, lineHeight:1.45 }}>{c.reason}</div>}
+          {c.status === 'pending' ? (
+            <div style={{ display:'flex', gap:9, marginTop:13 }}>
+              <div onClick={()=>acceptCorrection(i)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:40, borderRadius:13, background:C.forest, color:'#fff', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>
+                <IconCheck s={16} c="#fff"/> Apply
+              </div>
+              <div onClick={()=>dismissCorrection(i)} style={{ flexShrink:0, padding:'0 18px', height:40, borderRadius:13, border:C.hair, color:C.brown, display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Dismiss</div>
+            </div>
+          ) : (
+            <div style={{ marginTop:12, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color: c.status==='accepted'?C.sage:C.brown, opacity: c.status==='accepted'?1:0.6 }}>{c.status==='accepted'?'✓ Applied':'Dismissed'}</div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const bubble = (m, i) => {
@@ -815,7 +892,7 @@ function DoctorOverlay({ plant, anthropicKey, model, onBack, isDesktop }) {
             <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:5, maxWidth:280, marginLeft:'auto', marginRight:'auto' }}>Snap a photo and ask anything — “what’s wrong with this?”, “how tall will it grow?”</div>
           </div>
         )}
-        {thread.map(bubble)}
+        {thread.map((m, i) => m.role === 'card' ? correctionCard(m, i) : bubble(m, i))}
         {busy && (
           <div style={{ display:'flex', justifyContent:'flex-start', marginBottom:10 }}>
             <div style={{ display:'flex', gap:5, padding:'12px 16px', background:C.panel, border:C.hair, borderRadius:18 }}>

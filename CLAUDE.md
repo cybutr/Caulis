@@ -77,7 +77,7 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v84.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v85.
 Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
 
 ## Watering Model
@@ -91,6 +91,8 @@ Hidden in Settings → About: tap the Version row 7× to reveal a "Developer" se
 ## Doctor (AI plant chat)
 
 `DoctorOverlay` (`caulis-detail.jsx`) — vision chat over the Anthropic API via `doctorAsk()` (`caulis-perenual.jsx`, raw `fetch` + `anthropic-dangerous-direct-browser-access`). Reuses the existing `anthropicKey`. Model chosen in Settings → AI (`caulis_doctor_model`, default `claude-haiku-4-5`, toggle Haiku/Sonnet). Capped thread: last 3 exchanges (6 msgs) resent each call; photo attached as a base64 image block on its user turn. Entry points: nav action `doctor` (standalone, photo-only) and a "Ask the doctor" button on `PlantDetail` (passes plant data as `plantContext`). Both nav actions `add`/`doctor` route through `onNavAction` in `app.jsx`.
+
+**Agentic tools** (`DOCTOR_TOOLS` in `caulis-perenual.jsx`): `list_garden_plants` (lazy garden read — only sent when needed, keeps tokens low) and `suggest_correction` (proposes field edits to a saved plant). `doctorAsk({withTools})` returns `{content, stop_reason, text, toolUses}`; the overlay runs a capped 4-hop tool loop (`runTool`), executing tools client-side and feeding `tool_result` back. Tool plumbing is NOT persisted to `thread` — only final text + correction cards — so future turns don't resend it. A `suggest_correction` renders a polished accept/dismiss card; Apply calls `onApplyCorrection(plantId, changes)` → `applyCorrection` in `app.jsx` (mirrors edit-path `every`→`benchmark`).
 
 ## Bottom Navigation
 

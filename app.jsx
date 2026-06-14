@@ -942,8 +942,17 @@ window.onload=()=>{
     />
   );
 
+  const applyCorrection = (plantId, changes) => {
+    haptic('light');
+    setPlants(ps => ps.map(p => {
+      if (p.id !== plantId) return p;
+      const next = { ...p, ...changes };
+      if (changes.every != null) next.benchmark = `${changes.every} days`;
+      return next;
+    }));
+  };
   const doctorEl = doctor && (
-    <DoctorOverlay plant={doctor.plant || null} anthropicKey={anthropicKey} model={doctorModel} onBack={()=>setDoctor(null)} isDesktop={isDesktop}/>
+    <DoctorOverlay plant={doctor.plant ? plants.find(p => p.id === doctor.plant.id) || doctor.plant : null} plants={plants} anthropicKey={anthropicKey} model={doctorModel} onApplyCorrection={applyCorrection} onBack={()=>setDoctor(null)} isDesktop={isDesktop}/>
   );
 
   const formEl = form && (
