@@ -1306,13 +1306,15 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
           const cycleAction = (i) => { const idx = opts.indexOf(nav[i].action); const next = opts[(idx + 1) % opts.length]; onSetNavConfig(nav.map((s, j) => j === i ? { ...s, action: next } : s)); };
           const setCenter = (i) => onSetNavConfig(nav.map((s, j) => ({ ...s, center: j === i })));
           const swap = (i, j) => { if (j < 0 || j >= nav.length) return; const out = nav.map(s => ({ ...s })); const t = out[i]; out[i] = out[j]; out[j] = t; onSetNavConfig(out); };
+          const removeSlot = (i) => { if (nav.length <= 1) return; onSetNavConfig(nav.filter((_, j) => j !== i)); };
+          const addSlot = () => { if (nav.length >= NAV_MAX) return; const used = nav.map(s => s.action); const pick = NAV_ORDER.find(a => !used.includes(a)) || 'garden'; onSetNavConfig([...nav, { action: pick }]); };
           const arrow = (dir, enabled, onClick) => (
             <div onClick={enabled ? onClick : undefined} style={{ cursor: enabled ? 'pointer' : 'default', opacity: enabled ? 0.6 : 0.18, lineHeight:1, fontSize:11, color:C.brown, padding:'1px 3px' }}>{dir}</div>
           );
           return (
           <SettingsSection title="Navigation bar" open={isOpen('nav')} onToggle={()=>toggleSec('nav')}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:8 }}>
-              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, padding:'0 2px 2px' }}>Tap a slot to change its button. The selected one is raised in the center. Set a slot to Empty to remove it.</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, padding:'0 2px 2px' }}>Tap a slot to change its button, reorder with the arrows, pick which one is raised in the center, and add up to {NAV_MAX}. The “More” button opens everything not on the bar — so nothing is ever out of reach.</div>
               {nav.map((s, i) => {
                 const meta = NAV_ACTIONS[s.action];
                 const isEmpty = s.action === 'empty';
@@ -1334,10 +1336,18 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                         {s.center && <div style={{ width:7, height:7, borderRadius:999, background:'#fff' }}/>}
                       </div>
                     </div>
+                    <div onClick={()=>removeSlot(i)} style={{ cursor: nav.length>1?'pointer':'default', opacity: nav.length>1?0.5:0.2, color:C.brown, fontSize:18, lineHeight:1, padding:'0 2px' }}>×</div>
                   </div>
                 );
               })}
-              <div onClick={()=>onSetNavConfig(DEFAULT_NAV)} style={{ alignSelf:'flex-start', marginTop:2, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest, cursor:'pointer', padding:'4px 2px' }}>Reset to default</div>
+              <div style={{ display:'flex', alignItems:'center', gap:14, marginTop:2 }}>
+                {nav.length < NAV_MAX && (
+                  <div onClick={addSlot} style={{ display:'inline-flex', alignItems:'center', gap:6, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest, cursor:'pointer', padding:'4px 2px' }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16"><path d="M8 2.5v11M2.5 8h11" stroke={C.forest} strokeWidth="1.8" strokeLinecap="round"/></svg> Add button
+                  </div>
+                )}
+                <div onClick={()=>onSetNavConfig(DEFAULT_NAV)} style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.7, cursor:'pointer', padding:'4px 2px' }}>Reset to default</div>
+              </div>
             </div>
           </SettingsSection>
           );

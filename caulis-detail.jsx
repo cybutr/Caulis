@@ -721,6 +721,13 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
 //  DOCTOR — vision chat with the plant doctor
 // ════════════════════════════════════════════════════════════
 function splitDataUrl(d) { const m = /^data:([^;]+);base64,(.*)$/.exec(d || ''); return m ? { media_type: m[1], data: m[2] } : null; }
+// build an Anthropic image content block from a dataURL or a remote https URL
+function imgBlock(src) {
+  const b = splitDataUrl(src);
+  if (b) return { type: 'image', source: { type: 'base64', media_type: b.media_type, data: b.data } };
+  if (/^https?:\/\//.test(src || '')) return { type: 'image', source: { type: 'url', url: src } };
+  return null;
+}
 
 // ── lightweight inline Markdown → React (bold, italic, code) ──
 function mdInline(str) {
@@ -832,13 +839,17 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
   }
   const [chatId, setChatId] = useState(initial.current.id);
   const [thread, setThread] = useState(initial.current.thread);
-  const [pendingImage, setPendingImage] = useState(null);
+  // seed the saved plant photo when opening from a plant on a fresh chat — ask without snapping a new one
+  const [pendingImage, setPendingImage] = useState(() => (plant && !initial.current.thread.length) ? firstPhoto(plant) : null);
+  const [activePlant, setActivePlant] = useState(plant || null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+  const [showGarden, setShowGarden] = useState(false);
   const fileRef = useRef(null);
   const scrollRef = useRef(null);
+  const gardenWithPhotos = (plants || []).filter(p => firstPhoto(p));
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [thread, busy, pendingImage]);
 
@@ -848,14 +859,15 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
     const persistThread = thread.map(m => m.animate ? { ...m, animate: false } : m);
     setChats(prev => {
       const others = prev.filter(c => c.id !== chatId);
-      const next = [...others, { id: chatId, plantId: plant ? plant.id : null, plantName: plant ? plant.name : 'General', ts: Date.now(), thread: persistThread }].slice(-3);
+      const next = [...others, { id: chatId, plantId: activePlant ? activePlant.id : null, plantName: activePlant ? activePlant.name : 'General', ts: Date.now(), thread: persistThread }].slice(-3);
       saveDoctorChats(next);
       return next;
     });
   }, [thread]);
 
-  const startNewChat = () => { setShowHistory(false); setChatId('dc-' + Date.now().toString(36)); setThread([]); setPendingImage(null); setError(''); };
-  const loadChat = (c) => { setShowHistory(false); setChatId(c.id); setThread(c.thread.map(m => ({ ...m, animate: false }))); setPendingImage(null); setError(''); };
+  const startNewChat = () => { setShowHistory(false); setChatId('dc-' + Date.now().toString(36)); setThread([]); setActivePlant(plant || null); setPendingImage(plant ? firstPhoto(plant) : null); setError(''); };
+  const loadChat = (c) => { setShowHistory(false); setChatId(c.id); setThread(c.thread.map(m => ({ ...m, animate: false }))); setActivePlant((plants || []).find(p => p.id === c.plantId) || null); setPendingImage(null); setError(''); };
+  const pickGardenPlant = (p) => { setShowGarden(false); setActivePlant(p); setPendingImage(firstPhoto(p)); setError(''); };
   const pinScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; };
 
   const processFile = (f) => {
@@ -880,7 +892,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
       return JSON.stringify((plants || []).map(p => ({ id: p.id, name: p.name, latin: p.latin || '', location: p.location || '' })));
     }
     if (name === 'suggest_correction') {
-      const target = (plants || []).find(p => String(p.id) === String(input.plant_id)) || plant;
+      const target = (plants || []).find(p => String(p.id) === String(input.plant_id)) || activePlant;
       if (!target) return 'No matching plant found in the garden.';
       const changes = {};
       for (const k of ['name','latin','location','every','light']) {
@@ -903,16 +915,17 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
     const recent = next.filter(m => m.role === 'user' || (m.role === 'assistant' && m.text)).slice(-6);
     let messages = recent.map(m => {
       if (m.role === 'user' && m.image) {
-        const img = splitDataUrl(m.image);
+        const block = imgBlock(m.image);
         const content = [];
-        if (img) content.push({ type: 'image', source: { type: 'base64', media_type: img.media_type, data: img.data } });
+        if (block) content.push(block);
         content.push({ type: 'text', text: m.text });
         return { role: 'user', content };
       }
       return { role: m.role, content: m.text };
     });
-    const plantContext = plant
-      ? `This conversation is about a saved plant.\nid: ${plant.id}\nName: ${plant.name}\nLatin: ${plant.latin || 'unknown'}\nLocation: ${plant.location || 'unknown'}\nWaters every ${plant.every} days; last watered ${plant.days} day(s) ago.\nLight: ${plant.light || 'unknown'}\nCare notes: ${plant.care || 'none'}`
+    const ap = activePlant;
+    const plantContext = ap
+      ? `This conversation is about a saved plant.\nid: ${ap.id}\nName: ${ap.name}\nLatin: ${ap.latin || 'unknown'}\nLocation: ${ap.location || 'unknown'}\nWaters every ${ap.every} days; last watered ${ap.days} day(s) ago.\nLight: ${ap.light || 'unknown'}\nCare notes: ${ap.care || 'none'}`
       : null;
     try {
       let finalText = '';
@@ -1006,7 +1019,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
         </div>
         <div style={{ display:'flex', flexDirection:'column', flex:1 }}>
           <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, lineHeight:1.1 }}>Plant doctor</span>
-          {plant && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65 }}>about {plant.name}</span>}
+          {activePlant && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65 }}>about {activePlant.name}</span>}
         </div>
         <div onClick={startNewChat} title="New chat" style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke={C.forest} strokeWidth="1.9" strokeLinecap="round"/></svg>
@@ -1065,22 +1078,56 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
       {error && <div style={{ flexShrink:0, padding:`0 ${sp}px 6px`, fontFamily:FONT_SANS, fontSize:12, color:STATUS.needs.dot }}>{error}</div>}
 
       <div style={{ flexShrink:0, padding:`8px ${sp}px calc(20px + env(safe-area-inset-bottom))`, borderTop:C.hair, background:C.bg }}>
-        {pendingImage && (
-          <div style={{ display:'inline-flex', position:'relative', marginBottom:8 }}>
-            <img src={pendingImage} alt="" style={{ width:56, height:56, objectFit:'cover', borderRadius:12, border:C.hair }}/>
-            <div onClick={()=>setPendingImage(null)} style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:999, background:C.ink, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>×</div>
+        {(pendingImage || activePlant) && (
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+            {pendingImage && (
+              <div style={{ display:'inline-flex', position:'relative' }}>
+                <img src={pendingImage} alt="" style={{ width:56, height:56, objectFit:'cover', borderRadius:12, border:C.hair }}/>
+                <div onClick={()=>setPendingImage(null)} style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:999, background:C.ink, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>×</div>
+              </div>
+            )}
+            {activePlant && (
+              <div style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'6px 11px', borderRadius:999, background:'rgba(110,154,62,0.1)', border:'0.5px solid rgba(110,154,62,0.3)' }}>
+                <LeafOutline size={12} color={C.forest} sw={1.7}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.forest }}>{activePlant.name}</span>
+                <span onClick={()=>setActivePlant(null)} style={{ cursor:'pointer', color:C.brown, opacity:0.6, fontSize:14, lineHeight:1 }}>×</span>
+              </div>
+            )}
           </div>
         )}
         <div style={{ display:'flex', alignItems:'flex-end', gap:9 }}>
-          <div onClick={openPicker} style={{ flexShrink:0, width:42, height:42, borderRadius:13, background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+          <div onClick={openPicker} title="Take / upload a photo" style={{ flexShrink:0, width:42, height:42, borderRadius:13, background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1l1-1.5h7L16.5 6h2A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-9Z" stroke={C.forest} strokeWidth="1.6"/><circle cx="12" cy="13" r="3.2" stroke={C.forest} strokeWidth="1.6"/></svg>
           </div>
+          {gardenWithPhotos.length > 0 && (
+            <div onClick={()=>setShowGarden(true)} title="Pick a plant from your garden" style={{ flexShrink:0, width:42, height:42, borderRadius:13, background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              <LeafOutline size={19} color={C.forest} sw={1.7}/>
+            </div>
+          )}
           <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={hasPhoto ? 'Ask the doctor…' : 'Add a photo to begin'} rows={1} style={{ flex:1, resize:'none', maxHeight:120, padding:'11px 14px', borderRadius:16, border:C.hair, background:C.panel, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', lineHeight:1.4 }}/>
           <div onClick={send} style={{ flexShrink:0, width:42, height:42, borderRadius:13, background: canSend ? C.forest : 'rgba(45,80,22,0.12)', display:'flex', alignItems:'center', justifyContent:'center', cursor: canSend ? 'pointer' : 'default' }}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke={canSend ? '#fff' : C.forest} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
         </div>
       </div>
+
+      {showGarden && (
+        <div onClick={()=>setShowGarden(false)} style={{ position:'absolute', inset:0, zIndex:10, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:26, borderTopRightRadius:26, padding:'10px 18px calc(26px + env(safe-area-inset-bottom))', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'70%', overflowY:'auto' }}>
+            <div style={{ width:38, height:4, borderRadius:999, background:'rgba(45,80,22,0.16)', margin:'0 auto 14px' }}/>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, color:C.forest, textAlign:'center' }}>From your garden</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65, textAlign:'center', marginTop:3, marginBottom:14 }}>Use a saved plant's photo — no new shot needed</div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(96px, 1fr))', gap:12 }}>
+              {gardenWithPhotos.map(p => (
+                <div key={p.id} onClick={()=>pickGardenPlant(p)} style={{ cursor:'pointer', display:'flex', flexDirection:'column', gap:5 }}>
+                  <img src={firstPhoto(p)} alt="" style={{ width:'100%', aspectRatio:'1', objectFit:'cover', borderRadius:14, border: activePlant && activePlant.id===p.id ? `2px solid ${C.forest}` : C.hair }}/>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'center' }}>{p.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

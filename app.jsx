@@ -124,7 +124,15 @@ function App() {
   const setSwipeNav = (v) => { setSwipeNavRaw(v); lsSet('caulis_swipe_nav', v); };
   const [navConfig, setNavConfigRaw] = useState(() => normalizeNav(lsGet('caulis_navbar', null)));
   const setNavConfig = (cfg) => { const n = normalizeNav(cfg); setNavConfigRaw(n); lsSet('caulis_navbar', n); };
-  const onNavAction = (action) => { if (action === 'add') setForm({ mode:'add' }); else if (action === 'doctor') setDoctor({}); };
+  const [moreOpen, setMoreOpen] = useState(false);
+  const onNavAction = (action) => {
+    if (action === 'add') setForm({ mode:'add' });
+    else if (action === 'doctor') setDoctor({});
+    else if (action === 'more') setMoreOpen(true);
+  };
+  const navTo = (action) => { setMoreOpen(false); const meta = NAV_ACTIONS[action]; if (!meta) return; if (meta.tab) setTab(action); else onNavAction(action); };
+  // launch: if the saved/default tab isn't in the customized bar, snap to its first tab
+  useEffect(() => { const order = navTabOrder(navConfig); if (!order.includes(tab)) setTab(order[0]); }, []);
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [bulkMove, setBulkMove] = useState(null);
   const [bulkRemoveIds, setBulkRemoveIds] = useState(null);
@@ -610,7 +618,7 @@ function App() {
   // unified mobile gesture: horizontal swipe = change tab (if enabled),
   // vertical pull at scroll-top = pull-to-refresh. Ignored over overlays
   // and horizontally-scrollable zones (marked data-noswipe).
-  const TAB_ORDER = ['garden', 'needs', 'scanner', 'print', 'settings'];
+  const TAB_ORDER = navTabOrder(navConfig); // swipes follow the customized bar order
   const PULL_MAX = 88, PULL_TRIG = 62;
   const swipeRef = useRef(null);
   const [pull, setPull] = useState(0);
@@ -955,6 +963,26 @@ window.onload=()=>{
     <DoctorOverlay plant={doctor.plant ? plants.find(p => p.id === doctor.plant.id) || doctor.plant : null} plants={plants} anthropicKey={anthropicKey} model={doctorModel} onApplyCorrection={applyCorrection} onBack={()=>setDoctor(null)} isDesktop={isDesktop}/>
   );
 
+  const moreEl = moreOpen && (
+    <div onClick={()=>setMoreOpen(false)} style={{ position:'fixed', inset:0, zIndex:44, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:26, borderTopRightRadius:26, padding:'10px 18px calc(30px + env(safe-area-inset-bottom))', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'72%', overflowY:'auto' }}>
+        <div style={{ width:38, height:4, borderRadius:999, background:'rgba(45,80,22,0.16)', margin:'0 auto 14px' }}/>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, color:C.forest, textAlign:'center', marginBottom:14 }}>All sections</div>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(92px, 1fr))', gap:12 }}>
+          {NAV_ORDER.filter(a => a !== 'more').map(a => {
+            const meta = NAV_ACTIONS[a]; const active = meta.tab && tab === a;
+            return (
+              <div key={a} onClick={()=>navTo(a)} style={{ cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'16px 8px', borderRadius:18, background: active ? 'rgba(110,154,62,0.1)' : C.panel, border: active ? '1px solid rgba(110,154,62,0.4)' : C.hair }}>
+                <meta.Icon s={24} c={active ? C.forest : C.brown} a={active ? 1 : 0.7}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color: active ? C.forest : C.ink }}>{meta.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
   const formEl = form && (
     <AddPlant
       key={form.mode === 'edit' ? 'edit-'+form.plant.id : 'add'}
@@ -1047,6 +1075,7 @@ window.onload=()=>{
           </DesktopModal>
         )}
         {doctor && <div style={{ position:'fixed', inset:0, zIndex:46 }}>{doctorEl}</div>}
+        {moreEl}
         {moving && (
           <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={()=>{}} isDesktop/>
         )}
@@ -1098,6 +1127,7 @@ window.onload=()=>{
       {detailPlant && detailEl}
       {form && formEl}
       {doctor && doctorEl}
+      {moreEl}
       {moving && (
         <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={()=>{}}/>
       )}

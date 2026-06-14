@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '86'; // keep in sync with sw.js CACHE
+const APP_VERSION = '87'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
@@ -237,6 +237,9 @@ function IconPlus({ s = 16, c = C.forest, w = 1.7 }) {
 function IconBack({ s = 20, c = C.forest }) {
   return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none"><path d="M12.5 4 6.5 10l6 6" stroke={c} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg>);
 }
+function IconMore({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" opacity={a}><circle cx="5" cy="12" r="1.7" fill={c}/><circle cx="12" cy="12" r="1.7" fill={c}/><circle cx="19" cy="12" r="1.7" fill={c}/></svg>);
+}
 function IconDoctor({ s = 24, c = C.ink, a = 1 }) {
   return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" opacity={a}>
     <path d="M6 3v5a4 4 0 0 0 8 0V3" stroke={c} strokeWidth="1.7" strokeLinecap="round"/>
@@ -348,26 +351,34 @@ const NAV_ACTIONS = {
   settings: { label:'Settings', Icon:IconGear,   tab:true },
   add:      { label:'Add',      Icon:IconPlus,   tab:false },
   doctor:   { label:'Doctor',   Icon:IconDoctor, tab:false },
+  more:     { label:'More',     Icon:IconMore,   tab:false },
 };
-const NAV_ORDER = ['garden','needs','scanner','print','settings','add','doctor'];
+const NAV_ORDER = ['garden','needs','scanner','print','settings','add','doctor','more'];
+const NAV_MAX = 7;
 const DEFAULT_NAV = [
   { action:'garden' }, { action:'needs' }, { action:'scanner', center:true }, { action:'print' }, { action:'settings' },
 ];
 function normalizeNav(cfg) {
   if (!Array.isArray(cfg) || !cfg.length) return DEFAULT_NAV.map(s => ({ ...s }));
-  const slots = cfg.slice(0, 5).map(s => ({ action: NAV_ACTIONS[s && s.action] ? s.action : 'empty', center: !!(s && s.center) }));
+  const slots = cfg.slice(0, NAV_MAX).map(s => ({ action: NAV_ACTIONS[s && s.action] ? s.action : 'empty', center: !!(s && s.center) }));
+  if (!slots.length) return DEFAULT_NAV.map(s => ({ ...s }));
   if (!slots.some(s => s.center)) { const i = slots.findIndex(s => s.action !== 'empty'); if (i >= 0) slots[i].center = true; }
   let seen = false; for (const s of slots) { if (s.center && !seen) seen = true; else s.center = false; }
   return slots;
+}
+// ordered tab actions present in the bar — what swipes and launch-tab respect
+function navTabOrder(cfg) {
+  const order = normalizeNav(cfg).filter(s => s.action !== 'empty' && NAV_ACTIONS[s.action] && NAV_ACTIONS[s.action].tab).map(s => s.action);
+  return order.length ? order : ['garden'];
 }
 
 // export to window for other babel scripts -------------------
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
-  NAV_ACTIONS, NAV_ORDER, DEFAULT_NAV, normalizeNav,
+  NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder,
   Leaf, LeafOutline, Sprig,
-  IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor,
+  IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
   useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION, MOTION,

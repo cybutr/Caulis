@@ -77,7 +77,7 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v86.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v87.
 Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
 
 ## Watering Model
@@ -98,7 +98,11 @@ Hidden in Settings → About: tap the Version row 7× to reveal a "Developer" se
 
 ## Bottom Navigation
 
-Customizable via Settings → Navigation bar. `navConfig` (`caulis_navbar`) is an array of `{action, center?}` slots normalized by `normalizeNav()` (`caulis-core.jsx`); actions defined in `NAV_ACTIONS`/`NAV_ORDER`. Tab actions call `setTab`; non-tab actions (`add`, `doctor`) call `onNavAction`. Desktop uses `DesktopSidebar` (not customizable).
+Customizable via Settings → Navigation bar. `navConfig` (`caulis_navbar`) is an array of `{action, center?}` slots normalized by `normalizeNav()` (`caulis-core.jsx`), up to `NAV_MAX` (7); editor supports add/remove/reorder/center. Actions in `NAV_ACTIONS`/`NAV_ORDER`. Tab actions call `setTab`; non-tab actions (`add`, `doctor`, `more`) call `onNavAction`. **Swipes and launch-tab respect the bar**: `navTabOrder(navConfig)` drives both the swipe `TAB_ORDER` and a mount effect that snaps to the first bar tab if the saved tab isn't present. `more` opens a sheet (`moreEl` in `app.jsx`) listing every action — guarantees access to anything not on the bar. Desktop uses `DesktopSidebar` (not customizable).
+
+## Doctor — garden photos
+
+Opening the doctor from a plant pre-seeds that plant's saved photo (`firstPhoto`) so you can ask without snapping a new one; `activePlant` (state, init from the `plant` prop) drives context + `suggest_correction` target and updates a chip in the composer. A leaf button in the composer opens a garden picker sheet (`pickGardenPlant`) to attach any saved plant's photo + set it as context. `imgBlock()` builds the Anthropic image block from a dataURL (base64) or a remote https URL, so both stored user photos and API images work.
 
 ## Animations
 
