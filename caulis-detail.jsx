@@ -722,16 +722,141 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
 // ════════════════════════════════════════════════════════════
 function splitDataUrl(d) { const m = /^data:([^;]+);base64,(.*)$/.exec(d || ''); return m ? { media_type: m[1], data: m[2] } : null; }
 
+// ── lightweight inline Markdown → React (bold, italic, code) ──
+function mdInline(str) {
+  const out = []; let key = 0, last = 0, m;
+  const re = /(\*\*([^*]+)\*\*|\*([^*\n]+)\*|`([^`]+)`)/g;
+  while ((m = re.exec(str))) {
+    if (m.index > last) out.push(str.slice(last, m.index));
+    if (m[2] != null) out.push(<strong key={key++}>{m[2]}</strong>);
+    else if (m[3] != null) out.push(<em key={key++}>{m[3]}</em>);
+    else if (m[4] != null) out.push(<code key={key++} style={{ fontFamily:'monospace', fontSize:'0.9em', background:'rgba(45,80,22,0.08)', padding:'1px 5px', borderRadius:5 }}>{m[4]}</code>);
+    last = m.index + m[0].length;
+  }
+  if (last < str.length) out.push(str.slice(last));
+  return out;
+}
+// block-level: paragraphs, bullets, numbered lists, light headings
+function MarkdownText({ text }) {
+  const lines = (text || '').split('\n');
+  const blocks = []; let list = null;
+  const flush = () => { if (list) { blocks.push(list); list = null; } };
+  for (const ln of lines) {
+    const bullet = /^\s*[-*•]\s+(.*)/.exec(ln);
+    const num = /^\s*\d+[.)]\s+(.*)/.exec(ln);
+    const head = /^\s*#{1,3}\s+(.*)/.exec(ln);
+    if (bullet) { if (!list || list.type !== 'ul') { flush(); list = { type:'ul', items:[] }; } list.items.push(bullet[1]); }
+    else if (num) { if (!list || list.type !== 'ol') { flush(); list = { type:'ol', items:[] }; } list.items.push(num[1]); }
+    else if (head) { flush(); blocks.push({ type:'h', text:head[1] }); }
+    else if (ln.trim() === '') { flush(); }
+    else { flush(); blocks.push({ type:'p', text:ln }); }
+  }
+  flush();
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+      {blocks.map((b, i) => {
+        if (b.type === 'h') return <div key={i} style={{ fontFamily:FONT_SANS, fontSize:14.5, fontWeight:700, color:C.forest }}>{mdInline(b.text)}</div>;
+        if (b.type === 'p') return <div key={i} style={{ lineHeight:1.55 }}>{mdInline(b.text)}</div>;
+        return (
+          <div key={i} style={{ display:'flex', flexDirection:'column', gap:5 }}>
+            {b.items.map((it, j) => (
+              <div key={j} style={{ display:'flex', gap:9, alignItems:'flex-start', lineHeight:1.5 }}>
+                <span style={{ flexShrink:0, marginTop:b.type==='ul'?6:0, fontFamily:FONT_SANS, fontSize: b.type==='ul'?0:13, fontWeight:700, color:C.sage }}>
+                  {b.type==='ul' ? <span style={{ display:'inline-block', width:5, height:5, borderRadius:999, background:C.sage }}/> : `${j+1}.`}
+                </span>
+                <span>{mdInline(it)}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+// reveals text progressively (~2.4s total), then renders Markdown; balances stray ** mid-reveal
+function TypewriterMarkdown({ text, onTick }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    setN(0);
+    const total = (text || '').length; if (!total) return;
+    const step = Math.max(2, Math.ceil(total / 150));
+    let i = 0;
+    const id = setInterval(() => {
+      i += step; setN(i); onTick && onTick();
+      if (i >= total) clearInterval(id);
+    }, 16);
+    return () => clearInterval(id);
+  }, [text]);
+  const done = n >= (text || '').length;
+  let shown = (text || '').slice(0, n);
+  if (!done && (shown.match(/\*\*/g) || []).length % 2) shown = shown.replace(/\*\*[^*]*$/, ''); // drop dangling bold
+  return (
+    <div>
+      <MarkdownText text={shown}/>
+      {!done && <span style={{ display:'inline-block', width:6, height:14, marginLeft:1, borderRadius:1, background:C.sage, animation:'blink 1s steps(2) infinite', verticalAlign:'-2px' }}/>}
+    </div>
+  );
+}
+
+function relTime(ts) {
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
+  if (s < 60) return 'just now';
+  const mn = Math.round(s / 60); if (mn < 60) return `${mn}m ago`;
+  const h = Math.round(mn / 60); if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24); return d === 1 ? 'yesterday' : `${d}d ago`;
+}
+
+// ── persist last 3 doctor chats locally (strip images oldest-first on quota) ──
+const DOCTOR_CHATS_KEY = 'caulis_doctor_chats';
+function loadDoctorChats() { try { const v = JSON.parse(localStorage.getItem(DOCTOR_CHATS_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch(e) { return []; } }
+function saveDoctorChats(chats) {
+  const trimmed = chats.slice(-3);
+  const write = (arr) => localStorage.setItem(DOCTOR_CHATS_KEY, JSON.stringify(arr));
+  try { write(trimmed); return; } catch(e) {}
+  // quota — strip images from oldest chats until it fits
+  const stripped = trimmed.map(c => ({ ...c, thread: c.thread }));
+  for (let i = 0; i < stripped.length; i++) {
+    stripped[i] = { ...stripped[i], thread: stripped[i].thread.map(m => m.image ? { ...m, image: null, imgStripped: true } : m) };
+    try { write(stripped); return; } catch(e) {}
+  }
+  try { write(stripped.slice(-1)); } catch(e) {}
+}
+
 function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, onBack, isDesktop }) {
-  const [thread, setThread] = useState([]); // { role:'user'|'assistant'|'card', text?, image?, correction? }
+  const [chats, setChats] = useState(() => loadDoctorChats());
+  const initial = useRef(null);
+  if (initial.current === null) {
+    const mine = chats.filter(c => plant ? c.plantId === plant.id : !c.plantId);
+    const resume = (mine.length ? mine : chats).slice(-1)[0];
+    initial.current = resume ? { id: resume.id, thread: resume.thread } : { id: 'dc-' + Date.now().toString(36), thread: [] };
+  }
+  const [chatId, setChatId] = useState(initial.current.id);
+  const [thread, setThread] = useState(initial.current.thread);
   const [pendingImage, setPendingImage] = useState(null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
   const fileRef = useRef(null);
   const scrollRef = useRef(null);
 
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [thread, busy, pendingImage]);
+
+  // persist current chat (debounced via effect) into the last-3 store
+  useEffect(() => {
+    if (!thread.length) return;
+    const persistThread = thread.map(m => m.animate ? { ...m, animate: false } : m);
+    setChats(prev => {
+      const others = prev.filter(c => c.id !== chatId);
+      const next = [...others, { id: chatId, plantId: plant ? plant.id : null, plantName: plant ? plant.name : 'General', ts: Date.now(), thread: persistThread }].slice(-3);
+      saveDoctorChats(next);
+      return next;
+    });
+  }, [thread]);
+
+  const startNewChat = () => { setShowHistory(false); setChatId('dc-' + Date.now().toString(36)); setThread([]); setPendingImage(null); setError(''); };
+  const loadChat = (c) => { setShowHistory(false); setChatId(c.id); setThread(c.thread.map(m => ({ ...m, animate: false }))); setPendingImage(null); setError(''); };
+  const pinScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; };
 
   const processFile = (f) => {
     const reader = new FileReader();
@@ -802,7 +927,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
         }
         finalText = res.text; break;
       }
-      setThread(t => [...t, { role: 'assistant', text: finalText || 'I couldn’t read that — try another photo?' }]);
+      setThread(t => [...t, { role: 'assistant', text: finalText || 'I couldn’t read that — try another photo?', animate: true }]);
     } catch (e) {
       setThread(t => [...t, { role: 'assistant', text: '', error: String(e.message || e) }]);
     } finally { setBusy(false); }
@@ -860,9 +985,12 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
       <div key={i} style={{ display:'flex', justifyContent: mine ? 'flex-end' : 'flex-start', marginBottom:10 }}>
         <div style={{ maxWidth:'82%', display:'flex', flexDirection:'column', gap:6, alignItems: mine ? 'flex-end' : 'flex-start' }}>
           {m.image && <img src={m.image} alt="" style={{ width:150, height:150, objectFit:'cover', borderRadius:15, border:C.hair }}/>}
+          {!m.image && m.imgStripped && <div style={{ width:150, height:96, borderRadius:15, background:'rgba(45,80,22,0.05)', border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6 }}>photo from earlier</div>}
           {m.error
             ? <div style={{ fontFamily:FONT_SANS, fontSize:13.5, color:STATUS.needs.dot, background:'rgba(180,71,46,0.08)', padding:'10px 13px', borderRadius:16 }}>{m.error}</div>
-            : !!m.text && <div style={{ fontFamily:FONT_SANS, fontSize:14, lineHeight:1.5, color: mine ? '#fff' : C.ink, background: mine ? C.forest : C.panel, border: mine ? 'none' : C.hair, padding:'10px 14px', borderRadius:18, whiteSpace:'pre-wrap' }}>{m.text}</div>}
+            : !!m.text && <div style={{ fontFamily:FONT_SANS, fontSize:14, color: mine ? '#fff' : C.ink, background: mine ? C.forest : C.panel, border: mine ? 'none' : C.hair, padding:'11px 14px', borderRadius:18, boxShadow: mine ? 'none' : '0px 4px 18px rgba(45,80,22,0.05)', animation: mine ? 'none' : 'doctorIn 360ms cubic-bezier(.2,.8,.2,1)' }}>
+                {mine ? <span style={{ whiteSpace:'pre-wrap', lineHeight:1.5 }}>{m.text}</span> : (m.animate ? <TypewriterMarkdown text={m.text} onTick={pinScroll}/> : <MarkdownText text={m.text}/>)}
+              </div>}
         </div>
       </div>
     );
@@ -872,14 +1000,40 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
   return (
     <div style={{ position: isDesktop ? 'absolute' : 'fixed', inset:0, zIndex:46, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
       <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}/>
-      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:`56px ${sp}px 14px` }}>
+      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:`56px ${sp}px 14px`, position:'relative', zIndex:5 }}>
         <div onClick={onBack} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <IconBack/>
         </div>
-        <div style={{ display:'flex', flexDirection:'column' }}>
+        <div style={{ display:'flex', flexDirection:'column', flex:1 }}>
           <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, lineHeight:1.1 }}>Plant doctor</span>
           {plant && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65 }}>about {plant.name}</span>}
         </div>
+        <div onClick={startNewChat} title="New chat" style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke={C.forest} strokeWidth="1.9" strokeLinecap="round"/></svg>
+        </div>
+        {chats.length > 0 && (
+          <div onClick={()=>setShowHistory(v=>!v)} title="History" style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background: showHistory ? C.forest : C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 7v5l3.5 2" stroke={showHistory?'#fff':C.forest} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="12" r="8.5" stroke={showHistory?'#fff':C.forest} strokeWidth="1.6"/></svg>
+          </div>
+        )}
+        {showHistory && (
+          <div style={{ position:'absolute', top:'calc(100% - 4px)', right:sp, width:'min(320px, 78vw)', background:C.panel, borderRadius:18, border:C.hair, boxShadow:'0px 12px 40px rgba(45,80,22,0.14)', overflow:'hidden', zIndex:8, animation:'doctorIn 200ms cubic-bezier(.2,.8,.2,1)' }}>
+            <div style={{ padding:'11px 15px', fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', borderBottom:C.hair }}>Recent chats</div>
+            {[...chats].reverse().map(c => {
+              const firstQ = (c.thread.find(m => m.role === 'user' && m.text) || {}).text || 'Photo';
+              const active = c.id === chatId;
+              return (
+                <div key={c.id} onClick={()=>loadChat(c)} style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 15px', cursor:'pointer', background: active ? 'rgba(110,154,62,0.08)' : 'transparent', borderBottom:C.hair }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{firstQ}</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, marginTop:1 }}>{c.plantName} · {relTime(c.ts)}</div>
+                  </div>
+                  {active && <IconCheck s={15} c={C.sage}/>}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div ref={scrollRef} style={{ flex:1, overflowY:'auto', padding:`6px ${sp}px 10px`, position:'relative', zIndex:2 }}>
@@ -894,9 +1048,12 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
         )}
         {thread.map((m, i) => m.role === 'card' ? correctionCard(m, i) : bubble(m, i))}
         {busy && (
-          <div style={{ display:'flex', justifyContent:'flex-start', marginBottom:10 }}>
-            <div style={{ display:'flex', gap:5, padding:'12px 16px', background:C.panel, border:C.hair, borderRadius:18 }}>
-              {[0,1,2].map(i => <div key={i} style={{ width:7, height:7, borderRadius:999, background:C.sage, opacity:0.5, animation:`pulse 1s ${i*0.15}s infinite` }}/>)}
+          <div style={{ display:'flex', justifyContent:'flex-start', marginBottom:10, animation:'doctorIn 360ms cubic-bezier(.2,.8,.2,1)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:9, padding:'12px 16px', background:C.panel, border:C.hair, borderRadius:18, boxShadow:'0px 4px 18px rgba(45,80,22,0.05)' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:4, height:16 }}>
+                {[0,1,2,3].map(i => <div key={i} style={{ width:3.5, height:16, borderRadius:999, background:C.sage, transformOrigin:'center', animation:`bar 1.1s ${i*0.13}s ease-in-out infinite` }}/>)}
+              </div>
+              <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>examining…</span>
             </div>
           </div>
         )}

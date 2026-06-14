@@ -41,6 +41,9 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes pulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.9; } }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes bar { 0%, 100% { transform: scaleY(0.4); opacity: 0.5; } 50% { transform: scaleY(1); opacity: 1; } }
+  @keyframes doctorIn { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   @keyframes slideFromR { from { transform: translateX(26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes slideFromL { from { transform: translateX(-26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
