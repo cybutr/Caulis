@@ -77,7 +77,7 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v83.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v84.
 Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
 
 ## Watering Model

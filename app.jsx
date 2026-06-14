@@ -862,8 +862,10 @@ window.onload=()=>{
           sunlight: p.sunlight || [], _care: p.care || '', _fact: p.fact || '', _source: 'recheck',
         });
         const care = speciesCare(rec);
+        const blankName = (n) => !n || ['—','-','unknown','new plant','unnamed','plant'].includes(String(n).trim().toLowerCase());
         setPlants(ps => ps.map(x => x.id === p.id ? {
-          ...x, every: care.every, light: care.light, care: care.care, fact: care.fact,
+          ...x, name: (blankName(x.name) && rec._aiName) ? rec._aiName : x.name,
+          every: care.every, light: care.light, care: care.care, fact: care.fact,
           watering: care.watering, benchmark: care.benchmark, sunlight: care.sunlight,
           czech: x.czech || care.czech || '', aiV: APP_VERSION,
         } : x));

@@ -285,6 +285,7 @@ function _aiCacheSet(latin, result) {
 
 function _applyAiCare(record, ai) {
   const out = { ...record };
+  if (ai.name && String(ai.name).trim()) out._aiName = String(ai.name).trim();
   if (Number.isFinite(ai.every)) {
     out._aiEvery = Math.min(365, Math.max(1, Math.round(ai.every)));
     out.watering_general_benchmark = { value: String(out._aiEvery), unit: 'days' };
@@ -324,6 +325,7 @@ async function aiReviewCare(record) {
       'Only fill fields that are missing AND correct values that are clearly wrong for the species ' +
       '(e.g. a cactus or succulent should have a long watering interval; ferns and carnivorous plants a short one). ' +
       'Reply with ONLY a JSON object, no prose, no code fences, with keys: ' +
+      'name (the correct, properly capitalised English common name of the species, e.g. "Snake plant" — only if you are confident, otherwise empty string), ' +
       'every (integer days between waterings), watering (one of "Frequent","Average","Minimum","None"), ' +
       'light (short phrase), care (one or two concise sentences), fact (one short interesting sentence), ' +
       'sunlight (array of short light strings), czech (the Czech common name of the species — only if you are confident, otherwise empty string).';

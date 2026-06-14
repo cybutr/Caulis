@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '83'; // keep in sync with sw.js CACHE
+const APP_VERSION = '84'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
