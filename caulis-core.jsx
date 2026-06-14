@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '81'; // keep in sync with sw.js CACHE
+const APP_VERSION = '82'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
@@ -331,10 +331,32 @@ function Specimen({ tint, height, radius = 15, leafSize = 46, caption, image }) 
 // ════════════════════════════════════════════════════════════
 const SEED_LOCATIONS = ['Living room','Bedroom','Kitchen windowsill','Bathroom','Office','Balcony'];
 
+// ── customizable bottom navigation ───────────────────────────
+const NAV_ACTIONS = {
+  garden:   { label:'Garden',   Icon:IconGarden, tab:true },
+  needs:    { label:'Water',    Icon:IconDrop,   tab:true },
+  scanner:  { label:'Scan',     Icon:IconScan,   tab:true },
+  print:    { label:'Queue',    Icon:IconPrint,  tab:true },
+  settings: { label:'Settings', Icon:IconGear,   tab:true },
+  add:      { label:'Add',      Icon:IconPlus,   tab:false },
+};
+const NAV_ORDER = ['garden','needs','scanner','print','settings','add'];
+const DEFAULT_NAV = [
+  { action:'garden' }, { action:'needs' }, { action:'scanner', center:true }, { action:'print' }, { action:'settings' },
+];
+function normalizeNav(cfg) {
+  if (!Array.isArray(cfg) || !cfg.length) return DEFAULT_NAV.map(s => ({ ...s }));
+  const slots = cfg.slice(0, 5).map(s => ({ action: NAV_ACTIONS[s && s.action] ? s.action : 'empty', center: !!(s && s.center) }));
+  if (!slots.some(s => s.center)) { const i = slots.findIndex(s => s.action !== 'empty'); if (i >= 0) slots[i].center = true; }
+  let seen = false; for (const s of slots) { if (s.center && !seen) seen = true; else s.center = false; }
+  return slots;
+}
+
 // export to window for other babel scripts -------------------
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
+  NAV_ACTIONS, NAV_ORDER, DEFAULT_NAV, normalizeNav,
   Leaf, LeafOutline, Sprig,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin,
   StatusDot, LocationPill, StatusTag, Specimen,

@@ -661,7 +661,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevLoadNode, onDevPushNode }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevLoadNode, onDevPushNode, navConfig, onSetNavConfig }) {
   const [openSecs, setOpenSecs] = useState(() => GS.get('caulis_set_open', {}));
   const isOpen = (id) => openSecs[id] !== false;
   const toggleSec = (id) => setOpenSecs(s => { const n = { ...s, [id]: s[id] === false }; GS.set('caulis_set_open', n); return n; });
@@ -1288,6 +1288,48 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             <a href="docs.html" target="_blank" rel="noopener" style={{ textDecoration:'none', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8 }}>View format &amp; API docs ↗</a>
           </div>
         </SettingsSection>
+        {(() => {
+          const nav = normalizeNav(navConfig);
+          const opts = [...NAV_ORDER, 'empty'];
+          const cycleAction = (i) => { const idx = opts.indexOf(nav[i].action); const next = opts[(idx + 1) % opts.length]; onSetNavConfig(nav.map((s, j) => j === i ? { ...s, action: next } : s)); };
+          const setCenter = (i) => onSetNavConfig(nav.map((s, j) => ({ ...s, center: j === i })));
+          const swap = (i, j) => { if (j < 0 || j >= nav.length) return; const out = nav.map(s => ({ ...s })); const t = out[i]; out[i] = out[j]; out[j] = t; onSetNavConfig(out); };
+          const arrow = (dir, enabled, onClick) => (
+            <div onClick={enabled ? onClick : undefined} style={{ cursor: enabled ? 'pointer' : 'default', opacity: enabled ? 0.6 : 0.18, lineHeight:1, fontSize:11, color:C.brown, padding:'1px 3px' }}>{dir}</div>
+          );
+          return (
+          <SettingsSection title="Navigation bar" open={isOpen('nav')} onToggle={()=>toggleSec('nav')}>
+            <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:8 }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, padding:'0 2px 2px' }}>Tap a slot to change its button. The selected one is raised in the center. Set a slot to Empty to remove it.</div>
+              {nav.map((s, i) => {
+                const meta = NAV_ACTIONS[s.action];
+                const isEmpty = s.action === 'empty';
+                return (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:12, background:C.bg }}>
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+                      {arrow('▲', i > 0, ()=>swap(i, i-1))}
+                      {arrow('▼', i < nav.length-1, ()=>swap(i, i+1))}
+                    </div>
+                    <div onClick={()=>cycleAction(i)} style={{ flex:1, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+                      {meta
+                        ? <meta.Icon s={19} c={C.forest}/>
+                        : <div style={{ width:19, height:19, borderRadius:6, border:`1.5px dashed ${C.line}` }}/>}
+                      <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color: isEmpty?C.brown:C.ink, opacity: isEmpty?0.5:1 }}>{meta ? meta.label : 'Empty'}</span>
+                    </div>
+                    <div onClick={()=> !isEmpty && setCenter(i)} style={{ display:'flex', alignItems:'center', gap:6, cursor: isEmpty?'default':'pointer', opacity: isEmpty?0.3:1 }}>
+                      <span style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.7 }}>Center</span>
+                      <div style={{ width:18, height:18, borderRadius:999, border:`2px solid ${s.center?C.forest:C.line}`, background: s.center?C.forest:'transparent', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        {s.center && <div style={{ width:7, height:7, borderRadius:999, background:'#fff' }}/>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div onClick={()=>onSetNavConfig(DEFAULT_NAV)} style={{ alignSelf:'flex-start', marginTop:2, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest, cursor:'pointer', padding:'4px 2px' }}>Reset to default</div>
+            </div>
+          </SettingsSection>
+          );
+        })()}
         {devRevealed && (() => {
           let pinIsSet = false; try { pinIsSet = !!localStorage.getItem('caulis_dev_pin'); } catch(e) {}
           const dInput = { width:'100%', padding:'11px 13px', borderRadius:12, border:`1px solid ${C.line}`, background:C.bg, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', boxSizing:'border-box' };
@@ -1414,14 +1456,9 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
 // ════════════════════════════════════════════════════════════
 //  BOTTOM NAVIGATION
 // ════════════════════════════════════════════════════════════
-function BottomNav({ tab, setTab }) {
-  const items = [
-    { key:'garden', label:'Garden',  Icon:IconGarden },
-    { key:'needs',  label:'Water',   Icon:IconDrop },
-    { key:'scanner', label:'Scan',   center:true },
-    { key:'print',  label:'Queue',   Icon:IconPrint },
-    { key:'settings', label:'Settings', Icon:IconGear },
-  ];
+function BottomNav({ tab, setTab, onAction, navConfig }) {
+  const slots = normalizeNav(navConfig).filter(s => s.action !== 'empty');
+  const fire = (action) => { const a = NAV_ACTIONS[action]; if (!a) return; if (a.tab) setTab(action); else onAction && onAction(action); };
   return (
     <div style={{
       flexShrink:0, position:'relative', zIndex:30,
@@ -1430,11 +1467,12 @@ function BottomNav({ tab, setTab }) {
       padding:'9px 14px 26px',
       display:'flex', alignItems:'flex-end', justifyContent:'space-between',
     }}>
-      {items.map(it => {
-        if (it.center) {
-          const active = tab === it.key;
+      {slots.map((s, i) => {
+        const meta = NAV_ACTIONS[s.action];
+        const active = meta.tab && tab === s.action;
+        if (s.center) {
           return (
-            <div key={it.key} onClick={()=>setTab(it.key)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, cursor:'pointer' }}>
+            <div key={i} onClick={()=>fire(s.action)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, cursor:'pointer' }}>
               <div style={{
                 width:58, height:58, borderRadius:999, marginTop:-30,
                 background:`linear-gradient(160deg, ${C.sage} 0%, ${C.forest} 90%)`,
@@ -1442,18 +1480,17 @@ function BottomNav({ tab, setTab }) {
                 boxShadow: active ? '0 8px 20px rgba(45,80,22,0.42), 0 0 0 4px rgba(122,158,78,0.18)' : '0 6px 16px rgba(45,80,22,0.34)',
                 border:`3px solid ${C.bg}`, transition:'box-shadow 200ms ease',
               }}>
-                <IconScan s={26} c="#fff"/>
+                <meta.Icon s={26} c="#fff"/>
               </div>
-              <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight:600, color: active?C.forest:C.brown, opacity: active?1:0.7, letterSpacing:0.2 }}>{it.label}</span>
+              <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight:600, color: active?C.forest:C.brown, opacity: active?1:0.7, letterSpacing:0.2 }}>{meta.label}</span>
             </div>
           );
         }
-        const active = tab === it.key;
         const col = active ? C.forest : C.brown;
         return (
-          <div key={it.key} onClick={()=>setTab(it.key)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer', paddingBottom:2 }}>
-            <it.Icon s={23} c={col} a={active?1:0.55}/>
-            <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight: active?600:500, color:col, opacity: active?1:0.65, letterSpacing:0.2 }}>{it.label}</span>
+          <div key={i} onClick={()=>fire(s.action)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer', paddingBottom:2 }}>
+            <meta.Icon s={23} c={col} a={active?1:0.55}/>
+            <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight: active?600:500, color:col, opacity: active?1:0.65, letterSpacing:0.2 }}>{meta.label}</span>
           </div>
         );
       })}
