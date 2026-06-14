@@ -80,7 +80,7 @@ function PhotoCarousel({ images, tint, height = 196, radius = 22 }) {
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
-function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, isDesktop, readonly = false, czechMode = false }) {
+function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, isDesktop, readonly = false, czechMode = false }) {
   const [justWatered, setJustWatered] = useState(false);
   const [waterOffset, setWaterOffset] = useState(0); // days ago
   const prevRef = useRef(null);
@@ -169,6 +169,13 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
               </div>
             )}
           </>)}
+
+          {onAskDoctor && (
+            <div onClick={()=>onAskDoctor(plant)} style={{ marginTop:10, display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:46, borderRadius:16, border:`1px solid ${C.forest}`, cursor:'pointer' }}>
+              <IconDoctor s={17} c={C.forest}/>
+              <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.forest }}>Ask the doctor</span>
+            </div>
+          )}
 
           {/* info tiles */}
           <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:18 }}>
@@ -710,4 +717,138 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   );
 }
 
-Object.assign(window, { InfoTile, PlantDetail, AddPlant, Field });
+// ════════════════════════════════════════════════════════════
+//  DOCTOR — vision chat with the plant doctor
+// ════════════════════════════════════════════════════════════
+function splitDataUrl(d) { const m = /^data:([^;]+);base64,(.*)$/.exec(d || ''); return m ? { media_type: m[1], data: m[2] } : null; }
+
+function DoctorOverlay({ plant, anthropicKey, model, onBack, isDesktop }) {
+  const [thread, setThread] = useState([]); // { role, text, image? }
+  const [pendingImage, setPendingImage] = useState(null);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const fileRef = useRef(null);
+  const scrollRef = useRef(null);
+
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [thread, busy, pendingImage]);
+
+  const processFile = (f) => {
+    const reader = new FileReader();
+    reader.onload = async (ev) => { setPendingImage(await compressImage(ev.target.result)); setError(''); };
+    reader.readAsDataURL(f);
+  };
+  const openPicker = () => {
+    const input = fileRef.current; if (!input) return;
+    input.value = '';
+    if (!isDesktop) input.setAttribute('capture', 'environment'); else input.removeAttribute('capture');
+    input.onchange = () => { const f = input.files?.[0]; if (f) processFile(f); };
+    input.click();
+  };
+
+  const hasPhoto = pendingImage || thread.some(m => m.image);
+  const canSend = !busy && (pendingImage || (input.trim() && hasPhoto));
+
+  const send = async () => {
+    if (!hasPhoto) { setError('Add a photo of the plant first.'); return; }
+    if (!canSend) return;
+    const userMsg = { role: 'user', text: input.trim() || 'What’s going on with this plant?', image: pendingImage };
+    const next = [...thread, userMsg];
+    setThread(next); setInput(''); setPendingImage(null); setError(''); setBusy(true);
+    const recent = next.slice(-6);
+    const messages = recent.map(m => {
+      if (m.role === 'user' && m.image) {
+        const img = splitDataUrl(m.image);
+        const content = [];
+        if (img) content.push({ type: 'image', source: { type: 'base64', media_type: img.media_type, data: img.data } });
+        content.push({ type: 'text', text: m.text });
+        return { role: 'user', content };
+      }
+      return { role: m.role, content: m.text };
+    });
+    const plantContext = plant
+      ? `Name: ${plant.name}\nLatin: ${plant.latin || 'unknown'}\nLocation: ${plant.location || 'unknown'}\nWaters every ${plant.every} days; last watered ${plant.days} day(s) ago.\nLight: ${plant.light || 'unknown'}\nCare notes: ${plant.care || 'none'}`
+      : null;
+    try {
+      const reply = await doctorAsk({ messages, plantContext, model, key: anthropicKey });
+      setThread(t => [...t, { role: 'assistant', text: reply || 'I couldn’t read that — try another photo?' }]);
+    } catch (e) {
+      setThread(t => [...t, { role: 'assistant', text: '', error: String(e.message || e) }]);
+    } finally { setBusy(false); }
+  };
+
+  const bubble = (m, i) => {
+    const mine = m.role === 'user';
+    return (
+      <div key={i} style={{ display:'flex', justifyContent: mine ? 'flex-end' : 'flex-start', marginBottom:10 }}>
+        <div style={{ maxWidth:'82%', display:'flex', flexDirection:'column', gap:6, alignItems: mine ? 'flex-end' : 'flex-start' }}>
+          {m.image && <img src={m.image} alt="" style={{ width:150, height:150, objectFit:'cover', borderRadius:15, border:C.hair }}/>}
+          {m.error
+            ? <div style={{ fontFamily:FONT_SANS, fontSize:13.5, color:STATUS.needs.dot, background:'rgba(180,71,46,0.08)', padding:'10px 13px', borderRadius:16 }}>{m.error}</div>
+            : !!m.text && <div style={{ fontFamily:FONT_SANS, fontSize:14, lineHeight:1.5, color: mine ? '#fff' : C.ink, background: mine ? C.forest : C.panel, border: mine ? 'none' : C.hair, padding:'10px 14px', borderRadius:18, whiteSpace:'pre-wrap' }}>{m.text}</div>}
+        </div>
+      </div>
+    );
+  };
+
+  const sp = isDesktop ? 28 : 18;
+  return (
+    <div style={{ position: isDesktop ? 'absolute' : 'fixed', inset:0, zIndex:46, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
+      <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}/>
+      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:`56px ${sp}px 14px` }}>
+        <div onClick={onBack} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <IconBack/>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column' }}>
+          <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, lineHeight:1.1 }}>Plant doctor</span>
+          {plant && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65 }}>about {plant.name}</span>}
+        </div>
+      </div>
+
+      <div ref={scrollRef} style={{ flex:1, overflowY:'auto', padding:`6px ${sp}px 10px`, position:'relative', zIndex:2 }}>
+        {thread.length === 0 && (
+          <div style={{ textAlign:'center', padding:'40px 24px' }}>
+            <div style={{ display:'inline-flex', width:60, height:60, borderRadius:999, background:'rgba(110,154,62,0.12)', alignItems:'center', justifyContent:'center' }}>
+              <IconDoctor s={28} c={C.sage}/>
+            </div>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:20, color:C.forest, marginTop:14 }}>Show me your plant</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:5, maxWidth:280, marginLeft:'auto', marginRight:'auto' }}>Snap a photo and ask anything — “what’s wrong with this?”, “how tall will it grow?”</div>
+          </div>
+        )}
+        {thread.map(bubble)}
+        {busy && (
+          <div style={{ display:'flex', justifyContent:'flex-start', marginBottom:10 }}>
+            <div style={{ display:'flex', gap:5, padding:'12px 16px', background:C.panel, border:C.hair, borderRadius:18 }}>
+              {[0,1,2].map(i => <div key={i} style={{ width:7, height:7, borderRadius:999, background:C.sage, opacity:0.5, animation:`pulse 1s ${i*0.15}s infinite` }}/>)}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!anthropicKey && (
+        <div style={{ flexShrink:0, padding:`0 ${sp}px 6px`, fontFamily:FONT_SANS, fontSize:12, color:STATUS.needs.dot }}>Add an Anthropic API key in Settings to use the doctor.</div>
+      )}
+      {error && <div style={{ flexShrink:0, padding:`0 ${sp}px 6px`, fontFamily:FONT_SANS, fontSize:12, color:STATUS.needs.dot }}>{error}</div>}
+
+      <div style={{ flexShrink:0, padding:`8px ${sp}px calc(20px + env(safe-area-inset-bottom))`, borderTop:C.hair, background:C.bg }}>
+        {pendingImage && (
+          <div style={{ display:'inline-flex', position:'relative', marginBottom:8 }}>
+            <img src={pendingImage} alt="" style={{ width:56, height:56, objectFit:'cover', borderRadius:12, border:C.hair }}/>
+            <div onClick={()=>setPendingImage(null)} style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:999, background:C.ink, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>×</div>
+          </div>
+        )}
+        <div style={{ display:'flex', alignItems:'flex-end', gap:9 }}>
+          <div onClick={openPicker} style={{ flexShrink:0, width:42, height:42, borderRadius:13, background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1l1-1.5h7L16.5 6h2A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-9Z" stroke={C.forest} strokeWidth="1.6"/><circle cx="12" cy="13" r="3.2" stroke={C.forest} strokeWidth="1.6"/></svg>
+          </div>
+          <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={hasPhoto ? 'Ask the doctor…' : 'Add a photo to begin'} rows={1} style={{ flex:1, resize:'none', maxHeight:120, padding:'11px 14px', borderRadius:16, border:C.hair, background:C.panel, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', lineHeight:1.4 }}/>
+          <div onClick={send} style={{ flexShrink:0, width:42, height:42, borderRadius:13, background: canSend ? C.forest : 'rgba(45,80,22,0.12)', display:'flex', alignItems:'center', justifyContent:'center', cursor: canSend ? 'pointer' : 'default' }}>
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke={canSend ? '#fff' : C.forest} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { InfoTile, PlantDetail, AddPlant, Field, DoctorOverlay });

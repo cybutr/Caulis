@@ -661,7 +661,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevLoadNode, onDevPushNode, navConfig, onSetNavConfig }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevLoadNode, onDevPushNode, navConfig, onSetNavConfig, doctorModel, onSetDoctorModel }) {
   const [openSecs, setOpenSecs] = useState(() => GS.get('caulis_set_open', {}));
   const isOpen = (id) => openSecs[id] !== false;
   const toggleSec = (id) => setOpenSecs(s => { const n = { ...s, [id]: s[id] === false }; GS.set('caulis_set_open', n); return n; });
@@ -1031,6 +1031,18 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                   </div>
                 );
               })()}
+              <div style={{ marginTop:14 }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:2 }}>Doctor model</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, marginBottom:8 }}>Haiku is cheapest; Sonnet reads photos more carefully.</div>
+                <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3, alignSelf:'flex-start', width:'fit-content' }}>
+                  {[['claude-haiku-4-5','Haiku'],['claude-sonnet-4-6','Sonnet']].map(([id, label]) => {
+                    const on = (doctorModel || 'claude-haiku-4-5') === id;
+                    return (
+                      <div key={id} onClick={()=>onSetDoctorModel(id)} style={{ cursor:'pointer', padding:'5px 16px', borderRadius:6, background: on ? C.forest : 'transparent', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color: on ? '#fff' : C.brown, transition:'background 180ms' }}>{label}</div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <div style={{ height:'0.5px', background:'rgba(45,80,22,0.08)' }}/>
             <div>

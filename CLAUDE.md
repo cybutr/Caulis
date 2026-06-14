@@ -77,7 +77,7 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v82.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v83.
 Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
 
 ## Watering Model
@@ -87,6 +87,14 @@ Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
 ## Developer Panel
 
 Hidden in Settings → About: tap the Version row 7× to reveal a "Developer" section, gated by a PIN (`localStorage caulis_dev_pin`, set on first use). Tools: water-all, bulk day shift, per-plant day set for the current garden, plus cross-garden node management (load any garden by key+password, edit dates in memory, push back). Client-side obscurity only — not real auth. "Lock & hide" clears `caulis_dev_revealed`.
+
+## Doctor (AI plant chat)
+
+`DoctorOverlay` (`caulis-detail.jsx`) — vision chat over the Anthropic API via `doctorAsk()` (`caulis-perenual.jsx`, raw `fetch` + `anthropic-dangerous-direct-browser-access`). Reuses the existing `anthropicKey`. Model chosen in Settings → AI (`caulis_doctor_model`, default `claude-haiku-4-5`, toggle Haiku/Sonnet). Capped thread: last 3 exchanges (6 msgs) resent each call; photo attached as a base64 image block on its user turn. Entry points: nav action `doctor` (standalone, photo-only) and a "Ask the doctor" button on `PlantDetail` (passes plant data as `plantContext`). Both nav actions `add`/`doctor` route through `onNavAction` in `app.jsx`.
+
+## Bottom Navigation
+
+Customizable via Settings → Navigation bar. `navConfig` (`caulis_navbar`) is an array of `{action, center?}` slots normalized by `normalizeNav()` (`caulis-core.jsx`); actions defined in `NAV_ACTIONS`/`NAV_ORDER`. Tab actions call `setTab`; non-tab actions (`add`, `doctor`) call `onNavAction`. Desktop uses `DesktopSidebar` (not customizable).
 
 ## Animations
 

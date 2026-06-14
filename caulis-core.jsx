@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '82'; // keep in sync with sw.js CACHE
+const APP_VERSION = '83'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
@@ -237,6 +237,14 @@ function IconPlus({ s = 16, c = C.forest, w = 1.7 }) {
 function IconBack({ s = 20, c = C.forest }) {
   return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none"><path d="M12.5 4 6.5 10l6 6" stroke={c} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg>);
 }
+function IconDoctor({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" opacity={a}>
+    <path d="M6 3v5a4 4 0 0 0 8 0V3" stroke={c} strokeWidth="1.7" strokeLinecap="round"/>
+    <path d="M5 3h2M13 3h2" stroke={c} strokeWidth="1.7" strokeLinecap="round"/>
+    <path d="M10 12v3.5a4.5 4.5 0 0 0 9 0V14" stroke={c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="19" cy="12.5" r="2" stroke={c} strokeWidth="1.7"/>
+  </svg>);
+}
 function IconCheck({ s = 18, c = '#fff', w = 2 }) {
   return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none"><path d="M4 10.5 8 14.5 16 6" stroke={c} strokeWidth={w} strokeLinecap="round" strokeLinejoin="round"/></svg>);
 }
@@ -339,8 +347,9 @@ const NAV_ACTIONS = {
   print:    { label:'Queue',    Icon:IconPrint,  tab:true },
   settings: { label:'Settings', Icon:IconGear,   tab:true },
   add:      { label:'Add',      Icon:IconPlus,   tab:false },
+  doctor:   { label:'Doctor',   Icon:IconDoctor, tab:false },
 };
-const NAV_ORDER = ['garden','needs','scanner','print','settings','add'];
+const NAV_ORDER = ['garden','needs','scanner','print','settings','add','doctor'];
 const DEFAULT_NAV = [
   { action:'garden' }, { action:'needs' }, { action:'scanner', center:true }, { action:'print' }, { action:'settings' },
 ];
@@ -358,7 +367,7 @@ Object.assign(window, {
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, DEFAULT_NAV, normalizeNav,
   Leaf, LeafOutline, Sprig,
-  IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin,
+  IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
   useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION, MOTION,

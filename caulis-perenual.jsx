@@ -357,6 +357,35 @@ async function aiReviewCare(record) {
   }
 }
 
+// ── Doctor: vision chat over the Anthropic API (raw fetch, browser-direct) ──
+const DOCTOR_SYSTEM =
+  'You are Caulis\'s resident plant doctor — a warm, knowledgeable botanist. ' +
+  'The user shows a photo of a houseplant and asks about it. Give a direct, practical answer: ' +
+  'what is wrong and how to fix it, or the specific fact they asked for. Be concise — at most a few short ' +
+  'paragraphs — specific, and kind. If you genuinely cannot tell from the image, say so plainly and ask one ' +
+  'clarifying question. Skip hedging disclaimers and do not repeat the question back.';
+
+async function doctorAsk({ messages, plantContext, model, key }) {
+  if (!key) throw new Error('No Anthropic API key. Add one in Settings.');
+  const system = plantContext ? `${DOCTOR_SYSTEM}\n\nKnown details about this plant:\n${plantContext}` : DOCTOR_SYSTEM;
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({ model: model || 'claude-haiku-4-5', max_tokens: 1024, system, messages }),
+  });
+  if (!r.ok) {
+    let msg = ''; try { msg = (await r.json())?.error?.message; } catch(e) {}
+    throw new Error(msg || `Request failed (${r.status})`);
+  }
+  const j = await r.json();
+  return (j?.content || []).map(b => b.text || '').join('').trim();
+}
+
 // fetch real care data by latin name from the live services
 async function _careByLatin(latinName) {
   if (HOUSE_PLANTS_KEY) {
@@ -920,5 +949,5 @@ const INDOOR_PLANTS = [
 Object.assign(window, {
   PERENUAL, INDOOR_PLANTS, speciesCare, searchSpecies, searchLocalPlants, getSpeciesDetails, identifySpecies, resolveSpecies, setPlantIdKey, setIdentifyLang, setHousePlantsKey,
   setApiKey, hasApiKey, SEED_PLANTS,
-  setAnthropicKey, hasAnthropicKey, aiReviewCare,
+  setAnthropicKey, hasAnthropicKey, aiReviewCare, doctorAsk,
 });
