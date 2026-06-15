@@ -904,10 +904,14 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
               <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Opens on launch</div>
               <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:9 }}>Tab shown when you start Caulis</div>
               <div style={{ display:'flex', gap:6, overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
-                {[['garden','Garden'],['needs','Needs'],['scanner','Scan'],['print','Print'],['settings','Settings']].map(([val,label]) => {
-                  const on = defaultTab === val;
-                  return <div key={val} onClick={()=>onSetDefaultTab(val)} style={{ flexShrink:0, cursor:'pointer', padding:'6px 13px', borderRadius:999, background:on?C.forest:C.input, color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight:on?600:500, transition:'all 140ms ease' }}>{label}</div>;
-                })}
+                {(() => {
+                  const seen = new Set();
+                  const tabs = normalizeNav(navConfig).filter(s => s.action !== 'empty' && NAV_ACTIONS[s.action] && NAV_ACTIONS[s.action].tab && (seen.has(s.action) ? false : seen.add(s.action)));
+                  return tabs.map(s => {
+                    const on = defaultTab === s.action;
+                    return <div key={s.action} onClick={()=>onSetDefaultTab(s.action)} style={{ flexShrink:0, cursor:'pointer', padding:'6px 13px', borderRadius:999, background:on?C.forest:C.input, color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight:on?600:500, transition:'all 140ms ease' }}>{navLabel(s)}</div>;
+                  });
+                })()}
               </div>
             </div>
           </div>

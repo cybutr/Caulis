@@ -138,7 +138,7 @@ function App() {
   };
   const navTo = (action) => { setMoreOpen(false); const meta = NAV_ACTIONS[action]; if (!meta) return; if (meta.tab) setTab(action); else onNavAction(action); };
   // launch: if the saved/default tab isn't in the customized bar, snap to its first tab
-  useEffect(() => { const order = navTabOrder(navConfig); if (!order.includes(tab)) setTab(order[0]); }, []);
+  useEffect(() => { const order = navTabOrder(navConfig); if (!order.includes(tab)) setTab(order[0]); }, [navConfig]);
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [bulkMove, setBulkMove] = useState(null);
   const [bulkRemoveIds, setBulkRemoveIds] = useState(null);

@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '89'; // keep in sync with sw.js CACHE
+const APP_VERSION = '90'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
@@ -388,7 +388,11 @@ const navLabel = (s) => (s && s.label) || (NAV_ACTIONS[s && s.action] ? NAV_ACTI
 const navColor = (s) => (s && s.color) || C.forest;
 // ordered tab actions present in the bar — what swipes and launch-tab respect
 function navTabOrder(cfg) {
-  const order = normalizeNav(cfg).filter(s => s.action !== 'empty' && NAV_ACTIONS[s.action] && NAV_ACTIONS[s.action].tab).map(s => s.action);
+  const seen = new Set();
+  const order = normalizeNav(cfg)
+    .filter(s => s.action !== 'empty' && NAV_ACTIONS[s.action] && NAV_ACTIONS[s.action].tab)
+    .map(s => s.action)
+    .filter(a => (seen.has(a) ? false : seen.add(a)));
   return order.length ? order : ['garden'];
 }
 
