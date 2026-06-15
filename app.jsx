@@ -124,6 +124,12 @@ function App() {
   const setSwipeNav = (v) => { setSwipeNavRaw(v); lsSet('caulis_swipe_nav', v); };
   const [navConfig, setNavConfigRaw] = useState(() => normalizeNav(lsGet('caulis_navbar', null)));
   const setNavConfig = (cfg) => { const n = normalizeNav(cfg); setNavConfigRaw(n); lsSet('caulis_navbar', n); };
+  const [navLabels, setNavLabelsRaw] = useState(() => lsGet('caulis_nav_labels', true));
+  const setNavLabels = (v) => { setNavLabelsRaw(v); lsSet('caulis_nav_labels', v); };
+  const [gridCols, setGridColsRaw] = useState(() => lsGet('caulis_grid_cols', 0)); // 0 = follow density
+  const setGridCols = (v) => { setGridColsRaw(v); lsSet('caulis_grid_cols', v); };
+  const [sidebar, setSidebarRaw] = useState(() => ({ width:220, collapsed:false, side:'left', footer:'grown with care', ...lsGet('caulis_sidebar', {}) }));
+  const setSidebar = (patch) => setSidebarRaw(prev => { const n = { ...prev, ...patch }; lsSet('caulis_sidebar', n); return n; });
   const [moreOpen, setMoreOpen] = useState(false);
   const onNavAction = (action) => {
     if (action === 'add') setForm({ mode:'add' });
@@ -381,11 +387,13 @@ function App() {
     try { localStorage.setItem('caulis_dark', v ? '1' : '0'); } catch(e) {}
     setDarkModeState(v);
   };
-  applyTheme(darkMode);
+  const [palette, setPaletteRaw] = useState(() => lsGet('caulis_palette', 'forest'));
+  const setPalette = (v) => { setPaletteRaw(v); lsSet('caulis_palette', v); };
+  applyTheme(darkMode, palette);
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.content = darkMode ? '#111610' : '#2D5016';
-  }, [darkMode]);
+    if (meta) meta.content = C.bg === '#111610' ? '#111610' : C.forest;
+  }, [darkMode, palette]);
 
   const fromRemoteRef = useRef(false);
   const [plantNotFound, setPlantNotFound] = useState(false);
@@ -1047,19 +1055,19 @@ window.onload=()=>{
   // ── active screen ──
   const screenProps = { isDesktop };
   let screen = null;
-  if (tab === 'garden')   screen = <GardenScreen plants={plants} onOpen={id=>openDetail(id)} onAdd={()=>setForm({mode:'add'})} onLongPress={p=>setMenuPlant(p)} onReorder={reorderPlants} density={cardDensity} hideHealthy={hideHealthy} onBulkWater={bulkWater} onBulkQueue={bulkQueue} onBulkMove={setBulkMove} onBulkRemove={setBulkRemoveIds} onHaptic={()=>haptic('light')} czechMode={identifyLang === 'cs'} {...screenProps}/>;
+  if (tab === 'garden')   screen = <GardenScreen plants={plants} onOpen={id=>openDetail(id)} onAdd={()=>setForm({mode:'add'})} onLongPress={p=>setMenuPlant(p)} onReorder={reorderPlants} density={cardDensity} gridCols={gridCols} hideHealthy={hideHealthy} onBulkWater={bulkWater} onBulkQueue={bulkQueue} onBulkMove={setBulkMove} onBulkRemove={setBulkRemoveIds} onHaptic={()=>haptic('light')} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} onWaterAll={waterAll} confirmDelete={confirmDelete} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevLoadNode={devLoadNode} onDevPushNode={devPushNode} navConfig={navConfig} onSetNavConfig={setNavConfig} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevLoadNode={devLoadNode} onDevPushNode={devPushNode} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
   // ════════════════════════════════════════
   if (isDesktop) {
     return (
-      <div style={{ display:'flex', minHeight:'100vh', background:C.bg }}>
-        <DesktopSidebar tab={tab} setTab={setTab}/>
+      <div style={{ display:'flex', minHeight:'100vh', background:C.bg, flexDirection: sidebar.side === 'right' ? 'row-reverse' : 'row' }}>
+        <DesktopSidebar tab={tab} setTab={setTab} onAction={onNavAction} navConfig={navConfig} showLabels={navLabels} sidebar={sidebar}/>
         <div style={{ flex:1, height:'100vh', overflowY:'auto', overflowX:'hidden', position:'relative' }}>
           <div key={tab} style={{ animation: tabAnim, minHeight:'100%' }}>{screen}</div>
         </div>
@@ -1122,7 +1130,7 @@ window.onload=()=>{
           <div key={tab} style={{ animation: tabAnim, minHeight:'100%' }}>{screen}</div>
         </div>
       </div>
-      <BottomNav tab={tab} setTab={setTab} onAction={onNavAction} navConfig={navConfig}/>
+      <BottomNav tab={tab} setTab={setTab} onAction={onNavAction} navConfig={navConfig} showLabels={navLabels}/>
 
       {detailPlant && detailEl}
       {form && formEl}

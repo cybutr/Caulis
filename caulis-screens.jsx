@@ -66,7 +66,7 @@ function GripIcon({ c = C.brown }) {
 }
 
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact }) {
   const [press, setPress] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
@@ -82,7 +82,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
     <div
       onPointerDown={start} onPointerUp={end} onPointerLeave={end} onClick={click}
       style={{
-        background:C.panel, borderRadius:22, padding:12,
+        background:C.panel, borderRadius: compact ? 16 : 22, padding: compact ? 8 : 12, minWidth:0,
         boxShadow: press ? '0 1px 3px rgba(43,42,38,0.06)' : '0 1px 2px rgba(43,42,38,0.04), 0 8px 22px rgba(45,80,22,0.05)',
         border: selected ? `1.5px solid ${C.forest}` : over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)',
         transform: press ? 'scale(0.975)' : 'scale(1)',
@@ -91,7 +91,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
         cursor:'pointer', position:'relative', userSelect:'none', WebkitUserSelect:'none',
       }}>
       <div style={{ position:'relative' }}>
-        <Specimen tint={tint} height={96} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/>
+        <Specimen tint={tint} height={compact ? 76 : 96} radius={compact ? 11 : 15} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/>
         {grip && (
           <div {...grip} onClick={e=>e.stopPropagation()} style={{ position:'absolute', top:9, left:9, width:24, height:24, borderRadius:999, background:C.panel, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 2px rgba(43,42,38,0.12)', cursor:'grab', touchAction:'none' }}>
             <GripIcon/>
@@ -109,13 +109,13 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
           <StatusDot status={status}/>
         </div>
       </div>
-      <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, lineHeight:1.12, color:C.forest, marginTop:11, letterSpacing:0.1 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
-      <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:400, color:C.brown, opacity:0.7, marginTop:2, letterSpacing:0.2 }}>{plant.location}</div>
-      <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:9 }}>
+      <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize: compact ? 15.5 : 21, lineHeight:1.12, color:C.forest, marginTop: compact ? 8 : 11, letterSpacing:0.1, overflowWrap:'anywhere' }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
+      <div style={{ fontFamily:FONT_SANS, fontSize: compact ? 9.5 : 10.5, fontWeight:400, color:C.brown, opacity:0.7, marginTop:2, letterSpacing:0.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{plant.location}</div>
+      <div style={{ display:'flex', alignItems:'center', gap: compact ? 4 : 6, marginTop: compact ? 7 : 9 }}>
         <svg width="11" height="13" viewBox="0 0 11 13" style={{flexShrink:0}}>
           <path d="M5.5 1C5.5 1 1 6 1 8.6A4.5 4.5 0 0010 8.6C10 6 5.5 1 5.5 1Z" fill="none" stroke={STATUS[status].dot} strokeWidth="1.1"/>
         </svg>
-        <span style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:500, color:C.ink, opacity:0.62, letterSpacing:0.1 }}>{agoLabel(plant.days)}</span>
+        <span style={{ fontFamily:FONT_SANS, fontSize: compact ? 10 : 11.5, fontWeight:500, color:C.ink, opacity:0.62, letterSpacing:0.1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{compact ? (plant.days <= 0 ? 'Today' : plant.days === 1 ? '1 day' : `${plant.days} days`) : agoLabel(plant.days)}</span>
       </div>
     </div>
   );
@@ -219,7 +219,7 @@ function EmptyGarden({ onAdd }) {
   );
 }
 
-function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic }) {
+function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic }) {
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
   const [q, setQ] = useState('');
   const [fStatus, setFStatus] = useState(() => GS.get('caulis_g_status', 'all'));
@@ -239,7 +239,10 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
   const rooms = [...new Set(plants.map(p => p.location).filter(Boolean))].sort();
   const sidePad = isDesktop ? 28 : 18;
   const topPad  = isDesktop ? 32 : 56;
-  const gridCols = isDesktop ? 'repeat(auto-fill, minmax(185px, 1fr))' : (density === 'compact' ? '1fr 1fr 1fr' : '1fr 1fr');
+  const cols = gridColsPref || (density === 'compact' ? 3 : 2);
+  const gridCols = isDesktop ? 'repeat(auto-fill, minmax(185px, 1fr))' : `repeat(${cols}, minmax(0, 1fr))`;
+  const compact = !isDesktop && cols >= 3;
+  const gridGap = compact ? 10 : 14;
 
   const nq = q.trim().toLowerCase();
   const matched = plants.filter(p => {
@@ -261,7 +264,7 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
     flat = [...matched];
   }
 
-  const cardProps = { onOpen, onLongPress, czechMode, selectable: selMode, onToggleSelect: toggleSel };
+  const cardProps = { onOpen, onLongPress, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact };
 
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
@@ -352,7 +355,7 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
           {groups.map(g => (
             <div key={g.room}>
               <RoomHeader room={g.room} count={g.items.length}/>
-              <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:14, marginTop:10 }}>
+              <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, marginTop:10 }}>
                 {g.items.map(p => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)}/>)}
               </div>
             </div>
@@ -363,7 +366,7 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
       {!empty && sort !== 'location' && (() => {
         const dragEnabled = sort === 'all' && !nq && fStatus === 'all' && !fLoc && !hideHealthy && !selMode;
         return (
-          <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:14, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
+          <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
             {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i}/>)}
           </div>
         );
@@ -661,7 +664,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevLoadNode, onDevPushNode, navConfig, onSetNavConfig, doctorModel, onSetDoctorModel }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevLoadNode, onDevPushNode, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
   const [openSecs, setOpenSecs] = useState(() => GS.get('caulis_set_open', {}));
   const isOpen = (id) => openSecs[id] !== false;
   const toggleSec = (id) => setOpenSecs(s => { const n = { ...s, [id]: s[id] === false }; GS.set('caulis_set_open', n); return n; });
@@ -817,6 +820,21 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                 <div style={{ position:'absolute', top:3, left:darkMode?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
               </div>
             </div>
+            <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Accent color</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:10 }}>Theme color for buttons, icons &amp; highlights</div>
+              <div style={{ display:'flex', gap:10 }}>
+                {PALETTE_ORDER.map(key => {
+                  const p = PALETTES[key]; const on = palette === key;
+                  return (
+                    <div key={key} onClick={()=>onSetPalette(key)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer' }}>
+                      <div style={{ width:34, height:34, borderRadius:999, background:p.swatch, boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${p.swatch}` : '0 1px 3px rgba(43,42,38,0.18)', transition:'box-shadow 160ms ease' }}/>
+                      <span style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight: on?600:500, color: on?C.forest:C.brown, opacity: on?1:0.7 }}>{p.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             <div onClick={onToggleReduceMotion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Reduce motion</div>
@@ -840,6 +858,22 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                 })}
               </div>
             </div>
+            {!isDesktop && (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair }}>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden columns</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Override the grid width</div>
+                </div>
+                <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
+                  {[[0,'Auto'],[2,'2'],[3,'3'],[4,'4']].map(([val,label]) => {
+                    const on = (gridCols || 0) === val;
+                    return (
+                      <div key={val} onClick={()=>onSetGridCols(val)} style={{ cursor:'pointer', padding:'5px 11px', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, opacity:on?1:0.5, transition:'all 140ms ease' }}>{label}</div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </SettingsSection>
         <SettingsSection title="Garden" open={isOpen('garden')} onToggle={()=>toggleSec('garden')}>
@@ -1308,35 +1342,56 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
           const swap = (i, j) => { if (j < 0 || j >= nav.length) return; const out = nav.map(s => ({ ...s })); const t = out[i]; out[i] = out[j]; out[j] = t; onSetNavConfig(out); };
           const removeSlot = (i) => { if (nav.length <= 1) return; onSetNavConfig(nav.filter((_, j) => j !== i)); };
           const addSlot = () => { if (nav.length >= NAV_MAX) return; const used = nav.map(s => s.action); const pick = NAV_ORDER.find(a => !used.includes(a)) || 'garden'; onSetNavConfig([...nav, { action: pick }]); };
+          const setLabel = (i, v) => onSetNavConfig(nav.map((s, j) => { if (j !== i) return s; const o = { ...s }; if (v.trim()) o.label = v; else delete o.label; return o; }));
+          const setColor = (i, c) => onSetNavConfig(nav.map((s, j) => { if (j !== i) return s; const o = { ...s }; if (c) o.color = c; else delete o.color; return o; }));
+          const SLOT_COLORS = ['#2D5016','#15605A','#5A2456','#8A3A1E','#6E9A3E','#C98A2B','#B4472E'];
           const arrow = (dir, enabled, onClick) => (
             <div onClick={enabled ? onClick : undefined} style={{ cursor: enabled ? 'pointer' : 'default', opacity: enabled ? 0.6 : 0.18, lineHeight:1, fontSize:11, color:C.brown, padding:'1px 3px' }}>{dir}</div>
           );
           return (
           <SettingsSection title="Navigation bar" open={isOpen('nav')} onToggle={()=>toggleSec('nav')}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:8 }}>
-              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, padding:'0 2px 2px' }}>Tap a slot to change its button, reorder with the arrows, pick which one is raised in the center, and add up to {NAV_MAX}. The “More” button opens everything not on the bar — so nothing is ever out of reach.</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, padding:'0 2px 2px' }}>Tap a slot to change its button, reorder with the arrows{isDesktop ? '' : ', pick which one is raised in the center'}, and add up to {NAV_MAX}. The “More” button opens everything not on the bar — so nothing is ever out of reach.</div>
               {nav.map((s, i) => {
                 const meta = NAV_ACTIONS[s.action];
                 const isEmpty = s.action === 'empty';
                 return (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 10px', borderRadius:12, background:C.bg }}>
-                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-                      {arrow('▲', i > 0, ()=>swap(i, i-1))}
-                      {arrow('▼', i < nav.length-1, ()=>swap(i, i+1))}
-                    </div>
-                    <div onClick={()=>cycleAction(i)} style={{ flex:1, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-                      {meta
-                        ? <meta.Icon s={19} c={C.forest}/>
-                        : <div style={{ width:19, height:19, borderRadius:6, border:`1.5px dashed ${C.line}` }}/>}
-                      <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color: isEmpty?C.brown:C.ink, opacity: isEmpty?0.5:1 }}>{meta ? meta.label : 'Empty'}</span>
-                    </div>
-                    <div onClick={()=> !isEmpty && setCenter(i)} style={{ display:'flex', alignItems:'center', gap:6, cursor: isEmpty?'default':'pointer', opacity: isEmpty?0.3:1 }}>
-                      <span style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.7 }}>Center</span>
-                      <div style={{ width:18, height:18, borderRadius:999, border:`2px solid ${s.center?C.forest:C.line}`, background: s.center?C.forest:'transparent', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                        {s.center && <div style={{ width:7, height:7, borderRadius:999, background:'#fff' }}/>}
+                  <div key={i} style={{ display:'flex', flexDirection:'column', gap:8, padding:'8px 10px', borderRadius:12, background:C.bg }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+                        {arrow('▲', i > 0, ()=>swap(i, i-1))}
+                        {arrow('▼', i < nav.length-1, ()=>swap(i, i+1))}
                       </div>
+                      <div onClick={()=>cycleAction(i)} style={{ flex:1, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+                        {meta
+                          ? <meta.Icon s={19} c={s.color || C.forest}/>
+                          : <div style={{ width:19, height:19, borderRadius:6, border:`1.5px dashed ${C.line}` }}/>}
+                        <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color: isEmpty?C.brown:C.ink, opacity: isEmpty?0.5:1 }}>{meta ? meta.label : 'Empty'}</span>
+                      </div>
+                      {!isDesktop && (
+                        <div onClick={()=> !isEmpty && setCenter(i)} style={{ display:'flex', alignItems:'center', gap:6, cursor: isEmpty?'default':'pointer', opacity: isEmpty?0.3:1 }}>
+                          <span style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.7 }}>Center</span>
+                          <div style={{ width:18, height:18, borderRadius:999, border:`2px solid ${s.center?C.forest:C.line}`, background: s.center?C.forest:'transparent', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                            {s.center && <div style={{ width:7, height:7, borderRadius:999, background:'#fff' }}/>}
+                          </div>
+                        </div>
+                      )}
+                      <div onClick={()=>removeSlot(i)} style={{ cursor: nav.length>1?'pointer':'default', opacity: nav.length>1?0.5:0.2, color:C.brown, fontSize:18, lineHeight:1, padding:'0 2px' }}>×</div>
                     </div>
-                    <div onClick={()=>removeSlot(i)} style={{ cursor: nav.length>1?'pointer':'default', opacity: nav.length>1?0.5:0.2, color:C.brown, fontSize:18, lineHeight:1, padding:'0 2px' }}>×</div>
+                    {!isEmpty && (
+                      <div style={{ display:'flex', alignItems:'center', gap:8, paddingLeft:28 }}>
+                        <input value={s.label || ''} onChange={e=>setLabel(i, e.target.value)} placeholder={meta.label} maxLength={18}
+                          style={{ flex:1, minWidth:0, boxSizing:'border-box', height:32, borderRadius:9, border:`1px solid ${C.line}`, background:C.panel, padding:'0 10px', fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, outline:'none' }}/>
+                        <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+                          <div onClick={()=>setColor(i, null)} title="Default" style={{ width:18, height:18, borderRadius:999, border:`1.5px solid ${!s.color?C.forest:C.line}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+                            {!s.color && <div style={{ width:7, height:7, borderRadius:999, background:C.forest }}/>}
+                          </div>
+                          {SLOT_COLORS.map(c => (
+                            <div key={c} onClick={()=>setColor(i, c)} style={{ width:18, height:18, borderRadius:999, background:c, cursor:'pointer', boxShadow: s.color===c ? `0 0 0 1.5px ${C.bg}, 0 0 0 3px ${c}` : 'none' }}/>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1348,6 +1403,52 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                 )}
                 <div onClick={()=>onSetNavConfig(DEFAULT_NAV)} style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.7, cursor:'pointer', padding:'4px 2px' }}>Reset to default</div>
               </div>
+              <div style={{ borderTop:C.hair, marginTop:4, paddingTop:12 }}>
+                <div onClick={onToggleNavLabels} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Show labels</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Text under each {isDesktop ? 'sidebar' : 'bar'} icon</div>
+                  </div>
+                  <div style={{ width:44, height:26, borderRadius:999, background:navLabels?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
+                    <div style={{ position:'absolute', top:3, left:navLabels?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:12, marginTop:14 }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>Desktop sidebar</div>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Position</div>
+                <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
+                  {[['left','Left'],['right','Right']].map(([val,label]) => {
+                    const on = (sidebar.side || 'left') === val;
+                    return <div key={val} onClick={()=>onSetSidebar({ side: val })} style={{ cursor:'pointer', padding:'5px 12px', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, opacity:on?1:0.5, transition:'all 140ms ease' }}>{label}</div>;
+                  })}
+                </div>
+              </div>
+              <div onClick={()=>onSetSidebar({ collapsed: !sidebar.collapsed })} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Collapse to icons</div>
+                <div style={{ width:44, height:26, borderRadius:999, background:sidebar.collapsed?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
+                  <div style={{ position:'absolute', top:3, left:sidebar.collapsed?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
+                </div>
+              </div>
+              {!sidebar.collapsed && (
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Width</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <div onClick={()=>onSetSidebar({ width: Math.max(180, (sidebar.width||220) - 10) })} style={{ width:28, height:28, borderRadius:8, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:18, color:C.forest, fontWeight:500, userSelect:'none' }}>−</div>
+                    <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, minWidth:48, textAlign:'center' }}>{sidebar.width||220}px</span>
+                    <div onClick={()=>onSetSidebar({ width: Math.min(300, (sidebar.width||220) + 10) })} style={{ width:28, height:28, borderRadius:8, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:18, color:C.forest, fontWeight:500, userSelect:'none' }}>+</div>
+                  </div>
+                </div>
+              )}
+              {!sidebar.collapsed && (
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, marginBottom:8 }}>Footer text</div>
+                  <input value={sidebar.footer != null ? sidebar.footer : 'grown with care'} onChange={e=>onSetSidebar({ footer: e.target.value.slice(0, 40) })} placeholder="grown with care"
+                    style={{ width:'100%', boxSizing:'border-box', height:38, borderRadius:10, border:`1px solid ${C.line}`, background:C.bg, padding:'0 12px', fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14, color:C.brown, outline:'none' }}/>
+                </div>
+              )}
             </div>
           </SettingsSection>
           );
@@ -1478,7 +1579,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
 // ════════════════════════════════════════════════════════════
 //  BOTTOM NAVIGATION
 // ════════════════════════════════════════════════════════════
-function BottomNav({ tab, setTab, onAction, navConfig }) {
+function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true }) {
   const slots = normalizeNav(navConfig).filter(s => s.action !== 'empty');
   const fire = (action) => { const a = NAV_ACTIONS[action]; if (!a) return; if (a.tab) setTab(action); else onAction && onAction(action); };
   return (
@@ -1492,27 +1593,29 @@ function BottomNav({ tab, setTab, onAction, navConfig }) {
       {slots.map((s, i) => {
         const meta = NAV_ACTIONS[s.action];
         const active = meta.tab && tab === s.action;
+        const accent = navColor(s);
+        const label = navLabel(s);
         if (s.center) {
           return (
             <div key={i} onClick={()=>fire(s.action)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, cursor:'pointer' }}>
               <div style={{
                 width:58, height:58, borderRadius:999, marginTop:-30,
-                background:`linear-gradient(160deg, ${C.sage} 0%, ${C.forest} 90%)`,
+                background: s.color ? accent : `linear-gradient(160deg, ${C.sage} 0%, ${C.forest} 90%)`,
                 display:'flex', alignItems:'center', justifyContent:'center',
                 boxShadow: active ? '0 8px 20px rgba(45,80,22,0.42), 0 0 0 4px rgba(122,158,78,0.18)' : '0 6px 16px rgba(45,80,22,0.34)',
                 border:`3px solid ${C.bg}`, transition:'box-shadow 200ms ease',
               }}>
                 <meta.Icon s={26} c="#fff"/>
               </div>
-              <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight:600, color: active?C.forest:C.brown, opacity: active?1:0.7, letterSpacing:0.2 }}>{meta.label}</span>
+              {showLabels && <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight:600, color: active?accent:C.brown, opacity: active?1:0.7, letterSpacing:0.2 }}>{label}</span>}
             </div>
           );
         }
-        const col = active ? C.forest : C.brown;
+        const col = active ? accent : C.brown;
         return (
           <div key={i} onClick={()=>fire(s.action)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer', paddingBottom:2 }}>
             <meta.Icon s={23} c={col} a={active?1:0.55}/>
-            <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight: active?600:500, color:col, opacity: active?1:0.65, letterSpacing:0.2 }}>{meta.label}</span>
+            {showLabels && <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight: active?600:500, color:col, opacity: active?1:0.65, letterSpacing:0.2 }}>{label}</span>}
           </div>
         );
       })}
@@ -1588,54 +1691,60 @@ function PlantNotFoundScreen({ onBack }) {
 // ════════════════════════════════════════════════════════════
 //  DESKTOP SIDEBAR
 // ════════════════════════════════════════════════════════════
-function DesktopSidebar({ tab, setTab }) {
-  const items = [
-    { key:'garden',   label:'Garden',   Icon:IconGarden },
-    { key:'needs',    label:'Water',    Icon:IconDrop },
-    { key:'print',    label:'Queue',    Icon:IconPrint },
-    { key:'settings', label:'Settings', Icon:IconGear },
-  ];
+function DesktopSidebar({ tab, setTab, onAction, navConfig, showLabels = true, sidebar = {} }) {
+  const slots = normalizeNav(navConfig).filter(s => s.action !== 'empty');
+  const fire = (action) => { const a = NAV_ACTIONS[action]; if (!a) return; if (a.tab) setTab(action); else onAction && onAction(action); };
+  const collapsed = !!sidebar.collapsed;
+  const labels = showLabels && !collapsed;
+  const width = collapsed ? 72 : (sidebar.width || 220);
+  const side = sidebar.side === 'right' ? 'right' : 'left';
+  const footer = sidebar.footer != null ? sidebar.footer : 'grown with care';
   return (
     <div style={{
-      width:220, flexShrink:0, background:C.panel, borderRight:C.hair,
+      width, flexShrink:0, background:C.panel,
+      [side === 'right' ? 'borderLeft' : 'borderRight']: C.hair,
       display:'flex', flexDirection:'column',
       position:'sticky', top:0, alignSelf:'flex-start', height:'100vh',
+      transition:'width 220ms cubic-bezier(.2,.8,.2,1)',
     }}>
-      <div style={{ padding:'28px 20px 20px', borderBottom:C.hair, flexShrink:0 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-          <div style={{ width:32, height:32, borderRadius:999, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ padding: collapsed ? '28px 0 20px' : '28px 20px 20px', borderBottom:C.hair, flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', gap:9 }}>
+          <div style={{ width:32, height:32, borderRadius:999, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
             <Leaf size={17} color={C.forest}/>
           </div>
-          <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:28, color:C.forest, letterSpacing:0.3 }}>Caulis</span>
+          {!collapsed && <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:28, color:C.forest, letterSpacing:0.3 }}>Caulis</span>}
         </div>
       </div>
       <nav style={{ padding:'12px 10px 0', flex:1, overflowY:'auto' }}>
-        {items.map(({ key, label, Icon, special }) => {
-          const active = tab === key;
+        {slots.map((s, i) => {
+          const meta = NAV_ACTIONS[s.action];
+          if (!meta) return null;
+          const active = meta.tab && tab === s.action;
+          const accent = navColor(s);
           return (
-            <div key={key} onClick={()=>setTab(key)} style={{
-              display:'flex', alignItems:'center', gap:11,
-              padding:'11px 12px', borderRadius:12, marginBottom:4,
+            <div key={i} onClick={()=>fire(s.action)} title={collapsed ? navLabel(s) : undefined} style={{
+              display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', gap:11,
+              padding: collapsed ? '11px 0' : '11px 12px', borderRadius:12, marginBottom:4,
               cursor:'pointer',
-              background: active
-                ? (special ? `linear-gradient(120deg, ${C.sage} 0%, ${C.forest} 100%)` : 'rgba(45,80,22,0.09)')
-                : 'transparent',
+              background: active ? 'rgba(45,80,22,0.09)' : 'transparent',
               transition:'background 140ms ease',
             }}>
-              <Icon s={20} c={active ? (special ? '#fff' : C.forest) : C.brown} a={active ? 1 : 0.55}/>
-              <span style={{
+              <meta.Icon s={20} c={active ? accent : C.brown} a={active ? 1 : 0.55}/>
+              {labels && <span style={{
                 fontFamily:FONT_SANS, fontSize:14, fontWeight: active ? 600 : 500,
-                color: active ? (special ? '#fff' : C.forest) : C.ink,
+                color: active ? accent : C.ink,
                 opacity: active ? 1 : 0.75,
-              }}>{label}</span>
+              }}>{navLabel(s)}</span>}
             </div>
           );
         })}
       </nav>
-      <div style={{ padding:'16px 20px 24px', borderTop:C.hair, position:'relative', overflow:'hidden', flexShrink:0 }}>
-        <Sprig w={140} h={160} right={-18} bottom={-10} opacity={0.22}/>
-        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:13, color:C.brown, opacity:0.45, position:'relative', zIndex:1 }}>grown with care</div>
-      </div>
+      {!collapsed && footer && (
+        <div style={{ padding:'16px 20px 24px', borderTop:C.hair, position:'relative', overflow:'hidden', flexShrink:0 }}>
+          <Sprig w={140} h={160} right={-18} bottom={-10} opacity={0.22}/>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:13, color:C.brown, opacity:0.45, position:'relative', zIndex:1 }}>{footer}</div>
+        </div>
+      )}
     </div>
   );
 }

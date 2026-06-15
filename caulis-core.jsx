@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '87'; // keep in sync with sw.js CACHE
+const APP_VERSION = '89'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
@@ -66,9 +66,22 @@ const TINTS_LIGHT = ['#E7EDDE','#EEEAE0','#E3EAD6','#ECE7DC','#E9EEE2','#EDE9DF'
 const TINTS_DARK  = ['#1A2416','#201C12','#182210','#1E1C14','#1A2014','#201E14','#182016','#201A12'];
 const TINTS = [...TINTS_LIGHT];
 
-function applyTheme(dark) {
+// curated accent palettes — only the accent pair shifts, paper/ink stay (max consistency)
+const PALETTES = {
+  forest: { label:'Forest', swatch:'#2D5016', light:{ forest:'#2D5016', sage:'#7A9E4E' }, dark:{ forest:'#7EC870', sage:'#A0C876' } },
+  teal:   { label:'Teal',   swatch:'#15605A', light:{ forest:'#15605A', sage:'#3E9E92' }, dark:{ forest:'#5FC7BC', sage:'#76C8BE' } },
+  plum:   { label:'Plum',   swatch:'#5A2456', light:{ forest:'#5A2456', sage:'#9E4E92' }, dark:{ forest:'#C870BC', sage:'#C876BE' } },
+  clay:   { label:'Clay',   swatch:'#8A3A1E', light:{ forest:'#8A3A1E', sage:'#C07A4E' }, dark:{ forest:'#D4885F', sage:'#D8A074' } },
+};
+const PALETTE_ORDER = ['forest','teal','plum','clay'];
+let activePalette = 'forest';
+
+function applyTheme(dark, palette) {
+  if (palette && PALETTES[palette]) activePalette = palette;
   const src = dark ? C_DARK : C_LIGHT;
   Object.assign(C, src);
+  const pal = PALETTES[activePalette] || PALETTES.forest;
+  Object.assign(C, dark ? pal.dark : pal.light);
   const ss = dark ? STATUS_DARK : STATUS_LIGHT;
   Object.assign(STATUS.ok, ss.ok);
   Object.assign(STATUS.soon, ss.soon);
@@ -360,12 +373,19 @@ const DEFAULT_NAV = [
 ];
 function normalizeNav(cfg) {
   if (!Array.isArray(cfg) || !cfg.length) return DEFAULT_NAV.map(s => ({ ...s }));
-  const slots = cfg.slice(0, NAV_MAX).map(s => ({ action: NAV_ACTIONS[s && s.action] ? s.action : 'empty', center: !!(s && s.center) }));
+  const slots = cfg.slice(0, NAV_MAX).map(s => {
+    const out = { action: NAV_ACTIONS[s && s.action] ? s.action : 'empty', center: !!(s && s.center) };
+    if (s && typeof s.label === 'string' && s.label.trim()) out.label = s.label.slice(0, 18);
+    if (s && typeof s.color === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(s.color)) out.color = s.color;
+    return out;
+  });
   if (!slots.length) return DEFAULT_NAV.map(s => ({ ...s }));
   if (!slots.some(s => s.center)) { const i = slots.findIndex(s => s.action !== 'empty'); if (i >= 0) slots[i].center = true; }
   let seen = false; for (const s of slots) { if (s.center && !seen) seen = true; else s.center = false; }
   return slots;
 }
+const navLabel = (s) => (s && s.label) || (NAV_ACTIONS[s && s.action] ? NAV_ACTIONS[s.action].label : '');
+const navColor = (s) => (s && s.color) || C.forest;
 // ordered tab actions present in the bar — what swipes and launch-tab respect
 function navTabOrder(cfg) {
   const order = normalizeNav(cfg).filter(s => s.action !== 'empty' && NAV_ACTIONS[s.action] && NAV_ACTIONS[s.action].tab).map(s => s.action);
@@ -376,7 +396,8 @@ function navTabOrder(cfg) {
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
-  NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder,
+  NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor,
+  PALETTES, PALETTE_ORDER,
   Leaf, LeafOutline, Sprig,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore,
   StatusDot, LocationPill, StatusTag, Specimen,
