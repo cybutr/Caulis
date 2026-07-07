@@ -12,7 +12,7 @@ jobs:
       - name: rsync to caulis.czeddaru.dev
         uses: burnett01/rsync-deployments@7.0.1
         with:
-          switches: -avz --delete --exclude=backend --exclude=.git --exclude=.github --exclude=docs.html --exclude=README.md
+          switches: -avz --delete --delete-excluded --exclude=backend --exclude=.git --exclude=.github --exclude=docs.html --exclude=README.md
           path: ./
           remote_path: ./
           remote_host: 92.5.110.200
