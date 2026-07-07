@@ -664,7 +664,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationLink, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
   const [openSecs, setOpenSecs] = useState(() => GS.get('caulis_set_open', {}));
   const isOpen = (id) => openSecs[id] !== false;
   const toggleSec = (id) => setOpenSecs(s => { const n = { ...s, [id]: s[id] === false }; GS.set('caulis_set_open', n); return n; });
@@ -698,12 +698,15 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   const doImport = (mode) => { if (onImport(importData, mode)) { setImportData(null); setImported(true); setTimeout(()=>setImported(false), 1800); } };
   const handleGcalSync = async () => { setGcalSyncing(true); await onSyncCalendar(); setGcalSyncing(false); };
 
-  // Export/Import can wipe or leak a garden — confirm against the real
-  // backend password before either runs, not just a local string compare.
-  const [pwGate, setPwGate] = useState(null); // 'export' | 'import' | null
+  // Export/Import/migration-link can wipe or leak a garden — confirm against
+  // the real backend password before any of them run, not just a local
+  // string compare.
+  const [pwGate, setPwGate] = useState(null); // 'export' | 'import' | 'migrate' | null
   const [pwGateInput, setPwGateInput] = useState('');
   const [pwGateErr, setPwGateErr] = useState(false);
   const [pwGateBusy, setPwGateBusy] = useState(false);
+  const [migrationLink, setMigrationLink] = useState(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const requestGate = (action) => { setPwGate(action); setPwGateInput(''); setPwGateErr(false); };
   const confirmGate = async () => {
     setPwGateBusy(true);
@@ -714,6 +717,11 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
     setPwGate(null);
     if (action === 'export') onExport();
     else if (action === 'import') importRef.current && importRef.current.click();
+    else if (action === 'migrate') setMigrationLink(onBuildMigrationLink());
+  };
+  const copyMigrationLink = () => {
+    navigator.clipboard.writeText(migrationLink).catch(()=>{});
+    setLinkCopied(true); setTimeout(()=>setLinkCopied(false), 1500);
   };
   const sp = isDesktop ? 28 : 18;
 
@@ -1415,6 +1423,18 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                   <div onClick={()=>doImport('merge')} style={{ flex:1, height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Merge</div>
                   <div onClick={()=>doImport('replace')} style={{ flex:1, height:38, borderRadius:10, background:'#B4472E', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Replace</div>
                 </div>
+              </div>
+            )}
+            <div style={{ height:1, background:C.line, margin:'2px 0' }}/>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Moving to a new phone or browser? Get a one-time link that carries your garden key, password and settings over — open it there instead of typing everything again.</div>
+            <div onClick={()=>requestGate('migrate')} style={{ height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Get migration link</span>
+            </div>
+            {migrationLink && (
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)' }}>
+                <div style={{ fontFamily:'ui-monospace,monospace', fontSize:11.5, color:C.ink, opacity:0.75, wordBreak:'break-all', maxHeight:80, overflowY:'auto' }}>{migrationLink}</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:'#B4472E' }}>Treat this like a password — anyone with the link gets your garden.</div>
+                <div onClick={copyMigrationLink} style={{ height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{linkCopied?'Copied ✓':'Copy link'}</div>
               </div>
             )}
             <a href="https://api.caulis.czeddaru.dev/docs" target="_blank" rel="noopener" style={{ textDecoration:'none', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8 }}>View format &amp; API docs ↗</a>
