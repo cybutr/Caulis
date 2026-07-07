@@ -727,6 +727,14 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
     setCodeCopied(true); setTimeout(()=>setCodeCopied(false), 1500);
   };
   const sp = isDesktop ? 28 : 18;
+  // hoisted here (were previously declared only inside the Developer
+  // panel's nested IIFE further down) — referenced from the always-rendered
+  // Backup section too (dInput on the migration-code input) and from
+  // numStepper (dBtn), both of which sit outside that IIFE's scope. Any
+  // reference to either from outside it was a ReferenceError on every
+  // Settings render, not just once admin tools were opened.
+  const dInput = { width:'100%', padding:'11px 13px', borderRadius:12, border:`1px solid ${C.line}`, background:C.bg, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', boxSizing:'border-box' };
+  const dBtn = (filled) => ({ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'10px 16px', borderRadius:12, cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, border:`1px solid ${C.forest}`, background: filled?C.forest:'transparent', color: filled?'#fff':C.forest, userSelect:'none' });
 
   const [renaming, setRenaming] = useState(false);
   const [renameKey, setRenameKey] = useState('');
@@ -1640,8 +1648,6 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
         })()}
         {devRevealed && (() => {
           let pinIsSet = false; try { pinIsSet = !!localStorage.getItem('caulis_dev_pin'); } catch(e) {}
-          const dInput = { width:'100%', padding:'11px 13px', borderRadius:12, border:`1px solid ${C.line}`, background:C.bg, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', boxSizing:'border-box' };
-          const dBtn = (filled) => ({ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'10px 16px', borderRadius:12, cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, border:`1px solid ${C.forest}`, background: filled?C.forest:'transparent', color: filled?'#fff':C.forest, userSelect:'none' });
           const grpLabel = { fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase', marginBottom:2 };
           const stepper = (val, set) => (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>

@@ -1215,8 +1215,31 @@ window.onload=()=>{
 // catches any render-time error and shows a recoverable screen instead of a
 // blank white page — without this, one bad value reaching a render (e.g. a
 // malformed import, a corrupted local cache) silently unmounts the whole app
+// standalone light/dark read for the boundary below — it wraps <App/> so it
+// can't trust App's own darkMode state to still exist by the time it renders
+function _crashTheme() {
+  let dark = false;
+  try {
+    const stored = localStorage.getItem('caulis_dark');
+    dark = stored != null ? stored === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
+  } catch (e) {}
+  return dark
+    ? { bg:'#111610', panel:'#192115', forest:'#7EC870', ink:'#DCE8CC', brown:'#C4A882' }
+    : { bg:'#FAFAF7', panel:'#FFFFFF', forest:'#2D5016', ink:'#2A2A26', brown:'#6B4C2A' };
+}
+
+// a little personality beats a generic crash notice — picked once per mount
+// so a reload gets a fresh line rather than the same one every time
+const _CRASH_LINES = [
+  ['Root rot detected', "Something in the code wilted. Your garden's fine — it lives on the server, not in this tab."],
+  ['Overwatered the state tree', "One branch got too much and the rest went soggy. Reloading dries it back out."],
+  ['A pest got into the leaves', "Caulis hit a bug it couldn't shake off. Your plants are untouched — they're server-side."],
+  ['This leaf just gave up', "Rare, but it happens. Nothing you did — and nothing lost either."],
+  ['Something went sideways', "Caulis hit an error it couldn't recover from. Your garden data is safe on the server either way."],
+];
+
 class ErrorBoundary extends React.Component {
-  constructor(props) { super(props); this.state = { error: null }; }
+  constructor(props) { super(props); this.state = { error: null }; this.line = _CRASH_LINES[Math.floor(Math.random() * _CRASH_LINES.length)]; }
   static getDerivedStateFromError(error) { return { error }; }
   componentDidCatch(error, info) { console.error('Caulis crashed:', error, info); }
   resetData = () => {
@@ -1231,14 +1254,17 @@ class ErrorBoundary extends React.Component {
   };
   render() {
     if (!this.state.error) return this.props.children;
+    const t = _crashTheme();
+    const [title, body] = this.line;
     return (
-      <div style={{ position:'fixed', inset:0, background:'#FAFAF7', display:'flex', alignItems:'center', justifyContent:'center', padding:32, fontFamily:'"DM Sans",sans-serif' }}>
+      <div style={{ position:'fixed', inset:0, background:t.bg, display:'flex', alignItems:'center', justifyContent:'center', padding:32, fontFamily:'"DM Sans",sans-serif' }}>
         <div style={{ maxWidth:340, textAlign:'center' }}>
-          <div style={{ fontFamily:'"Cormorant Garamond",serif', fontStyle:'italic', fontWeight:600, fontSize:26, color:'#2D5016', marginBottom:12 }}>Something went sideways</div>
-          <div style={{ fontSize:13.5, color:'#2A2A26', opacity:0.75, lineHeight:1.6, marginBottom:20 }}>Caulis hit an error it couldn't recover from. Your garden data is safe on the server either way.</div>
+          <svg width="34" height="34" viewBox="0 0 24 24" style={{ margin:'0 auto 14px', display:'block', opacity:0.7 }}><path d="M12 3C7.6 6.4 5 10.6 5 14.4 5 18.6 8 21 12 21s7-2.4 7-6.6C19 10.6 16.4 6.4 12 3Z" fill={t.forest} transform="rotate(12 12 12)"/></svg>
+          <div style={{ fontFamily:'"Cormorant Garamond",serif', fontStyle:'italic', fontWeight:600, fontSize:26, color:t.forest, marginBottom:12 }}>{title}</div>
+          <div style={{ fontSize:13.5, color:t.ink, opacity:0.75, lineHeight:1.6, marginBottom:20 }}>{body}</div>
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            <div onClick={()=>location.reload()} style={{ background:'#2D5016', color:'#fff', borderRadius:999, padding:'13px 26px', fontWeight:600, fontSize:14, cursor:'pointer' }}>Reload</div>
-            <div onClick={this.resetData} style={{ color:'#6B4C2A', opacity:0.7, fontSize:13, cursor:'pointer', padding:8 }}>Reset local data &amp; reload</div>
+            <div onClick={()=>location.reload()} style={{ background:t.forest, color:t.bg, borderRadius:999, padding:'13px 26px', fontWeight:600, fontSize:14, cursor:'pointer' }}>Reload</div>
+            <div onClick={this.resetData} style={{ color:t.brown, opacity:0.7, fontSize:13, cursor:'pointer', padding:8 }}>Reset local data &amp; reload</div>
           </div>
         </div>
       </div>
