@@ -2,16 +2,21 @@
 <html lang="en">
 <head>
 <script>
-  // this page IS already on the real domain, so applying the payload here
+  // this page IS already on the real domain, so redeeming the token here
   // (rather than waiting for a click through to /) means the data's already
   // in place the moment "Continue in browser" is tapped
   if (location.search.indexOf('_migrate=') !== -1) {
     const params = new URLSearchParams(location.search);
-    const raw = params.get('_migrate');
-    if (raw) {
+    const token = params.get('_migrate');
+    if (token) {
       try {
-        const payload = JSON.parse(raw);
-        for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://api.caulis.czeddaru.dev/api/migrate/' + encodeURIComponent(token), false);
+        xhr.send();
+        if (xhr.status < 400) {
+          const { payload } = JSON.parse(xhr.responseText);
+          for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
+        }
       } catch (e) {}
       history.replaceState(null, '', location.pathname);
     }

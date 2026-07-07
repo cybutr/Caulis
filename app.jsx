@@ -914,15 +914,19 @@ window.onload=()=>{
 
   // manual counterpart to the automatic GH-Pages-move redirect: same gather
   // logic (small settings/credentials, not the bulky re-derivable caches),
-  // packed into a link you can open on another device/browser yourself.
-  const buildMigrationLink = () => {
+  // exchanged for a short one-time token instead of embedding the payload
+  // directly in the link — a long URL got mangled by messaging-app link
+  // previews and tripped an iOS "address invalid" bug.
+  const buildMigrationLink = async () => {
     const skip = new Set(['caulis_plants', 'caulis_queue', 'caulis_ai_care', 'caulis_garden_node']);
     const payload = {};
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.indexOf('caulis_') === 0 && !skip.has(k) && k.indexOf('caulis_img') !== 0) payload[k] = localStorage.getItem(k);
     }
-    return 'https://caulis.czeddaru.dev/?_migrate=' + encodeURIComponent(JSON.stringify(payload));
+    const r = await fetch(`${BACKEND_URL}/api/migrate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+    const { token } = await r.json();
+    return 'https://caulis.czeddaru.dev/?_migrate=' + token;
   };
 
   const exportGarden = () => {

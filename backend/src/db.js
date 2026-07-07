@@ -38,6 +38,12 @@ export async function initSchema() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS migration_tokens (
+      token TEXT PRIMARY KEY,
+      payload JSONB NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
     INSERT INTO admin_settings (key, value) VALUES ('backup_interval_hours', '24') ON CONFLICT DO NOTHING;
     INSERT INTO admin_settings (key, value) VALUES ('backup_keep_count', '14') ON CONFLICT DO NOTHING;
   `);

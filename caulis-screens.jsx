@@ -717,7 +717,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
     setPwGate(null);
     if (action === 'export') onExport();
     else if (action === 'import') importRef.current && importRef.current.click();
-    else if (action === 'migrate') setMigrationLink(onBuildMigrationLink());
+    else if (action === 'migrate') setMigrationLink(await onBuildMigrationLink());
   };
   const copyMigrationLink = () => {
     navigator.clipboard.writeText(migrationLink).catch(()=>{});

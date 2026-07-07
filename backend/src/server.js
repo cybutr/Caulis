@@ -2,6 +2,7 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
+import crypto from 'crypto';
 import { spawn } from 'child_process';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
@@ -355,6 +356,24 @@ app.get('/api/admin/backup/download/:name', { preHandler: requireAdmin }, async 
   if (!name.endsWith('.sql.gz') || !fs.existsSync(filePath)) return reply.code(404).send({ error: 'not found' });
   reply.header('content-disposition', `attachment; filename="${name}"`);
   return reply.type('application/gzip').send(fs.createReadStream(filePath));
+});
+
+// short-lived, single-use token standing in for a localStorage migration
+// payload — avoids embedding the whole thing in a URL, which got mangled or
+// rejected ("address invalid") when copy-pasted through messaging apps or
+// hit iOS URL-length quirks.
+app.post('/api/migrate', async (req, reply) => {
+  const payload = req.body || {};
+  const token = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
+  await pool.query('INSERT INTO migration_tokens (token, payload) VALUES ($1, $2)', [token, JSON.stringify(payload)]);
+  pool.query("DELETE FROM migration_tokens WHERE created_at < now() - interval '24 hours'").catch(() => {});
+  return { token };
+});
+
+app.get('/api/migrate/:token', async (req, reply) => {
+  const { rows } = await pool.query('DELETE FROM migration_tokens WHERE token = $1 RETURNING payload', [req.params.token]);
+  if (!rows.length) return reply.code(404).send({ error: 'not found or already used' });
+  return { payload: rows[0].payload };
 });
 
 app.get('/health', async () => ({ ok: true }));
