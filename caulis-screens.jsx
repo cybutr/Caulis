@@ -373,7 +373,7 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
       })()}
 
       {selMode && (
-        <div data-noswipe="1" style={{ position:'fixed', left:0, right:0, bottom: isDesktop?16:78, zIndex:40, display:'flex', justifyContent:'center', padding:'0 12px', pointerEvents:'none' }}>
+        <div data-noswipe="1" style={{ position:'fixed', left:0, right:0, bottom: isDesktop?16:'calc(78px + env(safe-area-inset-bottom))', zIndex:40, display:'flex', justifyContent:'center', padding:'0 12px', pointerEvents:'none' }}>
           <div style={{ pointerEvents:'auto', display:'flex', alignItems:'center', gap:2, background:C.panel, borderRadius:999, padding:'5px 6px 5px 14px', boxShadow:'0 10px 30px rgba(45,80,22,0.2)', border:C.hair }}>
             <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink, marginRight:4, whiteSpace:'nowrap' }}>{sel.size}</span>
             {[['Water', onBulkWater], ['Queue', onBulkQueue], ['Move', onBulkMove]].map(([label, fn]) => (
@@ -664,10 +664,12 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationLink, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
-  const [openSecs, setOpenSecs] = useState(() => GS.get('caulis_set_open', {}));
-  const isOpen = (id) => openSecs[id] !== false;
-  const toggleSec = (id) => setOpenSecs(s => { const n = { ...s, [id]: s[id] === false }; GS.set('caulis_set_open', n); return n; });
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
+  // accordion — one section open at a time, everything else collapses. With
+  // 13 sections all expanded by default this screen was an endless scroll.
+  const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
+  const isOpen = (id) => activeSec === id;
+  const toggleSec = (id) => setActiveSec(s => { const n = s === id ? null : id; GS.set('caulis_set_open', n); return n; });
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [housePlantsInput, setHousePlantsInput] = useState('');
@@ -698,15 +700,16 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   const doImport = (mode) => { if (onImport(importData, mode)) { setImportData(null); setImported(true); setTimeout(()=>setImported(false), 1800); } };
   const handleGcalSync = async () => { setGcalSyncing(true); await onSyncCalendar(); setGcalSyncing(false); };
 
-  // Export/Import/migration-link can wipe or leak a garden — confirm against
+  // Export/Import/share-code can wipe or leak a garden — confirm against
   // the real backend password before any of them run, not just a local
   // string compare.
   const [pwGate, setPwGate] = useState(null); // 'export' | 'import' | 'migrate' | null
   const [pwGateInput, setPwGateInput] = useState('');
   const [pwGateErr, setPwGateErr] = useState(false);
   const [pwGateBusy, setPwGateBusy] = useState(false);
-  const [migrationLink, setMigrationLink] = useState(null);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [migrationCode, setMigrationCode] = useState(null);
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [enterCode, setEnterCode] = useState('');
   const requestGate = (action) => { setPwGate(action); setPwGateInput(''); setPwGateErr(false); };
   const confirmGate = async () => {
     setPwGateBusy(true);
@@ -717,11 +720,11 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
     setPwGate(null);
     if (action === 'export') onExport();
     else if (action === 'import') importRef.current && importRef.current.click();
-    else if (action === 'migrate') setMigrationLink(await onBuildMigrationLink());
+    else if (action === 'migrate') setMigrationCode(await onBuildMigrationCode());
   };
-  const copyMigrationLink = () => {
-    navigator.clipboard.writeText(migrationLink).catch(()=>{});
-    setLinkCopied(true); setTimeout(()=>setLinkCopied(false), 1500);
+  const copyMigrationCode = () => {
+    navigator.clipboard.writeText(migrationCode).catch(()=>{});
+    setCodeCopied(true); setTimeout(()=>setCodeCopied(false), 1500);
   };
   const sp = isDesktop ? 28 : 18;
 
@@ -763,24 +766,46 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   };
   const [adminSecret, setAdminSecretState] = useState(() => { try { return localStorage.getItem('caulis_admin_secret') || ''; } catch(e) { return ''; } });
   const setAdminSecret = (v) => { setAdminSecretState(v); try { localStorage.setItem('caulis_admin_secret', v); } catch(e) {} };
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminBusy, setAdminBusy] = useState(false);
+  const [adminErr, setAdminErr] = useState(false);
   const [adminGardens, setAdminGardens] = useState(null);
-  const [adminListStatus, setAdminListStatus] = useState('idle'); // idle|loading|error
+  const [adminStats, setAdminStatsData] = useState(null);
+  const [backupSettings, setBackupSettings] = useState(null);
+  const [backupFiles, setBackupFiles] = useState(null);
   const [adminLoaded, setAdminLoaded] = useState(null); // { key, data, plants }
   const [adminStatus, setAdminStatus] = useState('idle'); // idle|loading|loaded|empty|error|pushing|pushed
   const [adminOffsetN, setAdminOffsetN] = useState(1);
-  const listAdminGardens = async () => {
-    setAdminListStatus('loading');
-    const gardens = await onAdminListGardens(adminSecret);
-    if (!gardens) { setAdminListStatus('error'); return; }
-    setAdminGardens(gardens);
-    setAdminListStatus('idle');
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [adminSearch, setAdminSearch] = useState('');
+
+  // one unlock action loads everything at once — no more per-panel "Load…"
+  // buttons, and every call is guarded so a network hiccup shows an inline
+  // error instead of leaving the screen half-rendered.
+  const unlockAdmin = async () => {
+    setAdminBusy(true); setAdminErr(false);
+    try {
+      const [gardens, stats, settings, files] = await Promise.all([
+        onAdminListGardens(adminSecret), onAdminStats(adminSecret),
+        onAdminGetSettings(adminSecret), onAdminListBackups(adminSecret),
+      ]);
+      if (!gardens) { setAdminErr(true); setAdminBusy(false); return; }
+      setAdminGardens(gardens); setAdminStatsData(stats); setBackupSettings(settings); setBackupFiles(files);
+      setAdminUnlocked(true);
+    } catch (e) { setAdminErr(true); }
+    setAdminBusy(false);
+  };
+  const refreshAdminGardens = async () => {
+    try { const gardens = await onAdminListGardens(adminSecret); if (gardens) setAdminGardens(gardens); } catch (e) {}
   };
   const loadAdminGarden = async (key) => {
     setAdminStatus('loading');
-    const { data } = await onAdminLoadGarden(adminSecret, key);
-    if (!data || !Array.isArray(data.plants)) { setAdminLoaded({ key, data: data || {}, plants: [] }); setAdminStatus('empty'); return; }
-    setAdminLoaded({ key, data, plants: data.plants.map(p => ({ ...p })) });
-    setAdminStatus('loaded');
+    try {
+      const { data } = await onAdminLoadGarden(adminSecret, key);
+      if (!data || !Array.isArray(data.plants)) { setAdminLoaded({ key, data: data || {}, plants: [] }); setAdminStatus('empty'); return; }
+      setAdminLoaded({ key, data, plants: data.plants.map(p => ({ ...p })) });
+      setAdminStatus('loaded');
+    } catch (e) { setAdminStatus('error'); }
   };
   const adminShiftAll = (n) => setAdminLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = (typeof p.wateredAt === 'number' ? p.wateredAt : todayMidnight()) - n * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: daysSinceMidnight(wa) }; }) }));
   const adminWaterAll = () => setAdminLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = todayMidnight(); return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), fmtLocalDate(new Date())].slice(-60) }; }) }));
@@ -788,42 +813,33 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   const pushAdminGarden = async () => {
     if (!adminLoaded) return;
     setAdminStatus('pushing');
-    const clean = adminLoaded.plants.map(({ photos, userImage, ...rest }) => rest);
-    await onAdminSaveGarden(adminSecret, adminLoaded.key, { ...adminLoaded.data, plants: clean });
-    setAdminStatus('pushed'); setTimeout(() => setAdminStatus('loaded'), 1800);
+    try {
+      const clean = adminLoaded.plants.map(({ photos, userImage, ...rest }) => rest);
+      await onAdminSaveGarden(adminSecret, adminLoaded.key, { ...adminLoaded.data, plants: clean });
+      setAdminStatus('pushed'); setTimeout(() => setAdminStatus('loaded'), 1800);
+    } catch (e) { setAdminStatus('error'); }
   };
   const deleteAdminGarden = async () => {
     if (!adminLoaded) return;
-    await onAdminRemoveGarden(adminSecret, adminLoaded.key);
+    try { await onAdminRemoveGarden(adminSecret, adminLoaded.key); } catch (e) {}
     setAdminLoaded(null); setAdminStatus('idle');
-    listAdminGardens();
+    refreshAdminGardens();
   };
-  const [adminSearch, setAdminSearch] = useState('');
   const filteredAdminGardens = adminGardens ? adminGardens.filter(g => g.key.toLowerCase().includes(adminSearch.toLowerCase())) : null;
   const bulkDelete = async (filter) => {
-    const n = await onAdminBulkRemove(adminSecret, filter);
-    if (n != null) listAdminGardens();
-  };
-
-  const [adminStats, setAdminStatsData] = useState(null);
-  const loadAdminStats = async () => setAdminStatsData(await onAdminStats(adminSecret));
-
-  const [backupSettings, setBackupSettings] = useState(null);
-  const [backupFiles, setBackupFiles] = useState(null);
-  const [backupBusy, setBackupBusy] = useState(false);
-  const loadBackupPanel = async () => {
-    const [s, f] = await Promise.all([onAdminGetSettings(adminSecret), onAdminListBackups(adminSecret)]);
-    setBackupSettings(s); setBackupFiles(f);
+    try { const n = await onAdminBulkRemove(adminSecret, filter); if (n != null) refreshAdminGardens(); } catch (e) {}
   };
   const saveBackupSettings = async (next) => {
     setBackupSettings(next);
-    await onAdminSaveSettings(adminSecret, next);
+    try { await onAdminSaveSettings(adminSecret, next); } catch (e) {}
   };
   const runBackupNow = async () => {
     setBackupBusy(true);
-    await onAdminRunBackup(adminSecret);
-    const f = await onAdminListBackups(adminSecret);
-    setBackupFiles(f);
+    try {
+      await onAdminRunBackup(adminSecret);
+      const f = await onAdminListBackups(adminSecret);
+      setBackupFiles(f);
+    } catch (e) {}
     setBackupBusy(false);
   };
   const fmtBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n/1024).toFixed(1)} KB` : `${(n/1048576).toFixed(1)} MB`;
@@ -834,6 +850,65 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
       <div onClick={()=>set(val+1)} style={{ ...dBtn(false), padding:'6px 12px', fontSize:16 }}>+</div>
     </div>
   );
+  // sequential single-hue sparkline — magnitude over time, one series, no legend needed
+  const Sparkline = ({ data }) => {
+    if (!data || !data.length) return null;
+    const days = [...data].reverse();
+    const max = Math.max(1, ...days.map(d => d.count));
+    return (
+      <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:52, padding:'0 2px' }}>
+        {days.map((d, i) => {
+          const h = Math.max(3, (d.count / max) * 44);
+          const isLast = i === days.length - 1;
+          return (
+            <div key={d.day} title={`${d.day.slice(0,10)}: ${d.count}`} style={{ flex:1, height:h, borderRadius:3, background: isLast ? C.forest : 'rgba(122,158,78,0.55)', transition:'height 300ms ease' }}/>
+          );
+        })}
+      </div>
+    );
+  };
+  // horizontal bar list — magnitude comparison, single hue scaled by rank
+  const BarList = ({ rows, labelKey, valueKey, onRowClick }) => {
+    const max = Math.max(1, ...rows.map(r => r[valueKey]));
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {rows.map((r, i) => (
+          <div key={r[labelKey]} onClick={onRowClick ? ()=>onRowClick(r) : undefined} style={{ cursor:onRowClick?'pointer':'default' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink }}>{r[labelKey]}</span>
+              <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{r[valueKey]}</span>
+            </div>
+            <div style={{ height:6, borderRadius:999, background:'rgba(45,80,22,0.08)', overflow:'hidden' }}>
+              <div style={{ height:'100%', width:`${(r[valueKey]/max)*100}%`, borderRadius:999, background: i===0?C.forest:'rgba(122,158,78,0.7)', transition:'width 300ms ease' }}/>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  // radial gauge — how due the next backup is (elapsed / interval), a ring not a bar since it's a cyclical "how full is the clock" read
+  const BackupGauge = ({ settings, files }) => {
+    if (!settings) return null;
+    const last = files && files[0] ? new Date(files[0].createdAt).getTime() : null;
+    const elapsedH = last ? (Date.now() - last) / 3600000 : null;
+    const pct = elapsedH == null ? 0 : Math.min(1, elapsedH / settings.backupIntervalHours);
+    const overdue = pct >= 1;
+    const r = 30, c = 2 * Math.PI * r;
+    const color = overdue ? STATUS.needs.dot : pct > 0.7 ? STATUS.soon.dot : C.forest;
+    return (
+      <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+        <svg width="72" height="72" viewBox="0 0 72 72" style={{ flexShrink:0 }}>
+          <circle cx="36" cy="36" r={r} fill="none" stroke="rgba(45,80,22,0.1)" strokeWidth="6"/>
+          <circle cx="36" cy="36" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round"
+            strokeDasharray={c} strokeDashoffset={c * (1 - pct)} transform="rotate(-90 36 36)" style={{ transition:'stroke-dashoffset 400ms ease' }}/>
+        </svg>
+        <div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color: overdue?STATUS.needs.dot:C.ink }}>{last ? (overdue ? 'Backup due' : `${Math.round((1-pct)*settings.backupIntervalHours)}h until due`) : 'No backups yet'}</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65 }}>{last ? `Last: ${new Date(last).toLocaleString()}` : 'Run one to start the clock'}</div>
+        </div>
+      </div>
+    );
+  };
 
   const copyKey = () => {
     navigator.clipboard.writeText(gardenKey).catch(()=>{});
@@ -1324,7 +1399,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                 </div>
               )}
               {renaming && (
-                <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                   <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>Rename keeps your current plants under a new key.</div>
                   <div style={{ display:'flex', gap:8 }}>
                     <input value={renameKey} onChange={e=>{ setRenameKey(e.target.value); setRenameStatus('idle'); }} onKeyDown={e=>{ if(e.key==='Enter') checkRename(); }} placeholder="new-garden-name"
@@ -1347,7 +1422,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                 </div>
               )}
               {joining && (
-                <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                   <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>
                     {joinStatus==='notFound' ? "No garden found. Create it now?" : "Enter the garden key and its password (if any). Your current plants will be replaced."}
                   </div>
@@ -1404,7 +1479,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
               </div>
             </div>
             {pwGate && (
-              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.75 }}>Confirm your garden password to {pwGate}.</div>
                 <input type="password" value={pwGateInput} onChange={e=>{ setPwGateInput(e.target.value); setPwGateErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') confirmGate(); }} placeholder="Garden password" style={dInput} autoFocus/>
                 {pwGateErr && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Wrong password</div>}
@@ -1416,7 +1491,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             )}
             {importErr && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Not a valid Caulis export file.</div>}
             {importData && (
-              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', borderRadius:12, background:'rgba(45,80,22,0.05)' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', borderRadius:12, background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.75, lineHeight:1.5 }}>{importData.plants.length} plants in file. Merge keeps your current plants; Replace overwrites them.</div>
                 <div style={{ display:'flex', gap:8 }}>
                   <div onClick={()=>setImportData(null)} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
@@ -1426,17 +1501,21 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
               </div>
             )}
             <div style={{ height:1, background:C.line, margin:'2px 0' }}/>
-            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Moving to a new phone or browser? Get a one-time link that carries your garden key, password and settings over — open it there instead of typing everything again.</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Moving to a new phone or browser? Get a one-time code that carries your garden key, password and settings over — read it out or paste it there.</div>
             <div onClick={()=>requestGate('migrate')} style={{ height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
-              <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Get migration link</span>
+              <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Share settings as a code</span>
             </div>
-            {migrationLink && (
-              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)' }}>
-                <div style={{ fontFamily:'ui-monospace,monospace', fontSize:11.5, color:C.ink, opacity:0.75, wordBreak:'break-all', maxHeight:80, overflowY:'auto' }}>{migrationLink}</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:'#B4472E' }}>Treat this like a password — anyone with the link gets your garden.</div>
-                <div onClick={copyMigrationLink} style={{ height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{linkCopied?'Copied ✓':'Copy link'}</div>
+            {migrationCode && (
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
+                <div style={{ fontFamily:'ui-monospace,monospace', fontSize:20, fontWeight:600, letterSpacing:1, color:C.forest, textAlign:'center', padding:'6px 0' }}>{migrationCode}</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:'#B4472E', textAlign:'center' }}>Treat this like a password — anyone with the code gets your garden.</div>
+                <div onClick={copyMigrationCode} style={{ height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{codeCopied?'Copied ✓':'Copy code'}</div>
               </div>
             )}
+            <div style={{ display:'flex', gap:8 }}>
+              <input value={enterCode} onChange={e=>setEnterCode(e.target.value)} placeholder="Have a code? Enter it here" style={{ ...dInput, flex:1 }}/>
+              <div onClick={()=>enterCode.trim() && onApplyMigrationCode(enterCode)} style={{ flexShrink:0, padding:'0 16px', borderRadius:12, background:C.forest, color:'#fff', display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Apply</div>
+            </div>
             <a href="https://api.caulis.czeddaru.dev/docs" target="_blank" rel="noopener" style={{ textDecoration:'none', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8 }}>View format &amp; API docs ↗</a>
           </div>
         </SettingsSection>
@@ -1620,122 +1699,120 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                   <div style={{ height:1, background:C.line }}/>
 
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    <div style={grpLabel}>Admin · manage any garden</div>
-                    <input type="password" value={adminSecret} onChange={e=>setAdminSecret(e.target.value)} placeholder="Admin secret" style={dInput}/>
-                    <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-                      <div onClick={listAdminGardens} style={dBtn(false)}>{adminListStatus==='loading' ? 'Loading…' : 'List all gardens'}</div>
-                      {adminListStatus==='error' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:STATUS.needs.dot }}>Wrong secret or request failed</span>}
-                    </div>
-                    {adminGardens && (
+                    <div style={grpLabel}>Admin</div>
+                    {!adminUnlocked ? (
                       <>
-                        <input value={adminSearch} onChange={e=>setAdminSearch(e.target.value)} placeholder="Search by key" style={dInput}/>
-                        <div style={{ display:'flex', gap:8 }}>
-                          <div onClick={()=>bulkDelete('unclaimed')} style={{ ...dBtn(false), flex:1, fontSize:12.5 }}>Delete all unclaimed</div>
-                          <div onClick={()=>bulkDelete('empty')} style={{ ...dBtn(false), flex:1, fontSize:12.5 }}>Delete all empty</div>
-                        </div>
-                        <div style={{ display:'flex', flexDirection:'column', gap:1, marginTop:4, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:280, overflowY:'auto' }}>
-                          {filteredAdminGardens.map(g => (
-                            <div key={g.key} onClick={()=>loadAdminGarden(g.key)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
-                              <span style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{g.key}{g.unclaimed ? ' · unclaimed' : ''}</span>
-                              <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{g.plant_count} plants</span>
-                            </div>
-                          ))}
-                          {filteredAdminGardens.length === 0 && <div style={{ padding:12, fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>No gardens match</div>}
-                        </div>
+                        <input type="password" value={adminSecret} onChange={e=>{ setAdminSecret(e.target.value); setAdminErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') unlockAdmin(); }} placeholder="Admin secret" style={dInput}/>
+                        <div onClick={unlockAdmin} style={dBtn(true)}>{adminBusy ? 'Unlocking…' : 'Unlock admin'}</div>
+                        {adminErr && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:STATUS.needs.dot }}>Wrong secret or request failed</span>}
                       </>
-                    )}
-                    {adminStatus==='empty' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>No plants in that garden</span>}
-                    {adminLoaded && (
-                      <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:4, padding:12, borderRadius:14, background:C.bg }}>
-                        <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{adminLoaded.key} · {adminLoaded.plants.length} plants loaded · edits stay local until pushed</div>
-                        {adminLoaded.plants.length > 0 && <>
-                          <div onClick={adminWaterAll} style={dBtn(true)}><IconDrop s={15} c="#fff"/> Water all to today</div>
-                          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
-                            <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Shift every plant</span>
-                            {stepper(adminOffsetN, setAdminOffsetN)}
-                          </div>
-                          <div style={{ display:'flex', gap:10 }}>
-                            <div onClick={()=>adminShiftAll(-adminOffsetN)} style={{ ...dBtn(false), flex:1 }}>− {adminOffsetN}d</div>
-                            <div onClick={()=>adminShiftAll(adminOffsetN)} style={{ ...dBtn(false), flex:1 }}>+ {adminOffsetN}d</div>
-                          </div>
-                          {plantEditor(adminLoaded.plants, adminSetDays)}
-                          <div onClick={pushAdminGarden} style={{ ...dBtn(true), marginTop:2 }}>{adminStatus==='pushed' ? 'Pushed ✓' : adminStatus==='pushing' ? 'Pushing…' : 'Push to garden'}</div>
-                        </>}
-                        <div onClick={deleteAdminGarden} style={{ ...dBtn(false), color:STATUS.needs.dot, borderColor:'rgba(180,71,46,0.3)' }}>Delete this garden</div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ height:1, background:C.line }}/>
-
-                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    <div style={grpLabel}>Stats</div>
-                    <div onClick={loadAdminStats} style={dBtn(false)}>{adminStats ? 'Refresh stats' : 'Load stats'}</div>
-                    {adminStats && (
-                      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                          {[
-                            ['Gardens', adminStats.totalGardens],
-                            ['Unclaimed', adminStats.unclaimedCount],
-                            ['Plants', adminStats.totalPlants],
-                            ['Avg / garden', adminStats.avgPlantsPerGarden],
-                            ['Photo sets', adminStats.totalPhotoSets],
-                          ].map(([label, val]) => (
-                            <div key={label} style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
-                              <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
-                              <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest }}>{val}</div>
+                    ) : (
+                      <div style={{ display:'flex', flexDirection:'column', gap:18, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
+                        {adminStats && (
+                          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                              {[
+                                ['Gardens', adminStats.totalGardens],
+                                ['Unclaimed', adminStats.unclaimedCount],
+                                ['Plants', adminStats.totalPlants],
+                                ['Avg / garden', adminStats.avgPlantsPerGarden],
+                                ['Photo sets', adminStats.totalPhotoSets],
+                              ].map(([label, val]) => (
+                                <div key={label} style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
+                                  <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
+                                  <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest }}>{val}</div>
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                        <div style={grpLabel}>Most common species</div>
-                        <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair }}>
-                          {adminStats.topSpecies.map(s => (
-                            <div key={s.name} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair }}>
-                              <span style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{s.name}</span>
-                              <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{s.count}</span>
-                            </div>
-                          ))}
-                        </div>
-                        <div style={grpLabel}>Most recently active</div>
-                        <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair }}>
-                          {adminStats.mostActive.map(g => (
-                            <div key={g.key} onClick={()=>loadAdminGarden(g.key)} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
-                              <span style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{g.key}</span>
-                              <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{g.plant_count} plants</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div style={{ height:1, background:C.line }}/>
-
-                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    <div style={grpLabel}>Backups</div>
-                    <div onClick={loadBackupPanel} style={dBtn(false)}>{backupSettings ? 'Refresh' : 'Load backup panel'}</div>
-                    {backupSettings && (
-                      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
-                          <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Backup every</span>
-                          {numStepper(backupSettings.backupIntervalHours, (v)=>saveBackupSettings({ ...backupSettings, backupIntervalHours: v }), 'h')}
-                        </div>
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
-                          <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Keep last N backups</span>
-                          {numStepper(backupSettings.backupKeepCount, (v)=>saveBackupSettings({ ...backupSettings, backupKeepCount: v }), '')}
-                        </div>
-                        <div onClick={runBackupNow} style={dBtn(true)}>{backupBusy ? 'Running…' : 'Run backup now'}</div>
-                        {backupFiles && (
-                          <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:220, overflowY:'auto' }}>
-                            {backupFiles.map(f => (
-                              <a key={f.name} href={onAdminBackupUrl(adminSecret, f.name)} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair, textDecoration:'none' }}>
-                                <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.forest, fontWeight:600 }}>{f.name}</span>
-                                <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{fmtBytes(f.size)}</span>
-                              </a>
-                            ))}
-                            {backupFiles.length === 0 && <div style={{ padding:12, fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>No backups yet</div>}
+                            {adminStats.gardensPerDay && adminStats.gardensPerDay.length > 0 && (
+                              <div style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
+                                <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4, marginBottom:6 }}>Gardens created · last 14 days</div>
+                                <Sparkline data={adminStats.gardensPerDay}/>
+                              </div>
+                            )}
+                            {adminStats.topSpecies.length > 0 && <>
+                              <div style={grpLabel}>Most common species</div>
+                              <BarList rows={adminStats.topSpecies} labelKey="name" valueKey="count"/>
+                            </>}
+                            {adminStats.mostActive.length > 0 && <>
+                              <div style={grpLabel}>Most recently active</div>
+                              <BarList rows={adminStats.mostActive} labelKey="key" valueKey="plant_count" onRowClick={g=>loadAdminGarden(g.key)}/>
+                            </>}
                           </div>
                         )}
+
+                        <div style={{ height:1, background:C.line }}/>
+
+                        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                          <div style={grpLabel}>Manage any garden</div>
+                          <input value={adminSearch} onChange={e=>setAdminSearch(e.target.value)} placeholder="Search by key" style={dInput}/>
+                          <div style={{ display:'flex', gap:8 }}>
+                            <div onClick={()=>bulkDelete('unclaimed')} style={{ ...dBtn(false), flex:1, fontSize:12.5 }}>Delete all unclaimed</div>
+                            <div onClick={()=>bulkDelete('empty')} style={{ ...dBtn(false), flex:1, fontSize:12.5 }}>Delete all empty</div>
+                          </div>
+                          {filteredAdminGardens && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:1, marginTop:4, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:280, overflowY:'auto' }}>
+                              {filteredAdminGardens.map(g => (
+                                <div key={g.key} onClick={()=>loadAdminGarden(g.key)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
+                                  <span style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{g.key}{g.unclaimed ? ' · unclaimed' : ''}</span>
+                                  <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{g.plant_count} plants</span>
+                                </div>
+                              ))}
+                              {filteredAdminGardens.length === 0 && <div style={{ padding:12, fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>No gardens match</div>}
+                            </div>
+                          )}
+                          {adminStatus==='empty' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>No plants in that garden</span>}
+                          {adminLoaded && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:4, padding:12, borderRadius:14, background:C.bg, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
+                              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{adminLoaded.key} · {adminLoaded.plants.length} plants loaded · edits stay local until pushed</div>
+                              {adminLoaded.plants.length > 0 && <>
+                                <div onClick={adminWaterAll} style={dBtn(true)}><IconDrop s={15} c="#fff"/> Water all to today</div>
+                                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+                                  <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Shift every plant</span>
+                                  {stepper(adminOffsetN, setAdminOffsetN)}
+                                </div>
+                                <div style={{ display:'flex', gap:10 }}>
+                                  <div onClick={()=>adminShiftAll(-adminOffsetN)} style={{ ...dBtn(false), flex:1 }}>− {adminOffsetN}d</div>
+                                  <div onClick={()=>adminShiftAll(adminOffsetN)} style={{ ...dBtn(false), flex:1 }}>+ {adminOffsetN}d</div>
+                                </div>
+                                {plantEditor(adminLoaded.plants, adminSetDays)}
+                                <div onClick={pushAdminGarden} style={{ ...dBtn(true), marginTop:2 }}>{adminStatus==='pushed' ? 'Pushed ✓' : adminStatus==='pushing' ? 'Pushing…' : 'Push to garden'}</div>
+                              </>}
+                              <div onClick={deleteAdminGarden} style={{ ...dBtn(false), color:STATUS.needs.dot, borderColor:'rgba(180,71,46,0.3)' }}>Delete this garden</div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{ height:1, background:C.line }}/>
+
+                        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                          <div style={grpLabel}>Backups</div>
+                          <BackupGauge settings={backupSettings} files={backupFiles}/>
+                          {backupSettings && (
+                            <>
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+                                <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Backup every</span>
+                                {numStepper(backupSettings.backupIntervalHours, (v)=>saveBackupSettings({ ...backupSettings, backupIntervalHours: v }), 'h')}
+                              </div>
+                              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+                                <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Keep last N backups</span>
+                                {numStepper(backupSettings.backupKeepCount, (v)=>saveBackupSettings({ ...backupSettings, backupKeepCount: v }), '')}
+                              </div>
+                              <div onClick={runBackupNow} style={dBtn(true)}>{backupBusy ? 'Running…' : 'Run backup now'}</div>
+                              {backupFiles && (
+                                <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:220, overflowY:'auto' }}>
+                                  {backupFiles.map(f => (
+                                    <a key={f.name} href={onAdminBackupUrl(adminSecret, f.name)} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair, textDecoration:'none' }}>
+                                      <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.forest, fontWeight:600 }}>{f.name}</span>
+                                      <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{fmtBytes(f.size)}</span>
+                                    </a>
+                                  ))}
+                                  {backupFiles.length === 0 && <div style={{ padding:12, fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>No backups yet</div>}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1789,7 +1866,7 @@ function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true }) {
       flexShrink:0, position:'relative', zIndex:30,
       background: C.bg === '#111610' ? 'rgba(17,22,16,0.9)' : 'rgba(250,250,247,0.86)', backdropFilter:'blur(18px) saturate(160%)', WebkitBackdropFilter:'blur(18px) saturate(160%)',
       borderTop:'0.5px solid rgba(45,80,22,0.1)',
-      padding:'9px 14px 26px',
+      padding:'9px 14px calc(26px + env(safe-area-inset-bottom))',
       display:'flex', alignItems:'flex-end', justifyContent:'space-between',
     }}>
       {slots.map((s, i) => {
