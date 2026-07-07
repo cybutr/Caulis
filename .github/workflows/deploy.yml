@@ -1,0 +1,20 @@
+name: Deploy frontend
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: rsync to caulis.czeddaru.dev
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avz --delete --exclude=backend --exclude=.git --exclude=.github --exclude=docs.html --exclude=README.md
+          path: ./
+          remote_path: ./
+          remote_host: 92.5.110.200
+          remote_user: deploy
+          remote_key: ${{ secrets.DEPLOY_SSH_KEY }}

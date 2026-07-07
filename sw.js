@@ -1,8 +1,7 @@
-const CACHE = 'caulis-v90';
+const CACHE = 'caulis-v94';
 const SHELL = [
   './',
   './index.html',
-  './docs.html',
   './caulis-core.jsx',
   './caulis-perenual.jsx',
   './caulis-firebase.jsx',
@@ -13,6 +12,22 @@ const SHELL = [
   './icon-192.png',
   './icon-512.png',
 ];
+
+// Caulis moved off GitHub Pages. A PWA installed from the old origin still
+// runs whatever service worker it last cached — self-destruct here instead
+// of serving stale offline content, and push any open window to the new home.
+if (self.location.hostname !== 'caulis.czeddaru.dev') {
+  self.addEventListener('install', () => self.skipWaiting());
+  self.addEventListener('activate', e => {
+    e.waitUntil((async () => {
+      await self.registration.unregister();
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+      const clientList = await self.clients.matchAll({ type: 'window' });
+      for (const client of clientList) client.navigate('https://caulis.czeddaru.dev/');
+    })());
+  });
+} else {
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -48,3 +63,5 @@ self.addEventListener('fetch', e => {
     );
   }
 });
+
+}

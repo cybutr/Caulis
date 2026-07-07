@@ -664,7 +664,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevLoadNode, onDevPushNode, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
+function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
   const [openSecs, setOpenSecs] = useState(() => GS.get('caulis_set_open', {}));
   const isOpen = (id) => openSecs[id] !== false;
   const toggleSec = (id) => setOpenSecs(s => { const n = { ...s, [id]: s[id] === false }; GS.set('caulis_set_open', n); return n; });
@@ -697,6 +697,24 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   };
   const doImport = (mode) => { if (onImport(importData, mode)) { setImportData(null); setImported(true); setTimeout(()=>setImported(false), 1800); } };
   const handleGcalSync = async () => { setGcalSyncing(true); await onSyncCalendar(); setGcalSyncing(false); };
+
+  // Export/Import can wipe or leak a garden — confirm against the real
+  // backend password before either runs, not just a local string compare.
+  const [pwGate, setPwGate] = useState(null); // 'export' | 'import' | null
+  const [pwGateInput, setPwGateInput] = useState('');
+  const [pwGateErr, setPwGateErr] = useState(false);
+  const [pwGateBusy, setPwGateBusy] = useState(false);
+  const requestGate = (action) => { setPwGate(action); setPwGateInput(''); setPwGateErr(false); };
+  const confirmGate = async () => {
+    setPwGateBusy(true);
+    const ok = await onVerifyPassword(pwGateInput);
+    setPwGateBusy(false);
+    if (!ok) { setPwGateErr(true); return; }
+    const action = pwGate;
+    setPwGate(null);
+    if (action === 'export') onExport();
+    else if (action === 'import') importRef.current && importRef.current.click();
+  };
   const sp = isDesktop ? 28 : 18;
 
   const [renaming, setRenaming] = useState(false);
@@ -729,31 +747,85 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   };
   const lockDev = () => { try { localStorage.removeItem('caulis_dev_revealed'); } catch(e) {} setDevRevealed(false); setDevAuthed(false); setVerTaps(0); };
   const [devOffsetN, setDevOffsetN] = useState(1);
-  const [nodeKey, setNodeKey] = useState('');
-  const [nodePw, setNodePw] = useState('');
-  const [nodeLoaded, setNodeLoaded] = useState(null); // { node, data, plants }
-  const [nodeStatus, setNodeStatus] = useState('idle'); // idle|loading|loaded|empty|error|pushing|pushed
-  const [nodeOffsetN, setNodeOffsetN] = useState(1);
-  const loadNode = async () => {
-    if (!nodeKey.trim()) return;
-    setNodeStatus('loading');
-    try {
-      const { node, data } = await onDevLoadNode(nodeKey.trim(), nodePw);
-      if (!data || !Array.isArray(data.plants)) { setNodeLoaded({ node, data: data || {}, plants: [] }); setNodeStatus('empty'); return; }
-      setNodeLoaded({ node, data, plants: data.plants.map(p => ({ ...p })) });
-      setNodeStatus('loaded');
-    } catch(e) { setNodeStatus('error'); }
+  const [resyncMsg, setResyncMsg] = useState(null);
+  const resyncFromHistory = () => {
+    const fixed = onDevResyncFromHistory();
+    setResyncMsg(fixed ? `Fixed ${fixed} plant${fixed===1?'':'s'} from the watering log` : 'Already matched the watering log');
+    setTimeout(() => setResyncMsg(null), 3000);
   };
-  const nodeShiftAll = (n) => setNodeLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = (typeof p.wateredAt === 'number' ? p.wateredAt : todayMidnight()) - n * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: daysSinceMidnight(wa) }; }) }));
-  const nodeWaterAll = () => setNodeLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = todayMidnight(); return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), fmtLocalDate(new Date())].slice(-60) }; }) }));
-  const nodeSetDays = (id, d) => setNodeLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { if (p.id !== id) return p; const dd = Math.max(0, d | 0); const wa = todayMidnight() - dd * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: dd }; }) }));
-  const pushNode = () => {
-    if (!nodeLoaded) return;
-    setNodeStatus('pushing');
-    const clean = nodeLoaded.plants.map(({ photos, userImage, ...rest }) => rest);
-    onDevPushNode(nodeLoaded.node, { ...nodeLoaded.data, plants: clean });
-    setNodeStatus('pushed'); setTimeout(() => setNodeStatus('loaded'), 1800);
+  const [adminSecret, setAdminSecretState] = useState(() => { try { return localStorage.getItem('caulis_admin_secret') || ''; } catch(e) { return ''; } });
+  const setAdminSecret = (v) => { setAdminSecretState(v); try { localStorage.setItem('caulis_admin_secret', v); } catch(e) {} };
+  const [adminGardens, setAdminGardens] = useState(null);
+  const [adminListStatus, setAdminListStatus] = useState('idle'); // idle|loading|error
+  const [adminLoaded, setAdminLoaded] = useState(null); // { key, data, plants }
+  const [adminStatus, setAdminStatus] = useState('idle'); // idle|loading|loaded|empty|error|pushing|pushed
+  const [adminOffsetN, setAdminOffsetN] = useState(1);
+  const listAdminGardens = async () => {
+    setAdminListStatus('loading');
+    const gardens = await onAdminListGardens(adminSecret);
+    if (!gardens) { setAdminListStatus('error'); return; }
+    setAdminGardens(gardens);
+    setAdminListStatus('idle');
   };
+  const loadAdminGarden = async (key) => {
+    setAdminStatus('loading');
+    const { data } = await onAdminLoadGarden(adminSecret, key);
+    if (!data || !Array.isArray(data.plants)) { setAdminLoaded({ key, data: data || {}, plants: [] }); setAdminStatus('empty'); return; }
+    setAdminLoaded({ key, data, plants: data.plants.map(p => ({ ...p })) });
+    setAdminStatus('loaded');
+  };
+  const adminShiftAll = (n) => setAdminLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = (typeof p.wateredAt === 'number' ? p.wateredAt : todayMidnight()) - n * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: daysSinceMidnight(wa) }; }) }));
+  const adminWaterAll = () => setAdminLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = todayMidnight(); return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), fmtLocalDate(new Date())].slice(-60) }; }) }));
+  const adminSetDays = (id, d) => setAdminLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { if (p.id !== id) return p; const dd = Math.max(0, d | 0); const wa = todayMidnight() - dd * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: dd }; }) }));
+  const pushAdminGarden = async () => {
+    if (!adminLoaded) return;
+    setAdminStatus('pushing');
+    const clean = adminLoaded.plants.map(({ photos, userImage, ...rest }) => rest);
+    await onAdminSaveGarden(adminSecret, adminLoaded.key, { ...adminLoaded.data, plants: clean });
+    setAdminStatus('pushed'); setTimeout(() => setAdminStatus('loaded'), 1800);
+  };
+  const deleteAdminGarden = async () => {
+    if (!adminLoaded) return;
+    await onAdminRemoveGarden(adminSecret, adminLoaded.key);
+    setAdminLoaded(null); setAdminStatus('idle');
+    listAdminGardens();
+  };
+  const [adminSearch, setAdminSearch] = useState('');
+  const filteredAdminGardens = adminGardens ? adminGardens.filter(g => g.key.toLowerCase().includes(adminSearch.toLowerCase())) : null;
+  const bulkDelete = async (filter) => {
+    const n = await onAdminBulkRemove(adminSecret, filter);
+    if (n != null) listAdminGardens();
+  };
+
+  const [adminStats, setAdminStatsData] = useState(null);
+  const loadAdminStats = async () => setAdminStatsData(await onAdminStats(adminSecret));
+
+  const [backupSettings, setBackupSettings] = useState(null);
+  const [backupFiles, setBackupFiles] = useState(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const loadBackupPanel = async () => {
+    const [s, f] = await Promise.all([onAdminGetSettings(adminSecret), onAdminListBackups(adminSecret)]);
+    setBackupSettings(s); setBackupFiles(f);
+  };
+  const saveBackupSettings = async (next) => {
+    setBackupSettings(next);
+    await onAdminSaveSettings(adminSecret, next);
+  };
+  const runBackupNow = async () => {
+    setBackupBusy(true);
+    await onAdminRunBackup(adminSecret);
+    const f = await onAdminListBackups(adminSecret);
+    setBackupFiles(f);
+    setBackupBusy(false);
+  };
+  const fmtBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n/1024).toFixed(1)} KB` : `${(n/1048576).toFixed(1)} MB`;
+  const numStepper = (val, set, suffix) => (
+    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+      <div onClick={()=>set(Math.max(1, val-1))} style={{ ...dBtn(false), padding:'6px 12px', fontSize:16 }}>−</div>
+      <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600, color:C.ink, minWidth:46, textAlign:'center' }}>{val}{suffix}</span>
+      <div onClick={()=>set(val+1)} style={{ ...dBtn(false), padding:'6px 12px', fontSize:16 }}>+</div>
+    </div>
+  );
 
   const copyKey = () => {
     navigator.clipboard.writeText(gardenKey).catch(()=>{});
@@ -764,8 +836,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
     const k = renameKey.trim();
     if (!k || k === gardenKey) return;
     setRenameStatus('checking');
-    const node = await gardenNodeId(k, gardenPassword);
-    const exists = await gardenExists(node);
+    const exists = await gardenExists(k);
     setRenameStatus(exists ? 'taken' : 'available');
   };
 
@@ -785,7 +856,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   const submitJoin = async (force = false) => {
     const k = joinKey.trim();
     if (!k) return;
-    if (FIREBASE_READY && !force) {
+    if (SYNC_READY && !force) {
       setJoinStatus('checking');
       const node = await gardenNodeId(k, joinPassword);
       const data = await fetchGardenOnce(node);
@@ -1193,12 +1264,12 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
           </div>
         </SettingsSection>
         <SettingsSection title="Cloud sync" open={isOpen('cloud')} onToggle={()=>toggleSec('cloud')}>
-          {!FIREBASE_READY && (
+          {!SYNC_READY && (
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:'14px 16px' }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Firebase not configured. Fill in FIREBASE_CONFIG in caulis-firebase.jsx.</div>
             </div>
           )}
-          {FIREBASE_READY && (
+          {SYNC_READY && (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom:C.hair }}>
@@ -1315,15 +1386,26 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Export your whole garden (plants, photos, queue) to a JSON file, or restore from one.</div>
             <input ref={importRef} type="file" accept="application/json,.json" onChange={onImportFile} style={{ display:'none' }}/>
             <div style={{ display:'flex', gap:8 }}>
-              <div onClick={onExport} style={{ flex:1, height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
+              <div onClick={()=>requestGate('export')} style={{ flex:1, height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M12 15l-4-4M12 15l4-4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 20h14" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/></svg>
                 <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Export</span>
               </div>
-              <div onClick={()=>{ setImportErr(false); importRef.current && importRef.current.click(); }} style={{ flex:1, height:42, borderRadius:12, background: imported?C.sage:'rgba(45,80,22,0.08)', color: imported?'#fff':C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', transition:'background 200ms' }}>
+              <div onClick={()=>{ setImportErr(false); requestGate('import'); }} style={{ flex:1, height:42, borderRadius:12, background: imported?C.sage:'rgba(45,80,22,0.08)', color: imported?'#fff':C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', transition:'background 200ms' }}>
                 {imported ? <IconCheck s={15}/> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15V3M12 3l-4 4M12 3l4 4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 20h14" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/></svg>}
                 <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>{imported?'Imported':'Import'}</span>
               </div>
             </div>
+            {pwGate && (
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)' }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.75 }}>Confirm your garden password to {pwGate}.</div>
+                <input type="password" value={pwGateInput} onChange={e=>{ setPwGateInput(e.target.value); setPwGateErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') confirmGate(); }} placeholder="Garden password" style={dInput} autoFocus/>
+                {pwGateErr && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Wrong password</div>}
+                <div style={{ display:'flex', gap:8 }}>
+                  <div onClick={()=>setPwGate(null)} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
+                  <div onClick={confirmGate} style={{ flex:1, height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{pwGateBusy?'Checking…':'Confirm'}</div>
+                </div>
+              </div>
+            )}
             {importErr && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Not a valid Caulis export file.</div>}
             {importData && (
               <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', borderRadius:12, background:'rgba(45,80,22,0.05)' }}>
@@ -1335,7 +1417,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                 </div>
               </div>
             )}
-            <a href="docs.html" target="_blank" rel="noopener" style={{ textDecoration:'none', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8 }}>View format &amp; API docs ↗</a>
+            <a href="https://api.caulis.czeddaru.dev/docs" target="_blank" rel="noopener" style={{ textDecoration:'none', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8 }}>View format &amp; API docs ↗</a>
           </div>
         </SettingsSection>
         {(() => {
@@ -1501,6 +1583,8 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                   <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                     <div style={grpLabel}>This garden · {plants.length} plants</div>
                     <div onClick={onWaterAll} style={dBtn(true)}><IconDrop s={15} c="#fff"/> Water all to today</div>
+                    <div onClick={resyncFromHistory} style={dBtn(false)}>Resync days from watering log</div>
+                    {resyncMsg && <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.75 }}>{resyncMsg}</div>}
                     <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
                       <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Shift every plant</span>
                       {stepper(devOffsetN, setDevOffsetN)}
@@ -1516,28 +1600,122 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                   <div style={{ height:1, background:C.line }}/>
 
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    <div style={grpLabel}>Manage another node</div>
-                    <input value={nodeKey} onChange={e=>setNodeKey(e.target.value)} placeholder="Garden key" style={dInput}/>
-                    <input type="password" value={nodePw} onChange={e=>setNodePw(e.target.value)} placeholder="Garden password (if any)" style={dInput}/>
+                    <div style={grpLabel}>Admin · manage any garden</div>
+                    <input type="password" value={adminSecret} onChange={e=>setAdminSecret(e.target.value)} placeholder="Admin secret" style={dInput}/>
                     <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-                      <div onClick={loadNode} style={dBtn(false)}>{nodeStatus==='loading' ? 'Loading…' : 'Load node'}</div>
-                      {nodeStatus==='error' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:STATUS.needs.dot }}>Load failed</span>}
-                      {nodeStatus==='empty' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>No plants at that node</span>}
+                      <div onClick={listAdminGardens} style={dBtn(false)}>{adminListStatus==='loading' ? 'Loading…' : 'List all gardens'}</div>
+                      {adminListStatus==='error' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:STATUS.needs.dot }}>Wrong secret or request failed</span>}
                     </div>
-                    {nodeLoaded && nodeLoaded.plants.length > 0 && (
+                    {adminGardens && (
+                      <>
+                        <input value={adminSearch} onChange={e=>setAdminSearch(e.target.value)} placeholder="Search by key" style={dInput}/>
+                        <div style={{ display:'flex', gap:8 }}>
+                          <div onClick={()=>bulkDelete('unclaimed')} style={{ ...dBtn(false), flex:1, fontSize:12.5 }}>Delete all unclaimed</div>
+                          <div onClick={()=>bulkDelete('empty')} style={{ ...dBtn(false), flex:1, fontSize:12.5 }}>Delete all empty</div>
+                        </div>
+                        <div style={{ display:'flex', flexDirection:'column', gap:1, marginTop:4, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:280, overflowY:'auto' }}>
+                          {filteredAdminGardens.map(g => (
+                            <div key={g.key} onClick={()=>loadAdminGarden(g.key)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
+                              <span style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{g.key}{g.unclaimed ? ' · unclaimed' : ''}</span>
+                              <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{g.plant_count} plants</span>
+                            </div>
+                          ))}
+                          {filteredAdminGardens.length === 0 && <div style={{ padding:12, fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>No gardens match</div>}
+                        </div>
+                      </>
+                    )}
+                    {adminStatus==='empty' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>No plants in that garden</span>}
+                    {adminLoaded && (
                       <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:4, padding:12, borderRadius:14, background:C.bg }}>
-                        <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{nodeLoaded.plants.length} plants loaded · edits stay local until pushed</div>
-                        <div onClick={nodeWaterAll} style={dBtn(true)}><IconDrop s={15} c="#fff"/> Water all to today</div>
-                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
-                          <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Shift every plant</span>
-                          {stepper(nodeOffsetN, setNodeOffsetN)}
+                        <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{adminLoaded.key} · {adminLoaded.plants.length} plants loaded · edits stay local until pushed</div>
+                        {adminLoaded.plants.length > 0 && <>
+                          <div onClick={adminWaterAll} style={dBtn(true)}><IconDrop s={15} c="#fff"/> Water all to today</div>
+                          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+                            <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Shift every plant</span>
+                            {stepper(adminOffsetN, setAdminOffsetN)}
+                          </div>
+                          <div style={{ display:'flex', gap:10 }}>
+                            <div onClick={()=>adminShiftAll(-adminOffsetN)} style={{ ...dBtn(false), flex:1 }}>− {adminOffsetN}d</div>
+                            <div onClick={()=>adminShiftAll(adminOffsetN)} style={{ ...dBtn(false), flex:1 }}>+ {adminOffsetN}d</div>
+                          </div>
+                          {plantEditor(adminLoaded.plants, adminSetDays)}
+                          <div onClick={pushAdminGarden} style={{ ...dBtn(true), marginTop:2 }}>{adminStatus==='pushed' ? 'Pushed ✓' : adminStatus==='pushing' ? 'Pushing…' : 'Push to garden'}</div>
+                        </>}
+                        <div onClick={deleteAdminGarden} style={{ ...dBtn(false), color:STATUS.needs.dot, borderColor:'rgba(180,71,46,0.3)' }}>Delete this garden</div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <div style={grpLabel}>Stats</div>
+                    <div onClick={loadAdminStats} style={dBtn(false)}>{adminStats ? 'Refresh stats' : 'Load stats'}</div>
+                    {adminStats && (
+                      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                          {[
+                            ['Gardens', adminStats.totalGardens],
+                            ['Unclaimed', adminStats.unclaimedCount],
+                            ['Plants', adminStats.totalPlants],
+                            ['Avg / garden', adminStats.avgPlantsPerGarden],
+                            ['Photo sets', adminStats.totalPhotoSets],
+                          ].map(([label, val]) => (
+                            <div key={label} style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
+                              <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
+                              <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest }}>{val}</div>
+                            </div>
+                          ))}
                         </div>
-                        <div style={{ display:'flex', gap:10 }}>
-                          <div onClick={()=>nodeShiftAll(-nodeOffsetN)} style={{ ...dBtn(false), flex:1 }}>− {nodeOffsetN}d</div>
-                          <div onClick={()=>nodeShiftAll(nodeOffsetN)} style={{ ...dBtn(false), flex:1 }}>+ {nodeOffsetN}d</div>
+                        <div style={grpLabel}>Most common species</div>
+                        <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair }}>
+                          {adminStats.topSpecies.map(s => (
+                            <div key={s.name} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair }}>
+                              <span style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{s.name}</span>
+                              <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{s.count}</span>
+                            </div>
+                          ))}
                         </div>
-                        {plantEditor(nodeLoaded.plants, nodeSetDays)}
-                        <div onClick={pushNode} style={{ ...dBtn(true), marginTop:2 }}>{nodeStatus==='pushed' ? 'Pushed ✓' : nodeStatus==='pushing' ? 'Pushing…' : 'Push to node'}</div>
+                        <div style={grpLabel}>Most recently active</div>
+                        <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair }}>
+                          {adminStats.mostActive.map(g => (
+                            <div key={g.key} onClick={()=>loadAdminGarden(g.key)} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
+                              <span style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{g.key}</span>
+                              <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{g.plant_count} plants</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <div style={grpLabel}>Backups</div>
+                    <div onClick={loadBackupPanel} style={dBtn(false)}>{backupSettings ? 'Refresh' : 'Load backup panel'}</div>
+                    {backupSettings && (
+                      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+                          <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Backup every</span>
+                          {numStepper(backupSettings.backupIntervalHours, (v)=>saveBackupSettings({ ...backupSettings, backupIntervalHours: v }), 'h')}
+                        </div>
+                        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+                          <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>Keep last N backups</span>
+                          {numStepper(backupSettings.backupKeepCount, (v)=>saveBackupSettings({ ...backupSettings, backupKeepCount: v }), '')}
+                        </div>
+                        <div onClick={runBackupNow} style={dBtn(true)}>{backupBusy ? 'Running…' : 'Run backup now'}</div>
+                        {backupFiles && (
+                          <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:220, overflowY:'auto' }}>
+                            {backupFiles.map(f => (
+                              <a key={f.name} href={onAdminBackupUrl(adminSecret, f.name)} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair, textDecoration:'none' }}>
+                                <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.forest, fontWeight:600 }}>{f.name}</span>
+                                <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{fmtBytes(f.size)}</span>
+                              </a>
+                            ))}
+                            {backupFiles.length === 0 && <div style={{ padding:12, fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>No backups yet</div>}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

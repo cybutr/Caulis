@@ -38,7 +38,7 @@
   .note { background: rgba(122,158,78,0.1); border: 1px solid rgba(110,154,62,0.3); border-radius: 12px; padding: 12px 15px; font-size: 13.5px; margin: 16px 0; }
   .warn { background: rgba(201,138,43,0.1); border: 1px solid rgba(201,138,43,0.32); border-radius: 12px; padding: 12px 15px; font-size: 13.5px; margin: 16px 0; color: var(--brown); }
   .method { font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 6px; color: #fff; margin-right: 8px; }
-  .get { background: var(--sage); } .post { background: var(--forest); } .patch { background: #C98A2B; } .del { background: #B4472E; }
+  .get { background: var(--sage); } .post { background: var(--forest); } .patch { background: #C98A2B; } .del { background: #B4472E; } .put { background: #4C6B8A; }
   .ep { font-family: var(--mono); font-size: 13px; color: var(--ink); }
   .endpoint { padding: 11px 0; border-bottom: 0.5px solid var(--line); }
   .endpoint .desc { font-size: 13px; opacity: 0.7; margin-top: 4px; }
@@ -52,11 +52,11 @@
       <svg width="30" height="30" viewBox="0 0 24 24"><path d="M12 3C7.6 6.4 5 10.6 5 14.4 5 18.6 8 21 12 21s7-2.4 7-6.6C19 10.6 16.4 6.4 12 3Z" fill="#2D5016"/></svg>
       <h1>Caulis</h1>
     </div>
-    <div class="sub">Data format &amp; API reference — for the export/import JSON and a proposed REST API.</div>
+    <div class="sub">Data format &amp; API reference — the export/import JSON and the live backend API.</div>
   </header>
 
-  <p class="eyebrow">Prototype</p>
-  <p>Caulis is an in-browser React prototype. Data lives in <code>localStorage</code> and (optionally) a Firebase Realtime Database node. This page documents the <strong>export/import file format</strong> you can produce from Settings → Backup, and sketches a <strong>hypothetical REST API</strong> for a future backend.</p>
+  <p class="eyebrow">Backend</p>
+  <p>Caulis runs on a small self-hosted backend (Fastify + Postgres) behind <code>api.caulis.czeddaru.dev</code>. It replaced an earlier Firebase Realtime Database prototype — existing gardens were migrated over, Firebase is no longer used. This page documents the <strong>export/import JSON</strong> format and the <strong>live REST API</strong>.</p>
 
   <h2>Export / Import JSON</h2>
   <p>Settings → Backup → <strong>Export</strong> downloads a single JSON file describing your whole garden. <strong>Import</strong> reads the same shape, either <em>merging</em> (keeps current plants, re-ids any collisions) or <em>replacing</em> them.</p>
@@ -64,7 +64,7 @@
   <h3>Top-level object</h3>
   <table>
     <tr><th>Field</th><th>Type</th><th>Notes</th></tr>
-    <tr><td><code>version</code></td><td>string</td><td>App version that wrote the file, e.g. <code>"59"</code>.</td></tr>
+    <tr><td><code>version</code></td><td>string</td><td>App version that wrote the file, e.g. <code>"91"</code>.</td></tr>
     <tr><td><code>exportedAt</code></td><td>string</td><td>ISO 8601 timestamp.</td></tr>
     <tr><td><code>gardenKey</code></td><td>string</td><td>Human-readable garden key (e.g. <code>mossy-fern-42</code>).</td></tr>
     <tr><td><code>locations</code></td><td>string[]</td><td>Known room names.</td></tr>
@@ -89,15 +89,15 @@
     <tr><td><code>sunlight</code></td><td>string[]</td><td>Raw sunlight tags from the species source.</td></tr>
     <tr><td><code>species_id</code></td><td>number\|null</td><td>Perenual species id, if identified.</td></tr>
     <tr><td><code>image</code></td><td>string\|null</td><td>Preset/species photo URL.</td></tr>
-    <tr><td><code>photos</code></td><td>string[]</td><td>User photos as base64 data URLs (cover first). Can be large.</td></tr>
+    <tr><td><code>photos</code></td><td>string[]</td><td>User photos as base64 data URLs (cover first). Can be large — stored separately server-side, not inline on the plant.</td></tr>
   </table>
 
   <div class="note"><strong>Status rule:</strong> <code>r = days / every</code> → <code>r ≥ 1</code> needs water, <code>r ≥ 0.7</code> water soon, else healthy.</div>
-  <div class="warn"><strong>QR safety:</strong> The QR payload is <code>https://&lt;host&gt;/?plant={id}&amp;g={node}</code>. Reordering never changes <code>id</code>. On <em>merge</em> import, only colliding incoming plants get fresh ids — existing plants keep their ids and printed tags.</div>
+  <div class="warn"><strong>QR safety:</strong> The QR payload is <code>caulis://plant/{id}</code>. Reordering never changes <code>id</code>. On <em>merge</em> import, only colliding incoming plants get fresh ids — existing plants keep their ids and printed tags.</div>
 
   <h3>Example</h3>
   <pre><code>{
-  "version": "59",
+  "version": "91",
   "exportedAt": "2026-06-03T09:00:00.000Z",
   "gardenKey": "mossy-fern-42",
   "locations": ["Living room", "Bedroom"],
@@ -119,46 +119,64 @@
       "benchmark": "7 days",
       "sunlight": ["part shade", "filtered shade"],
       "species_id": 1442,
-      "image": "https://…/Monstera_deliciosa3.jpg",
-      "photos": ["data:image/jpeg;base64,…"]
+      "image": "https://…/Monstera_deliciosa3.jpg"
     }
   ]
 }</code></pre>
 
-  <h2>Proposed REST API</h2>
-  <div class="warn"><strong>Not implemented.</strong> A design sketch for a future backend, mirroring the data shape above. Today Caulis talks directly to Firebase Realtime Database; this is what a thin server in front of it could expose.</div>
+  <h2>REST API</h2>
+  <p>Base URL: <code>https://api.caulis.czeddaru.dev</code>. Everything below is live.</p>
 
   <h3>Model</h3>
-  <p>A <strong>garden</strong> is addressed by its storage <code>node</code> = <code>SHA-256(key + "::" + password)</code> — the same derivation the app uses, so the password gates access at the data layer. Plants are nested under a garden.</p>
-
-  <h3>Endpoints</h3>
-  <div class="endpoint"><span class="method get">GET</span><span class="ep">/v1/gardens/{node}</span><div class="desc">Whole garden (plants, locations, queue). 404 if the node is empty.</div></div>
-  <div class="endpoint"><span class="method get">GET</span><span class="ep">/v1/gardens/{node}/plants</span><div class="desc">List plants.</div></div>
-  <div class="endpoint"><span class="method get">GET</span><span class="ep">/v1/gardens/{node}/plants/{id}</span><div class="desc">Single plant (the resource a QR resolves to).</div></div>
-  <div class="endpoint"><span class="method post">POST</span><span class="ep">/v1/gardens/{node}/plants</span><div class="desc">Create a plant; server assigns the next free <code>id</code>. Returns the created plant.</div></div>
-  <div class="endpoint"><span class="method patch">PATCH</span><span class="ep">/v1/gardens/{node}/plants/{id}</span><div class="desc">Partial update (location, care, every, …).</div></div>
-  <div class="endpoint"><span class="method post">POST</span><span class="ep">/v1/gardens/{node}/plants/{id}/water</span><div class="desc">Log a watering. Body <code>{ "daysAgo": 0 }</code> → sets <code>days</code> and appends to <code>history</code>.</div></div>
-  <div class="endpoint"><span class="method del">DELETE</span><span class="ep">/v1/gardens/{node}/plants/{id}</span><div class="desc">Remove a plant.</div></div>
-  <div class="endpoint"><span class="method post">POST</span><span class="ep">/v1/gardens/{node}/import</span><div class="desc">Bulk import. Query <code>?mode=merge|replace</code>, body = the export JSON above.</div></div>
+  <p>A <strong>garden</strong> is a row keyed by a human-readable <code>key</code> string with a bcrypt-hashed password — the same key + password you type into Settings. Logging in returns a JWT bearer token; every authenticated call sends <code>Authorization: Bearer &lt;token&gt;</code>. Plants, locations and the print queue sync as one JSON blob per garden; photos sync separately per plant.</p>
 
   <h3>Auth</h3>
-  <p>The <code>node</code> itself is the capability — knowing it (derived from key + password) grants access. A real deployment should add a bearer token and rate limiting; the password should never travel in the URL.</p>
+  <div class="endpoint"><span class="method post">POST</span><span class="ep">/api/gardens/register</span><div class="desc">Body <code>{ key, password }</code>. Creates a garden, returns <code>{ token }</code>. 409 if the key is taken.</div></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="ep">/api/gardens/login</span><div class="desc">Body <code>{ key, password }</code>. Returns <code>{ token }</code>. 404 unknown key, 401 wrong password.</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/gardens/exists?key=</span><div class="desc">Availability check for a key, used before renaming a garden. No auth.</div></div>
+  <div class="endpoint"><span class="method patch">PATCH</span><span class="ep">/api/gardens/password</span><div class="desc">Body <code>{ newPassword }</code>. Changes the current garden's password.</div></div>
+  <div class="endpoint"><span class="method del">DELETE</span><span class="ep">/api/gardens/me</span><div class="desc">Deletes the current garden and all its data.</div></div>
 
-  <h3>Example — log a watering</h3>
-  <pre><code>POST /v1/gardens/9f3a…/plants/1/water
+  <h3>Garden sync</h3>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/garden</span><div class="desc">Returns <code>{ plants, locations, queue, updated_at }</code>.</div></div>
+  <div class="endpoint"><span class="method put">PUT</span><span class="ep">/api/garden</span><div class="desc">Body <code>{ plants, locations, queue }</code>. Full replace — the client always pushes the whole garden.</div></div>
+
+  <h3>Photos</h3>
+  <div class="endpoint"><span class="method put">PUT</span><span class="ep">/api/garden/photos/{plantId}</span><div class="desc">Body <code>{ photos: string[] }</code> (base64 data URLs, cover first).</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/garden/photos/{plantId}</span><div class="desc">Returns <code>{ photos }</code>.</div></div>
+  <div class="endpoint"><span class="method del">DELETE</span><span class="ep">/api/garden/photos/{plantId}</span><div class="desc">Removes a plant's photo set.</div></div>
+
+  <h3>API keys &amp; proxying</h3>
+  <p>Perenual, Anthropic, and other third-party API keys are stored server-side per garden, never sent to those services directly from the browser.</p>
+  <div class="endpoint"><span class="method put">PUT</span><span class="ep">/api/garden/keys</span><div class="desc">Body — any of <code>{ perenualKey, anthropicKey, plantIdKey, housePlantsKey }</code>. Stores whichever are present.</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/garden/keys/status</span><div class="desc">Returns which keys are set as booleans, never the values.</div></div>
+  <div class="endpoint"><span class="method post">POST</span><span class="ep">/api/ai/messages</span><div class="desc">Proxies to Anthropic's Messages API using the garden's stored key. Body is passed through as-is (model, messages, tools, …).</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/perenual/search?q=</span><div class="desc">Proxies Perenual species search using the stored key.</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/perenual/species/{id}</span><div class="desc">Proxies Perenual species detail lookup.</div></div>
+
+  <h3>Example — sync a garden</h3>
+  <pre><code>POST /api/gardens/login
 Content-Type: application/json
 
-{ "daysAgo": 0 }
+{ "key": "mossy-fern-42", "password": "…" }
 
 → 200 OK
-{ "id": 1, "days": 0, "history": ["2026-05-27", "2026-06-01", "2026-06-03"] }</code></pre>
+{ "token": "eyJhbGciOi…" }
+
+PUT /api/garden
+Authorization: Bearer eyJhbGciOi…
+Content-Type: application/json
+
+{ "plants": [...], "locations": ["Living room"], "queue": [] }
+
+→ 200 OK
+{ "ok": true }</code></pre>
 
   <h2>AI care review</h2>
-  <p>Plant data sources (Perenual, House&nbsp;Plants, Wikipedia, PlantNet) are inconsistent — they often omit the fun fact or care notes, sometimes the watering interval, and occasionally return values that are botanically wrong (a cactus tagged "Frequent"). When an <strong>Anthropic API key</strong> is set in Settings → API keys, Caulis runs each resolved species record through <code>claude-haiku-4-5</code> before it reaches the form.</p>
+  <p>Plant data sources (Perenual, House&nbsp;Plants, Wikipedia, PlantNet) are inconsistent — they often omit the fun fact or care notes, sometimes the watering interval, and occasionally return values that are botanically wrong (a cactus tagged "Frequent"). When an <strong>Anthropic API key</strong> is set in Settings → API keys, Caulis runs each resolved species record through <code>claude-haiku-4-5</code> before it reaches the form, via the <code>/api/ai/messages</code> proxy above.</p>
   <p>The model is told to <strong>keep plausible values and only fill blanks or fix clearly-wrong ones</strong> — succulents/cacti get a long watering interval, ferns and carnivorous plants a short one. It returns a watering interval (days), watering label, light, care notes, a fun fact, and the Czech common name when none was found from the other sources. Results are cached per species in <code>localStorage</code> (<code>caulis_ai_care</code>), so each species costs one call.</p>
   <p>This only ever touches <em>care fields</em> — never a plant's <code>id</code>, so QR codes are unaffected. The pass is fully optional: with no key, or on any network/parse error, Caulis falls back to the raw source data and built-in heuristics.</p>
   <p>Plants added before AI review existed can be upgraded in bulk: Settings → API keys shows a <strong>“Recheck older plants with AI”</strong> button (only when a key is set and such plants exist) that re-runs each one through the model and stamps it so it won't be re-processed.</p>
-  <p><strong>Key caveat:</strong> the prototype calls the Anthropic API directly from the browser (<code>anthropic-dangerous-direct-browser-access</code>), so the key lives in <code>localStorage</code> on the device. As with the other API keys, a production build must route this through a serverless proxy and never expose the key client-side.</p>
 
   <footer>Caulis · grown with care</footer>
 </div>

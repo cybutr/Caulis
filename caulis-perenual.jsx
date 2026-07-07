@@ -171,14 +171,28 @@ function searchLocalPlants(query) {
 }
 
 // ── service (live when key present, else bundled library) ──
+// keys are cached locally for instant UI state, but the values that matter
+// live server-side (garden.perenual_key / anthropic_key etc) — every save
+// also PUTs to /api/garden/keys so the backend proxy can use them without
+// the browser ever sending them straight to the third-party API again.
+function _pushKeyToBackend(field, value) {
+  const token = getActiveToken();
+  if (!token) return;
+  fetch(`${BACKEND_URL}/api/garden/keys`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ [field]: value }),
+  }).catch(() => {});
+}
+
 let API_KEY = '';
 try { API_KEY = localStorage.getItem('caulis_perenual_key') || ''; } catch (e) {}
-function setApiKey(k) { API_KEY = k || ''; try { localStorage.setItem('caulis_perenual_key', API_KEY); } catch (e) {} }
+function setApiKey(k) { API_KEY = k || ''; try { localStorage.setItem('caulis_perenual_key', API_KEY); } catch (e) {} _pushKeyToBackend('perenualKey', API_KEY); }
 function hasApiKey() { return !!API_KEY; }
 
 let PLANT_ID_KEY = '';
 try { PLANT_ID_KEY = localStorage.getItem('caulis_plantid_key') || ''; } catch(e) {}
-function setPlantIdKey(k) { PLANT_ID_KEY = k || ''; try { localStorage.setItem('caulis_plantid_key', PLANT_ID_KEY); } catch(e) {} }
+function setPlantIdKey(k) { PLANT_ID_KEY = k || ''; try { localStorage.setItem('caulis_plantid_key', PLANT_ID_KEY); } catch(e) {} _pushKeyToBackend('plantIdKey', PLANT_ID_KEY); }
 
 let IDENTIFY_LANG = 'en';
 try { IDENTIFY_LANG = localStorage.getItem('caulis_identify_lang') || 'en'; } catch(e) {}
@@ -186,11 +200,11 @@ function setIdentifyLang(lang) { IDENTIFY_LANG = lang || 'en'; try { localStorag
 
 let HOUSE_PLANTS_KEY = '';
 try { HOUSE_PLANTS_KEY = localStorage.getItem('caulis_houseplants_key') || ''; } catch(e) {}
-function setHousePlantsKey(k) { HOUSE_PLANTS_KEY = k || ''; try { localStorage.setItem('caulis_houseplants_key', HOUSE_PLANTS_KEY); } catch(e) {} }
+function setHousePlantsKey(k) { HOUSE_PLANTS_KEY = k || ''; try { localStorage.setItem('caulis_houseplants_key', HOUSE_PLANTS_KEY); } catch(e) {} _pushKeyToBackend('housePlantsKey', HOUSE_PLANTS_KEY); }
 
 let ANTHROPIC_KEY = '';
 try { ANTHROPIC_KEY = localStorage.getItem('caulis_anthropic_key') || ''; } catch(e) {}
-function setAnthropicKey(k) { ANTHROPIC_KEY = k || ''; try { localStorage.setItem('caulis_anthropic_key', ANTHROPIC_KEY); } catch(e) {} }
+function setAnthropicKey(k) { ANTHROPIC_KEY = k || ''; try { localStorage.setItem('caulis_anthropic_key', ANTHROPIC_KEY); } catch(e) {} _pushKeyToBackend('anthropicKey', ANTHROPIC_KEY); }
 function hasAnthropicKey() { return !!ANTHROPIC_KEY; }
 
 const _wait = (ms) => new Promise(r => setTimeout(r, ms));
@@ -329,22 +343,30 @@ async function aiReviewCare(record) {
       'every (integer days between waterings), watering (one of "Frequent","Average","Minimum","None"), ' +
       'light (short phrase), care (one or two concise sentences), fact (one short interesting sentence), ' +
       'sunlight (array of short light strings), czech (the Czech common name of the species — only if you are confident, otherwise empty string).';
-    const r = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5',
-        max_tokens: 400,
-        temperature: 0,
-        system: sys,
-        messages: [{ role: 'user', content: 'Current data:\n' + JSON.stringify(current, null, 2) }],
-      }),
-    });
+    const aiBody = {
+      model: 'claude-haiku-4-5',
+      max_tokens: 400,
+      temperature: 0,
+      system: sys,
+      messages: [{ role: 'user', content: 'Current data:\n' + JSON.stringify(current, null, 2) }],
+    };
+    const aiToken = getActiveToken();
+    const r = aiToken
+      ? await fetch(`${BACKEND_URL}/api/ai/messages`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${aiToken}` },
+          body: JSON.stringify(aiBody),
+        })
+      : await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': ANTHROPIC_KEY,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+          },
+          body: JSON.stringify(aiBody),
+        });
     if (!r.ok) return record;
     const j = await r.json();
     let text = (j?.content || []).map(b => b.text || '').join('').trim();
@@ -405,16 +427,24 @@ async function doctorAsk({ messages, plantContext, model, key, withTools }) {
     + (withTools ? '\n\nYou can use tools to inspect the garden and propose data corrections. Only reach for them when the conversation is actually about a saved plant being wrong — never for routine advice.' : '');
   const body = { model: model || 'claude-haiku-4-5', max_tokens: 1024, system, messages };
   if (withTools) body.tools = DOCTOR_TOOLS;
-  const r = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify(body),
-  });
+
+  const token = getActiveToken();
+  const r = token
+    ? await fetch(`${BACKEND_URL}/api/ai/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      })
+    : await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify(body),
+      });
   if (!r.ok) {
     let msg = ''; try { msg = (await r.json())?.error?.message; } catch(e) {}
     throw new Error(msg || `Request failed (${r.status})`);
@@ -455,7 +485,10 @@ async function searchSpecies(query) {
   const q = (query || '').trim().toLowerCase();
   if (API_KEY) {
     try {
-      const r = await fetch(`https://perenual.com/api/v2/species-list?key=${API_KEY}&q=${encodeURIComponent(q)}`);
+      const token = getActiveToken();
+      const r = token
+        ? await fetch(`${BACKEND_URL}/api/perenual/search?q=${encodeURIComponent(q)}`, { headers: { authorization: `Bearer ${token}` } })
+        : await fetch(`https://perenual.com/api/v2/species-list?key=${API_KEY}&q=${encodeURIComponent(q)}`);
       if (r.ok) { const j = await r.json(); if (j?.data?.length) return j.data; }
     } catch (e) {}
   }
@@ -472,7 +505,10 @@ async function searchSpecies(query) {
 async function getSpeciesDetails(id, latinNameHint) {
   if (API_KEY) {
     try {
-      const r = await fetch(`https://perenual.com/api/v2/species/details/${id}?key=${API_KEY}`);
+      const token = getActiveToken();
+      const r = token
+        ? await fetch(`${BACKEND_URL}/api/perenual/species/${id}`, { headers: { authorization: `Bearer ${token}` } })
+        : await fetch(`https://perenual.com/api/v2/species/details/${id}?key=${API_KEY}`);
       if (r.ok) { const j = await r.json(); if (j?.id) return await aiReviewCare({ ...j, _source: 'Perenual' }); }
     } catch (e) {}
   }
