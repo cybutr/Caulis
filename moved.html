@@ -1,27 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script>
-  // this page IS already on the real domain, so redeeming the token here
-  // (rather than waiting for a click through to /) means the data's already
-  // in place the moment "Continue in browser" is tapped
-  if (location.search.indexOf('_migrate=') !== -1) {
-    const params = new URLSearchParams(location.search);
-    const token = params.get('_migrate');
-    if (token) {
-      try {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', 'https://api.caulis.czeddaru.dev/api/migrate/' + encodeURIComponent(token), false);
-        xhr.send();
-        if (xhr.status < 400) {
-          const { payload } = JSON.parse(xhr.responseText);
-          for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
-        }
-      } catch (e) {}
-      history.replaceState(null, '', location.pathname);
-    }
-  }
-</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Caulis moved</title>
@@ -36,22 +15,43 @@
   h1 { font-family:"Cormorant Garamond",serif; font-style:italic; font-weight:600; font-size:28px; color:#2D5016; margin-bottom:14px; }
   p { font-size:14.5px; line-height:1.6; opacity:0.82; margin-bottom:10px; }
   ol { text-align:left; font-size:14px; line-height:1.7; opacity:0.85; margin:16px 0; padding-left:20px; }
-  a.btn { display:inline-block; margin-top:14px; background:#2D5016; color:#fff; text-decoration:none;
-          padding:13px 26px; border-radius:999px; font-weight:600; font-size:14px; }
+  .linkbox { display:flex; gap:8px; margin-top:16px; align-items:center; }
+  input { flex:1; min-width:0; font-size:12.5px; font-family:ui-monospace,monospace; padding:11px 12px;
+          border-radius:10px; border:1px solid rgba(45,80,22,0.2); background:#fff; color:#2A2A26; }
+  button { background:#2D5016; color:#fff; border:none; padding:12px 18px; border-radius:10px;
+           font-weight:600; font-size:13.5px; cursor:pointer; white-space:nowrap; }
+  .hint { font-size:12px; opacity:0.6; margin-top:10px; }
 </style>
 </head>
 <body>
 <div class="card">
   <svg width="36" height="36" viewBox="0 0 24 24"><path d="M12 3C7.6 6.4 5 10.6 5 14.4 5 18.6 8 21 12 21s7-2.4 7-6.6C19 10.6 16.4 6.4 12 3Z" fill="#2D5016"/></svg>
   <h1>Caulis moved home</h1>
-  <p>This installed app points at the old address, which can't update itself automatically.</p>
+  <p>This installed app points at the old address, which can't update or redirect itself — and on iOS, an installed app can't open the real Safari for you either.</p>
   <ol>
-    <li>Remove this app from your home screen</li>
-    <li>Open <strong>caulis.czeddaru.dev</strong> in your browser</li>
-    <li>Add it to your home screen again</li>
+    <li>Copy the link below</li>
+    <li>Open it in Safari yourself (not from inside this app)</li>
+    <li>Your garden and settings will already be there</li>
+    <li>Remove this old app from your home screen, add the new one instead</li>
   </ol>
-  <p>Your garden and settings are already waiting for you there.</p>
-  <a class="btn" href="https://caulis.czeddaru.dev/">Continue in browser</a>
+  <div class="linkbox">
+    <input id="link" readonly value="https://caulis.czeddaru.dev/" />
+    <button onclick="copyLink()" id="copyBtn">Copy</button>
+  </div>
+  <p class="hint">Long-pressing the link field and choosing Copy works even if the button above doesn't.</p>
 </div>
+<script>
+  const params = new URLSearchParams(location.search);
+  const token = params.get('_migrate');
+  const url = 'https://caulis.czeddaru.dev/' + (token ? '?_migrate=' + token : '');
+  document.getElementById('link').value = url;
+  function copyLink() {
+    const input = document.getElementById('link');
+    input.select(); input.setSelectionRange(0, url.length);
+    navigator.clipboard && navigator.clipboard.writeText(url).catch(() => document.execCommand('copy'));
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied ✓'; setTimeout(() => btn.textContent = 'Copy', 1500);
+  }
+</script>
 </body>
 </html>
