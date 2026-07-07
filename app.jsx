@@ -620,7 +620,16 @@ function App() {
   // unified mobile gesture: horizontal swipe = change tab (if enabled),
   // vertical pull at scroll-top = pull-to-refresh. Ignored over overlays
   // and horizontally-scrollable zones (marked data-noswipe).
-  const TAB_ORDER = navTabOrder(navConfig); // swipes follow the customized bar order
+  const TAB_ORDER = navTabOrder(navConfig); // screen-change animation direction only — persistent screens
+  // swiping reaches every slot actually in the bar, not just the persistent-
+  // screen ones — a slot replaced with Doctor/Add/More should be swipeable
+  // to, same as tapping it would fire that action. A position pointer is
+  // needed alongside `tab` because firing a non-tab action doesn't change
+  // `tab` (Doctor/Add open as overlays, not screens), so pure index-of-tab
+  // would get stuck re-firing the same slot on repeated swipes.
+  const SWIPE_ORDER = normalizeNav(navConfig).filter(s => s.action !== 'empty').map(s => s.action);
+  const swipeIdxRef = useRef(Math.max(0, SWIPE_ORDER.indexOf(tab)));
+  useEffect(() => { const i = SWIPE_ORDER.indexOf(tab); if (i >= 0) swipeIdxRef.current = i; }, [tab, navConfig]);
   const PULL_MAX = 88, PULL_TRIG = 62;
   const swipeRef = useRef(null);
   const [pull, setPull] = useState(0);
@@ -677,9 +686,9 @@ function App() {
     if (!swipeNav || s.noswipe) return;
     const dx = s.lx - s.x, dy = s.ly - s.y;
     if (Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
-    const i = TAB_ORDER.indexOf(tab);
-    const ni = dx < 0 ? Math.min(TAB_ORDER.length - 1, i + 1) : Math.max(0, i - 1);
-    if (ni !== i) setTab(TAB_ORDER[ni]);
+    const i = swipeIdxRef.current;
+    const ni = dx < 0 ? Math.min(SWIPE_ORDER.length - 1, i + 1) : Math.max(0, i - 1);
+    if (ni !== i) { swipeIdxRef.current = ni; navTo(SWIPE_ORDER[ni]); }
   };
   const prevTabRef = useRef(tab);
   const tabDir = TAB_ORDER.indexOf(tab) >= TAB_ORDER.indexOf(prevTabRef.current) ? 1 : -1;

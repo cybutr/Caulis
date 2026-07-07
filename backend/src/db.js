@@ -44,6 +44,22 @@ export async function initSchema() {
       payload JSONB NOT NULL,
       created_at TIMESTAMPTZ DEFAULT now()
     );
+
+    -- general-purpose tools, unrelated to gardens — reusable on this same
+    -- infra for whatever comes next
+    CREATE TABLE IF NOT EXISTS pastes (
+      code TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS shortlinks (
+      code TEXT PRIMARY KEY,
+      url TEXT NOT NULL,
+      hits INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+
     INSERT INTO admin_settings (key, value) VALUES ('backup_interval_hours', '24') ON CONFLICT DO NOTHING;
     INSERT INTO admin_settings (key, value) VALUES ('backup_keep_count', '14') ON CONFLICT DO NOTHING;
   `);

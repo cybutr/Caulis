@@ -376,6 +376,56 @@ app.get('/api/migrate/:token', async (req, reply) => {
   return { payload: rows[0].payload };
 });
 
+// ── general-purpose tools, unrelated to gardens — free to reuse on any
+// future project pointed at this box, no auth since there's nothing
+// sensitive here beyond whatever the caller pastes in ──
+
+app.post('/api/tools/paste', async (req, reply) => {
+  const { content, ttlMinutes = 1440 } = req.body || {};
+  if (typeof content !== 'string' || !content) return reply.code(400).send({ error: 'content required' });
+  if (content.length > 200000) return reply.code(413).send({ error: 'content too large (200KB max)' });
+  const code = crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+  const ttl = Math.min(43200, Math.max(1, ttlMinutes | 0)); // 1 min .. 30 days
+  await pool.query(
+    `INSERT INTO pastes (code, content, expires_at) VALUES ($1, $2, now() + ($3 || ' minutes')::interval)`,
+    [code, content, ttl]
+  );
+  pool.query("DELETE FROM pastes WHERE expires_at < now()").catch(() => {});
+  return { code };
+});
+
+app.get('/api/tools/paste/:code', async (req, reply) => {
+  const { rows } = await pool.query(
+    'SELECT content, expires_at FROM pastes WHERE code = $1 AND expires_at > now()',
+    [req.params.code]
+  );
+  if (!rows.length) return reply.code(404).send({ error: 'not found or expired' });
+  return { content: rows[0].content, expiresAt: rows[0].expires_at };
+});
+
+app.post('/api/tools/shorten', async (req, reply) => {
+  const { url } = req.body || {};
+  if (typeof url !== 'string' || !/^https?:\/\//.test(url)) return reply.code(400).send({ error: 'a valid http(s) url is required' });
+  const code = crypto.randomUUID().replace(/-/g, '').slice(0, 7);
+  await pool.query('INSERT INTO shortlinks (code, url) VALUES ($1, $2)', [code, url]);
+  return { code, shortUrl: `https://${req.hostname}/s/${code}` };
+});
+
+app.get('/s/:code', async (req, reply) => {
+  const { rows } = await pool.query(
+    'UPDATE shortlinks SET hits = hits + 1 WHERE code = $1 RETURNING url',
+    [req.params.code]
+  );
+  if (!rows.length) return reply.code(404).send({ error: 'not found' });
+  return reply.redirect(rows[0].url, 302);
+});
+
+app.get('/api/tools/shorten/:code/stats', async (req, reply) => {
+  const { rows } = await pool.query('SELECT url, hits, created_at FROM shortlinks WHERE code = $1', [req.params.code]);
+  if (!rows.length) return reply.code(404).send({ error: 'not found' });
+  return rows[0];
+});
+
 app.get('/health', async () => ({ ok: true }));
 
 const port = process.env.PORT || 3001;
