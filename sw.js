@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v97';
+const CACHE = 'caulis-v98';
 const SHELL = [
   './',
   './index.html',
@@ -49,6 +49,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // Never intercept navigations (document loads) — just let the browser
+  // handle them natively. Safari/WebKit has a real bug where a service
+  // worker manually re-fetching a navigation request (respondWith(fetch(...)))
+  // throws "FetchEvent.respondWith received an error: TypeError: Load failed",
+  // especially with a long URL like the migration link's ?_migrate= payload.
+  // Sub-resources (scripts, images) below are unaffected and still cached.
+  if (e.request.mode === 'navigate') return;
+
   // Network-first for CDN (React, Firebase, fonts) — fall back to cache
   // Cache-first for local app shell
   const url = new URL(e.request.url);
