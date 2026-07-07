@@ -4,14 +4,15 @@
 <script>
   // Caulis moved off GitHub Pages to its own domain.
   //
-  // The old-origin -> new-origin hop is code-driven, not something a human
-  // copies through a messaging app, so the raw payload rides directly in the
-  // URL (_migrate_raw) — no network call needed here at all. That matters
-  // because a cross-origin synchronous XHR from inside an *installed* app's
-  // isolated webview (iOS 16.4+) turned out to silently fail, leaving the
-  // migration payload empty. Only the human-facing copyable links (moved.html,
-  // Settings > Get migration link) go through the short-token backend API,
-  // since THOSE are the ones that get mangled by long URLs in chat apps.
+  // The old origin has no ordering constraint to protect — it only gathers
+  // and redirects, nothing here reads the result back — so it can safely
+  // use a normal async fetch to mint a short token from the backend rather
+  // than ever putting the raw payload in a URL (a long enough URL trips an
+  // iOS "address invalid" error regardless of whether a human pasted it or
+  // location.replace() set it directly). The sync XHR below, on the *new*
+  // domain, is the one that actually has to block: app.jsx's initial
+  // useState() reads localStorage synchronously at mount, so redemption has
+  // to finish before any later <script> tag runs.
   //
   // Bulky/re-derivable local caches (plant list, photos, AI cache) are left
   // behind — they resync fresh from the backend once the garden key/password
@@ -23,36 +24,33 @@
   // launch. No web API lets a page uninstall itself, so send it to a static
   // page that explains the one-time manual step instead.
   if (location.hostname !== 'caulis.czeddaru.dev') {
-    const skip = new Set(['caulis_plants', 'caulis_queue', 'caulis_ai_care', 'caulis_garden_node']);
-    const payload = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      if (k && k.indexOf('caulis_') === 0 && !skip.has(k) && k.indexOf('caulis_img') !== 0) payload[k] = localStorage.getItem(k);
-    }
-    const migrateQS = Object.keys(payload).length ? '_migrate_raw=' + encodeURIComponent(JSON.stringify(payload)) : '';
+    (async () => {
+      const skip = new Set(['caulis_plants', 'caulis_queue', 'caulis_ai_care', 'caulis_garden_node']);
+      const payload = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf('caulis_') === 0 && !skip.has(k) && k.indexOf('caulis_img') !== 0) payload[k] = localStorage.getItem(k);
+      }
+      let migrateQS = '';
+      if (Object.keys(payload).length) {
+        try {
+          const r = await fetch('https://api.caulis.czeddaru.dev/api/migrate', {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+          });
+          const { token } = await r.json();
+          if (token) migrateQS = '_migrate=' + token;
+        } catch (e) {}
+      }
 
-    const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
-    if (standalone) {
-      location.replace('https://caulis.czeddaru.dev/moved.html' + (migrateQS ? '?' + migrateQS : ''));
-    } else {
-      const path = location.pathname.replace(/^\/Caulis/, '') || '/';
-      const sep = location.search ? '&' : '?';
-      location.replace('https://caulis.czeddaru.dev' + path + location.search + (migrateQS ? sep + migrateQS : ''));
-    }
-  } else if (location.search.indexOf('_migrate_raw=') !== -1) {
-    // straight from the old origin's redirect — purely local, no network,
-    // so no ordering race with app.jsx's synchronous useState() reads
-    const params = new URLSearchParams(location.search);
-    const raw = params.get('_migrate_raw');
-    if (raw) {
-      try {
-        const payload = JSON.parse(raw);
-        for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
-      } catch (e) {}
-      params.delete('_migrate_raw');
-      const qs = params.toString();
-      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
-    }
+      const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+      if (standalone) {
+        location.replace('https://caulis.czeddaru.dev/moved.html' + (migrateQS ? '?' + migrateQS : ''));
+      } else {
+        const path = location.pathname.replace(/^\/Caulis/, '') || '/';
+        const sep = location.search ? '&' : '?';
+        location.replace('https://caulis.czeddaru.dev' + path + location.search + (migrateQS ? sep + migrateQS : ''));
+      }
+    })();
   } else if (location.search.indexOf('_migrate=') !== -1) {
     // a human-shared short-token link (moved.html, or Settings > Get
     // migration link) — this runs in a real browser tab on the real domain,
