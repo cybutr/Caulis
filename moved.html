@@ -1,6 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script>
+  // this page IS already on the real domain, so applying the payload here
+  // (rather than waiting for a click through to /) means the data's already
+  // in place the moment "Continue in browser" is tapped
+  if (location.search.indexOf('_migrate=') !== -1) {
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('_migrate');
+    if (raw) {
+      try {
+        const payload = JSON.parse(raw);
+        for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
+      } catch (e) {}
+      history.replaceState(null, '', location.pathname);
+    }
+  }
+</script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Caulis moved</title>

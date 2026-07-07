@@ -18,16 +18,22 @@
   // launch. No web API lets a page uninstall itself, so send it to a static
   // page that explains the one-time manual step instead.
   if (location.hostname !== 'caulis.czeddaru.dev') {
+    // gathered here regardless of standalone/browser — moved.html lives on
+    // the real domain, so the payload has to ride along in ITS url too,
+    // otherwise the old origin's localStorage is unreachable by the time
+    // the standalone shell lands there
+    const skip = new Set(['caulis_plants', 'caulis_queue', 'caulis_ai_care', 'caulis_garden_node']);
+    const payload = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('caulis_') === 0 && !skip.has(k) && k.indexOf('caulis_img') !== 0) payload[k] = localStorage.getItem(k);
+    }
+    const migrateQS = Object.keys(payload).length ? '?_migrate=' + encodeURIComponent(JSON.stringify(payload)) : '';
+
     const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
     if (standalone) {
-      location.replace('https://caulis.czeddaru.dev/moved.html');
+      location.replace('https://caulis.czeddaru.dev/moved.html' + migrateQS);
     } else {
-      const skip = new Set(['caulis_plants', 'caulis_queue', 'caulis_ai_care', 'caulis_garden_node']);
-      const payload = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.indexOf('caulis_') === 0 && !skip.has(k) && k.indexOf('caulis_img') !== 0) payload[k] = localStorage.getItem(k);
-      }
       const path = location.pathname.replace(/^\/Caulis/, '') || '/';
       const sep = location.search ? '&' : '?';
       const migrate = Object.keys(payload).length ? sep + '_migrate=' + encodeURIComponent(JSON.stringify(payload)) : '';
