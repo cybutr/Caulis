@@ -41,10 +41,25 @@
   <p class="hint">Long-pressing the link field and choosing Copy works even if the button above doesn't.</p>
 </div>
 <script>
-  const params = new URLSearchParams(location.search);
-  const token = params.get('_migrate');
-  const url = 'https://caulis.czeddaru.dev/' + (token ? '?_migrate=' + token : '');
-  document.getElementById('link').value = url;
+  // arrives here as the raw payload (from the old origin's redirect, code-
+  // driven so length doesn't matter) — exchange it for a short token so the
+  // link a human actually copies/pastes is small and safe to share
+  let url = 'https://caulis.czeddaru.dev/';
+  (async () => {
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('_migrate_raw');
+    if (raw) {
+      try {
+        const payload = JSON.parse(raw);
+        const r = await fetch('https://api.caulis.czeddaru.dev/api/migrate', {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+        });
+        const { token } = await r.json();
+        if (token) url = 'https://caulis.czeddaru.dev/?_migrate=' + token;
+      } catch (e) {}
+    }
+    document.getElementById('link').value = url;
+  })();
   function copyLink() {
     const input = document.getElementById('link');
     input.select(); input.setSelectionRange(0, url.length);

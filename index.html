@@ -4,40 +4,24 @@
 <script>
   // Caulis moved off GitHub Pages to its own domain.
   //
-  // Regular browser tab: silently redirect, carrying small localStorage
-  // settings/credentials along via a short-lived one-time token (backend-
-  // stored, not embedded as a giant URL payload — that got mangled by
-  // messaging-app link previews and tripped an iOS "address invalid" bug)
-  // so the new origin logs straight back into the same garden (localStorage
-  // is origin-scoped, so caulis.czeddaru.dev starts with none of it
-  // otherwise). Bulky/re-derivable local caches (plant list, photos, AI
-  // cache) are left behind — they resync fresh from the backend once the
-  // garden key/password carry over.
+  // The old-origin -> new-origin hop is code-driven, not something a human
+  // copies through a messaging app, so the raw payload rides directly in the
+  // URL (_migrate_raw) — no network call needed here at all. That matters
+  // because a cross-origin synchronous XHR from inside an *installed* app's
+  // isolated webview (iOS 16.4+) turned out to silently fail, leaving the
+  // migration payload empty. Only the human-facing copyable links (moved.html,
+  // Settings > Get migration link) go through the short-token backend API,
+  // since THOSE are the ones that get mangled by long URLs in chat apps.
+  //
+  // Bulky/re-derivable local caches (plant list, photos, AI cache) are left
+  // behind — they resync fresh from the backend once the garden key/password
+  // carry over.
   //
   // Installed PWA (standalone): a silent redirect here doesn't fix anything
   // long-term — the home-screen icon's start_url is fixed at install time to
   // the old origin, so it would just show this same page again on every
   // launch. No web API lets a page uninstall itself, so send it to a static
   // page that explains the one-time manual step instead.
-  // synchronous XHR is deliberate here, not an oversight — this must finish
-  // before any later <script> tag runs, since app.jsx's initial useState()
-  // reads localStorage synchronously at mount. An async fetch would let the
-  // rest of the page (React, app.jsx) load and initialize from an empty
-  // localStorage before the migrated values ever landed.
-  function syncPost(url, body) {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', url, false);
-    xhr.setRequestHeader('content-type', 'application/json');
-    try { xhr.send(JSON.stringify(body)); return xhr.status < 400 ? JSON.parse(xhr.responseText) : null; }
-    catch (e) { return null; }
-  }
-  function syncGet(url) {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', url, false);
-    try { xhr.send(); return xhr.status < 400 ? JSON.parse(xhr.responseText) : null; }
-    catch (e) { return null; }
-  }
-
   if (location.hostname !== 'caulis.czeddaru.dev') {
     const skip = new Set(['caulis_plants', 'caulis_queue', 'caulis_ai_care', 'caulis_garden_node']);
     const payload = {};
@@ -45,11 +29,7 @@
       const k = localStorage.key(i);
       if (k && k.indexOf('caulis_') === 0 && !skip.has(k) && k.indexOf('caulis_img') !== 0) payload[k] = localStorage.getItem(k);
     }
-    let migrateQS = '';
-    if (Object.keys(payload).length) {
-      const res = syncPost('https://api.caulis.czeddaru.dev/api/migrate', payload);
-      if (res && res.token) migrateQS = '_migrate=' + res.token;
-    }
+    const migrateQS = Object.keys(payload).length ? '_migrate_raw=' + encodeURIComponent(JSON.stringify(payload)) : '';
 
     const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
     if (standalone) {
@@ -59,16 +39,37 @@
       const sep = location.search ? '&' : '?';
       location.replace('https://caulis.czeddaru.dev' + path + location.search + (migrateQS ? sep + migrateQS : ''));
     }
+  } else if (location.search.indexOf('_migrate_raw=') !== -1) {
+    // straight from the old origin's redirect — purely local, no network,
+    // so no ordering race with app.jsx's synchronous useState() reads
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('_migrate_raw');
+    if (raw) {
+      try {
+        const payload = JSON.parse(raw);
+        for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
+      } catch (e) {}
+      params.delete('_migrate_raw');
+      const qs = params.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+    }
   } else if (location.search.indexOf('_migrate=') !== -1) {
-    // one-time import on the real domain — never overwrites a session that
-    // already exists here (e.g. someone re-clicking an old shared link)
+    // a human-shared short-token link (moved.html, or Settings > Get
+    // migration link) — this runs in a real browser tab on the real domain,
+    // not an isolated app container, so a sync XHR here is reliable and
+    // still finishes before app.jsx's synchronous useState() reads run
     const params = new URLSearchParams(location.search);
     const token = params.get('_migrate');
     if (token) {
-      const res = syncGet('https://api.caulis.czeddaru.dev/api/migrate/' + encodeURIComponent(token));
-      if (res && res.payload) {
-        for (const k in res.payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, res.payload[k]);
-      }
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', 'https://api.caulis.czeddaru.dev/api/migrate/' + encodeURIComponent(token), false);
+        xhr.send();
+        if (xhr.status < 400) {
+          const { payload } = JSON.parse(xhr.responseText);
+          for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
+        }
+      } catch (e) {}
       params.delete('_migrate');
       const qs = params.toString();
       history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
