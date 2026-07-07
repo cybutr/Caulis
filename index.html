@@ -2,12 +2,51 @@
 <html lang="en">
 <head>
 <script>
-  // Caulis moved off GitHub Pages to its own domain. Any visit here
-  // (bookmark, installed PWA, old QR code) bounces straight over —
-  // strip the GH Pages "/Caulis" project-page prefix, keep the rest.
+  // Caulis moved off GitHub Pages to its own domain.
+  //
+  // Regular browser tab: silently redirect, carrying small localStorage
+  // settings/credentials along as a one-time query payload so the new
+  // origin logs straight back into the same garden (localStorage is
+  // origin-scoped, so caulis.czeddaru.dev starts with none of it otherwise).
+  // Bulky/re-derivable local caches (plant list, photos, AI cache) are left
+  // behind — they resync fresh from the backend once the garden key/password
+  // carry over.
+  //
+  // Installed PWA (standalone): a silent redirect here doesn't fix anything
+  // long-term — the home-screen icon's start_url is fixed at install time to
+  // the old origin, so it would just show this same page again on every
+  // launch. No web API lets a page uninstall itself, so send it to a static
+  // page that explains the one-time manual step instead.
   if (location.hostname !== 'caulis.czeddaru.dev') {
-    const path = location.pathname.replace(/^\/Caulis/, '') || '/';
-    location.replace('https://caulis.czeddaru.dev' + path + location.search);
+    const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    if (standalone) {
+      location.replace('https://caulis.czeddaru.dev/moved.html');
+    } else {
+      const skip = new Set(['caulis_plants', 'caulis_queue', 'caulis_ai_care', 'caulis_garden_node']);
+      const payload = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf('caulis_') === 0 && !skip.has(k) && k.indexOf('caulis_img') !== 0) payload[k] = localStorage.getItem(k);
+      }
+      const path = location.pathname.replace(/^\/Caulis/, '') || '/';
+      const sep = location.search ? '&' : '?';
+      const migrate = Object.keys(payload).length ? sep + '_migrate=' + encodeURIComponent(JSON.stringify(payload)) : '';
+      location.replace('https://caulis.czeddaru.dev' + path + location.search + migrate);
+    }
+  } else if (location.search.indexOf('_migrate=') !== -1) {
+    // one-time import on the real domain — never overwrites a session that
+    // already exists here (e.g. someone re-clicking an old shared link)
+    const params = new URLSearchParams(location.search);
+    const raw = params.get('_migrate');
+    if (raw) {
+      try {
+        const payload = JSON.parse(raw);
+        for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
+      } catch (e) {}
+      params.delete('_migrate');
+      const qs = params.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+    }
   }
 </script>
 <meta charset="UTF-8" />

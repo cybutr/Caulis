@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v94';
+const CACHE = 'caulis-v95';
 const SHELL = [
   './',
   './index.html',
@@ -13,9 +13,14 @@ const SHELL = [
   './icon-512.png',
 ];
 
-// Caulis moved off GitHub Pages. A PWA installed from the old origin still
-// runs whatever service worker it last cached — self-destruct here instead
-// of serving stale offline content, and push any open window to the new home.
+// Caulis moved off GitHub Pages. A tab/PWA still on the old origin may be
+// running whatever service worker + cached index.html it last saw — self-
+// destruct here instead of serving stale offline content. Reload the old
+// origin's own root (not the new domain directly): the unregister + cache
+// wipe above means that reload hits the network fresh, picking up the
+// current index.html, which is the one that actually gathers localStorage
+// and carries it over — jumping straight to the new domain from inside the
+// service worker would skip that step entirely.
 if (self.location.hostname !== 'caulis.czeddaru.dev') {
   self.addEventListener('install', () => self.skipWaiting());
   self.addEventListener('activate', e => {
@@ -24,7 +29,7 @@ if (self.location.hostname !== 'caulis.czeddaru.dev') {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
       const clientList = await self.clients.matchAll({ type: 'window' });
-      for (const client of clientList) client.navigate('https://caulis.czeddaru.dev/');
+      for (const client of clientList) client.navigate(self.registration.scope);
     })());
   });
 } else {
