@@ -152,6 +152,11 @@ function App() {
     firedLaunchActionRef.current = true;
     const meta = NAV_ACTIONS[defaultTab];
     if (!meta || meta.tab) return;
+    // a QR/share-link deep link (a specific plant, or a guest view into someone
+    // else's garden) takes priority over the user's own launch preference — firing
+    // Doctor over top of a plant they were just sent to open would be worse than
+    // just skipping the auto-launch shortcut this one time
+    if (pendingPlantId != null || (pendingLink && pendingLink.node)) return;
     // a beat of visible context before the overlay pops — without it, opening
     // straight into Doctor's camera/chat UI on cold launch reads as a glitch
     // rather than the deliberate shortcut it is
@@ -188,26 +193,37 @@ function App() {
   }, [reduceMotion]);
   // a quiet milestone badge the first time the garden crosses a nice round size —
   // but only for growth that happens *in this session*. Plants load asynchronously
-  // (local cache first, then a possibly-larger Firebase sync that can land a few
-  // seconds later for a device freshly joining an existing garden), so a single
-  // "already primed on first render" flag isn't enough — a fresh device would still
-  // prime against 0, then get bumped to 30 by the sync and read that as fresh growth.
-  // Instead: any milestone crossed within a short settling window after mount is
-  // silently marked seen, never toasted — only crossings after that window count.
+  // (local cache first, then a possibly-larger Firebase sync that can land anywhere
+  // from under a second to many seconds later, depending on the network), so a
+  // fixed settling timer is the wrong tool — a slow sync just moves the same race
+  // past whatever window is chosen. Instead this gates on the real event: the first
+  // authoritative remote snapshot for this garden (see remoteSynced below, flipped
+  // by the Firebase listener). `remoteSyncedFallbackMs` is a generous fail-open
+  // safety net only — for a garden with no remote session at all, the listener
+  // would otherwise never fire and milestones would silently never prime.
   const MILESTONES = [5, 10, 25, 50, 100, 200];
   const [milestoneToast, setMilestoneToast] = useState(null);
-  const milestoneMountRef = useRef(Date.now());
+  const [remoteSynced, setRemoteSynced] = useState(false);
+  const milestonePrimedRef = useRef(false);
+  useEffect(() => { const t = setTimeout(() => setRemoteSynced(true), 12000); return () => clearTimeout(t); }, []);
   useEffect(() => {
     let seen = []; try { seen = lsGet('caulis_milestones_seen', []); } catch(e) {}
-    const settling = Date.now() - milestoneMountRef.current < 4000;
-    if (settling) {
-      const already = MILESTONES.filter(m => plants.length >= m);
-      if (already.length) lsSet('caulis_milestones_seen', [...new Set([...seen, ...already])]);
+    const baselineReady = !gardenNode || remoteSynced;
+    if (!baselineReady) return; // still waiting on the first authoritative snapshot — don't compare yet
+    const already = MILESTONES.filter(m => plants.length >= m);
+    const unseen = already.filter(m => !seen.includes(m));
+    if (!unseen.length) return;
+    // the very first comparison once a baseline exists seeds silently (this is
+    // the device's starting point, not growth it witnessed); only comparisons
+    // after that toast
+    if (!milestonePrimedRef.current) {
+      milestonePrimedRef.current = true;
+      lsSet('caulis_milestones_seen', [...new Set([...seen, ...unseen])]);
       return;
     }
-    const hit = MILESTONES.find(m => plants.length >= m && !seen.includes(m));
-    if (hit) { lsSet('caulis_milestones_seen', [...seen, hit]); setMilestoneToast(hit); haptic('success'); setTimeout(() => setMilestoneToast(null), 4000); }
-  }, [plants.length]);
+    const hit = unseen[0];
+    lsSet('caulis_milestones_seen', [...seen, hit]); setMilestoneToast(hit); haptic('success'); setTimeout(() => setMilestoneToast(null), 4000);
+  }, [plants.length, gardenNode, remoteSynced]);
 
   const [monochromePrint, setMonochromePrintRaw] = useState(() => lsGet('caulis_print_mono', false));
   const [gardenPassword, setGardenPassword] = useState(() => { try { return localStorage.getItem('caulis_garden_pw') || ''; } catch(e) { return ''; } });
@@ -621,6 +637,7 @@ function App() {
     const toArr = v => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
     const unsubscribe = listenGarden(gardenNode, (data) => {
       fromRemoteRef.current = true;
+      setRemoteSynced(true); // first authoritative snapshot for this garden has landed — safe to compare milestones now
       if (data.plants) {
         const incoming = toArr(data.plants).filter(Boolean);
         if (incoming.length) setPlants(prev => incoming.map(p => {
