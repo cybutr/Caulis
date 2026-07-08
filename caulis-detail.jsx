@@ -829,6 +829,14 @@ function saveDoctorChats(chats) {
   try { write(stripped.slice(-1)); } catch(e) {}
 }
 
+const TOOL_NOTES = {
+  list_garden_plants: 'checking your garden…',
+  suggest_correction: 'preparing a correction…',
+  check_watering_schedule: 'checking watering schedule…',
+  lookup_species_care: 'looking up species care…',
+  garden_risk_report: 'scanning your garden…',
+};
+
 function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, onBack, isDesktop }) {
   const [chats, setChats] = useState(() => loadDoctorChats());
   const initial = useRef(null);
@@ -844,6 +852,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
   const [activePlant, setActivePlant] = useState(plant || null);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [toolNote, setToolNote] = useState('');
   const [error, setError] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showGarden, setShowGarden] = useState(false);
@@ -959,6 +968,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
       for (let hop = 0; hop < 4; hop++) {
         const res = await doctorAsk({ messages, plantContext, model, key: anthropicKey, withTools: true });
         if (res.stop_reason === 'tool_use' && res.toolUses.length) {
+          setToolNote(TOOL_NOTES[res.toolUses[0].name] || 'checking…');
           messages = [...messages, { role: 'assistant', content: res.content }];
           const results = await Promise.all(res.toolUses.map(async tu => ({ type: 'tool_result', tool_use_id: tu.id, content: await runTool(tu.name, tu.input || {}) })));
           messages = [...messages, { role: 'user', content: results }];
@@ -970,7 +980,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
       setThread(t => [...t, { role: 'assistant', text: finalText || 'I couldn’t read that — try another photo?', animate: true }]);
     } catch (e) {
       setThread(t => [...t, { role: 'assistant', text: '', error: String(e.message || e) }]);
-    } finally { setBusy(false); }
+    } finally { setBusy(false); setToolNote(''); }
   };
 
   const FIELD_LABELS = { name:'Name', latin:'Latin name', location:'Location', every:'Water every', light:'Light' };
@@ -1093,7 +1103,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
               <div style={{ display:'flex', alignItems:'center', gap:4, height:16 }}>
                 {[0,1,2,3].map(i => <div key={i} style={{ width:3.5, height:16, borderRadius:999, background:C.sage, transformOrigin:'center', animation:`bar 1.1s ${i*0.13}s ease-in-out infinite` }}/>)}
               </div>
-              <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>examining…</span>
+              <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{toolNote || 'examining…'}</span>
             </div>
           </div>
         )}

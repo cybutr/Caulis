@@ -211,6 +211,7 @@ Content-Type: application/json
 
   <h2 id="public-api">Public API <span class="badge"><svg width="11" height="11" viewBox="0 0 24 24" style="display:block"><path d="M12 3C7.6 6.4 5 10.6 5 14.4 5 18.6 8 21 12 21s7-2.4 7-6.6C19 10.6 16.4 6.4 12 3Z" fill="currentColor"/></svg>developer product</span></h2>
   <p>A separate, standalone surface for third-party callers — not tied to a Caulis garden or its JWT auth. Authenticate with an <code>x-api-key</code> header issued by the Caulis admin. Each key carries its own daily rate limit; going over returns <code>429</code>.</p>
+  <div class="note"><strong>Want a key?</strong> Keys are currently issued by hand while this is early — reach out with what you're building and an expected volume, and one will be provisioned with a sensible rate limit.</div>
   <div class="warn"><strong>Bring your own upstream key:</strong> to avoid Caulis absorbing arbitrary third-party API costs, endpoints that call Perenual or Anthropic expect <em>your</em> key for that service, passed per request. Caulis only authenticates the call and enforces rate limits — it never stores or bills for the upstream key.</div>
 
   <h3>Auth</h3>

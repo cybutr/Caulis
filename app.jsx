@@ -881,16 +881,16 @@ window.onload=()=>{
     const p = plants.find(x => x.id === id);
     setPlants(ps => ps.filter(x => x.id !== id));
     setQueue(q => q.filter(x => x !== id));
-    if (p) setUndoDelete({ plant: p, queued: queue.includes(id) });
+    if (p) setUndoDelete({ plants: [p], queuedIds: queue.includes(id) ? [id] : [] });
     idbDel(id);
     if (gardenNode) deletePhotos(gardenNode, id);
   };
   const requestRemove = (id) => { if (confirmDelete) setConfirmRemove(id); else removePlant(id); };
   const undoRemove = () => {
     if (!undoDelete) return;
-    const { plant, queued } = undoDelete;
-    setPlants(ps => ps.some(x => x.id === plant.id) ? ps : [...ps, plant]);
-    if (queued) setQueue(q => q.includes(plant.id) ? q : [...q, plant.id]);
+    const { plants: removed, queuedIds } = undoDelete;
+    setPlants(ps => [...ps, ...removed.filter(p => !ps.some(x => x.id === p.id))]);
+    if (queuedIds.length) setQueue(q => [...q, ...queuedIds.filter(id => !q.includes(id))]);
     setUndoDelete(null);
   };
   useEffect(() => {
@@ -951,7 +951,17 @@ window.onload=()=>{
   const adminListBackupsFn = (secret) => adminListBackups(secret);
   const adminBackupUrl = (secret, name) => adminBackupDownloadUrl(secret, name);
   const bulkQueue  = (ids) => { haptic('medium'); setQueue(q => { const s = new Set(q); ids.forEach(id => s.add(id)); return [...s]; }); setPrinted(false); };
-  const doBulkRemove = () => { const ids = bulkRemoveIds || []; haptic('warning'); setPlants(ps => ps.filter(p => !ids.includes(p.id))); setQueue(q => q.filter(id => !ids.includes(id))); ids.forEach(id => idbDel(id)); setBulkRemoveIds(null); };
+  const doBulkRemove = () => {
+    const ids = bulkRemoveIds || [];
+    haptic('warning');
+    const removed = plants.filter(p => ids.includes(p.id));
+    const queuedIds = queue.filter(id => ids.includes(id));
+    setPlants(ps => ps.filter(p => !ids.includes(p.id)));
+    setQueue(q => q.filter(id => !ids.includes(id)));
+    ids.forEach(id => idbDel(id));
+    if (removed.length) setUndoDelete({ plants: removed, queuedIds });
+    setBulkRemoveIds(null);
+  };
   const reorderQueue = (from, to) => setQueue(q => { if (from===to||from<0||to<0||from>=q.length||to>=q.length) return q; const n=[...q]; const [x]=n.splice(from,1); n.splice(to,0,x); return n; });
   const reorderPlants = (from, to) => setPlants(ps => { if (from===to||from<0||to<0||from>=ps.length||to>=ps.length) return ps; const n=[...ps]; const [x]=n.splice(from,1); n.splice(to,0,x); return n; });
 
@@ -1156,7 +1166,7 @@ window.onload=()=>{
   const undoDeleteEl = undoDelete && (
     <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
       <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, background:C.toast, borderRadius:999, padding:'10px 12px 10px 18px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
-        <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:500, color:'#fff' }}>{undoDelete.plant.name} removed</span>
+        <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:500, color:'#fff' }}>{undoDelete.plants.length === 1 ? `${undoDelete.plants[0].name} removed` : `${undoDelete.plants.length} plants removed`}</span>
         <div onClick={undoRemove} style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, background:'rgba(255,255,255,0.16)', borderRadius:999, padding:'6px 13px' }}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M5 3 2 6l3 3M2 6h6.5a3.5 3.5 0 010 7H6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:'#fff' }}>Undo</span>
