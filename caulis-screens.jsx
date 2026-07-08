@@ -256,6 +256,7 @@ function EmptyGarden({ onAdd }) {
         <IconPlus s={17} c="#fff"/>
         <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600 }}>Add your first plant</span>
       </div>
+      <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6, marginTop:16 }}>Or use Scan to identify one from a photo, or Settings → App to import an existing garden.</div>
     </div>
   );
 }
@@ -1372,7 +1373,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             <div style={{ height:'0.5px', background:'rgba(45,80,22,0.08)' }}/>
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:4 }}>Claude — AI care review</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5, marginBottom:8 }}>Anthropic API key. Claude reviews &amp; corrects species care data on identify — filling gaps and fixing wrong watering intervals. Key is stored on this device; expose only in a prototype.</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5, marginBottom:8 }}>Anthropic API key. Claude reviews &amp; corrects species care data on identify — filling gaps and fixing wrong watering intervals. Key is stored server-side against your garden and used only to call Anthropic on your behalf, never sent to the browser directly.</div>
               <div style={{ display:'flex', gap:8 }}>
                 <input value={anthropicInput} onChange={e=>setAnthropicInput(e.target.value)} placeholder="sk-ant-…"
                   style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>

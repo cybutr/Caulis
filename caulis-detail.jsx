@@ -893,7 +893,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
   };
 
   const hasPhoto = pendingImage || thread.some(m => m.image);
-  const canSend = !busy && (pendingImage || (input.trim() && hasPhoto));
+  const canSend = !busy && (pendingImage || input.trim());
 
   // execute a tool call locally; returns the string result fed back to the model
   const runTool = async (name, input) => {
@@ -942,7 +942,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
   };
 
   const send = async () => {
-    if (!hasPhoto) { setError('Add a photo of the plant first.'); return; }
+    if (!hasPhoto && !input.trim()) { setError('Add a photo or ask a question.'); return; }
     if (!canSend) return;
     const userMsg = { role: 'user', text: input.trim() || 'What’s going on with this plant?', image: pendingImage };
     const next = [...thread, userMsg];
@@ -1093,7 +1093,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
               <IconDoctor s={28} c={C.sage}/>
             </div>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:20, color:C.forest, marginTop:14 }}>Show me your plant</div>
-            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:5, maxWidth:280, marginLeft:'auto', marginRight:'auto' }}>Snap a photo and ask anything — “what’s wrong with this?”, “how tall will it grow?”</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:5, maxWidth:280, marginLeft:'auto', marginRight:'auto' }}>Snap a photo and ask anything — “what’s wrong with this?”, “how tall will it grow?” — or ask about your whole garden, like “what needs water this week?”</div>
           </div>
         )}
         {thread.map((m, i) => m.role === 'card' ? correctionCard(m, i) : bubble(m, i))}
@@ -1141,7 +1141,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
               <LeafOutline size={19} color={C.forest} sw={1.7}/>
             </div>
           )}
-          <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={hasPhoto ? 'Ask the doctor…' : 'Add a photo to begin'} rows={1} style={{ flex:1, resize:'none', maxHeight:120, padding:'11px 14px', borderRadius:16, border:C.hair, background:C.panel, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', lineHeight:1.4 }}/>
+          <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={hasPhoto ? 'Ask the doctor…' : 'Ask about your garden, or add a photo'} rows={1} style={{ flex:1, resize:'none', maxHeight:120, padding:'11px 14px', borderRadius:16, border:C.hair, background:C.panel, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', lineHeight:1.4 }}/>
           <div onClick={send} style={{ flexShrink:0, width:42, height:42, borderRadius:13, background: canSend ? C.forest : 'rgba(45,80,22,0.12)', display:'flex', alignItems:'center', justifyContent:'center', cursor: canSend ? 'pointer' : 'default' }}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke={canSend ? '#fff' : C.forest} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
