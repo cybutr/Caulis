@@ -126,6 +126,7 @@
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
   @keyframes slideFromR { from { transform: translateX(26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes slideFromL { from { transform: translateX(-26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes confettiFall { from { transform: translateY(0) rotate(0deg); opacity: 0.95; } to { transform: translateY(105vh) rotate(340deg); opacity: 0; } }
   html[data-rm="1"] *, html[data-rm="1"] *::before, html[data-rm="1"] *::after {
     animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important; scroll-behavior: auto !important;
@@ -163,6 +164,9 @@
       navigator.serviceWorker.register('./sw.js');
     });
   }
+  console.log('%c🌿 Caulis', 'font-size:22px;font-weight:bold;color:#2D5016;');
+  console.log('%cPoking around in here? Try the konami code somewhere in the app.', 'font-size:12px;color:#6B4C2A;');
+  console.log('%cGrown with care — and, apparently, curiosity.', 'font-size:11px;color:#7A9E4E;font-style:italic;');
 </script>
 </body>
 </html>

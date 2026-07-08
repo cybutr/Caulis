@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '104'; // keep in sync with sw.js CACHE
+const APP_VERSION = '105'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
@@ -185,7 +185,7 @@ function LeafOutline({ size = 22, color = C.forest, sw = 1.4 }) {
   );
 }
 
-function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2 }) {
+function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2, onTap }) {
   const leaf = (cx, cy, rot) => (
     <g transform={`translate(${cx} ${cy}) rotate(${rot})`}>
       <ellipse cx="0" cy="-13" rx="7.5" ry="15" fill="none" stroke={C.brown} strokeWidth="1.4"/>
@@ -193,8 +193,8 @@ function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2 }) {
     </g>
   );
   return (
-    <svg width={w} height={h} viewBox="0 0 260 300"
-      style={{ position:'absolute', right, bottom, opacity, pointerEvents:'none' }}>
+    <svg width={w} height={h} viewBox="0 0 260 300" onClick={onTap}
+      style={{ position:'absolute', right, bottom, opacity, pointerEvents: onTap ? 'auto' : 'none', cursor: onTap ? 'pointer' : 'default' }}>
       <path d="M205 296 C 150 250, 120 180, 132 96 C 138 56, 158 30, 196 14"
         fill="none" stroke={C.brown} strokeWidth="1.4" strokeLinecap="round"/>
       {leaf(150,232,38)}{leaf(133,188,-34)}{leaf(126,150,30)}

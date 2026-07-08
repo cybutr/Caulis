@@ -10,11 +10,11 @@ const GS = {
 };
 
 // collapsible settings category — module-level so children keep identity (no remount)
-function SettingsSection({ title, open, onToggle, children }) {
+function SettingsSection({ title, open, onToggle, children, id, matched }) {
   return (
-    <div>
-      <div onClick={onToggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'0 6px 8px' }}>
-        <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>{title}</span>
+    <div id={id} style={matched ? { borderRadius:16, boxShadow:`0 0 0 2px ${C.forest}`, transition:'box-shadow 200ms ease' } : { transition:'box-shadow 200ms ease' }}>
+      <div onClick={onToggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding: matched ? '8px 6px 8px' : '0 6px 8px' }}>
+        <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color: matched ? C.forest : C.brown, opacity: matched ? 1 : 0.6, letterSpacing:0.6, textTransform:'uppercase' }}>{title}</span>
         <svg width="13" height="13" viewBox="0 0 24 24" style={{ transform: open?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45 }}><path d="M6 9l6 6 6-6" stroke={C.brown} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
       </div>
       <div style={{ display:'grid', gridTemplateRows: open?'1fr':'0fr', transition:'grid-template-rows 260ms ease' }}>
@@ -23,6 +23,24 @@ function SettingsSection({ title, open, onToggle, children }) {
     </div>
   );
 }
+
+// title + keywords used by the Settings search box to find a section without
+// indexing every row's text — good enough recall for a settings screen this size
+const SETTINGS_SEARCH_INDEX = {
+  appearance: ['appearance', 'dark mode', 'theme', 'light', 'palette', 'color', 'colour', 'forest', 'teal', 'plum', 'clay'],
+  garden: ['garden', 'plants tracked', 'locations', 'default watering', 'hide healthy', 'opens on launch', 'launch', 'startup'],
+  behavior: ['behavior', 'behaviour', 'confirm before delete', 'swipe', 'haptics', 'vibrate'],
+  notif: ['notifications', 'reminders', 'digest'],
+  printing: ['printing', 'label size', 'monochrome', 'print', 'qr'],
+  data: ['plant data', 'perenual', 'plantid', 'plant.id', 'houseplants', 'anthropic', 'ai', 'species', 'api key', 'doctor model', 'identify', 'language'],
+  app: ['app', 'export', 'import', 'migration', 'migrate', 'transfer'],
+  google: ['google sync', 'google', 'calendar', 'tasks', 'reminder time'],
+  cloud: ['cloud sync', 'garden key', 'password', 'rename', 'join', 'share'],
+  backup: ['backup', 'interval', 'keep', 'download', 'restore'],
+  nav: ['navigation bar', 'navigation', 'bottom nav', 'sidebar', 'slots', 'labels', 'tabs'],
+  dev: ['developer', 'pin', 'admin', 'water all', 'shift days', 'resync'],
+  about: ['about', 'version', 'update'],
+};
 
 // pointer-based reorder via a drag handle — nearest-center targeting works for
 // both vertical lists and grids. Reorders by array position only; ids untouched.
@@ -266,9 +284,31 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
 
   const cardProps = { onOpen, onLongPress, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact };
 
+  // easter egg: rapid-tapping the corner sprig watermark is a discoverable
+  // no-op everywhere else in the app — reward the curiosity with a one-line joke
+  const sprigTaps = useRef(0);
+  const sprigTimer = useRef(null);
+  const [sprigMsg, setSprigMsg] = useState(null);
+  const SPRIG_LINES = ["That tickles.", "Still just a sprig.", "It's not going to grow any faster.", "Okay, you found it — nothing else here.", "A watched sprig never sprouts."];
+  const tapSprig = () => {
+    if (sprigTimer.current) clearTimeout(sprigTimer.current);
+    sprigTimer.current = setTimeout(() => { sprigTaps.current = 0; }, 1200);
+    sprigTaps.current += 1;
+    if (sprigTaps.current >= 5) {
+      sprigTaps.current = 0;
+      setSprigMsg(SPRIG_LINES[Math.floor(Math.random() * SPRIG_LINES.length)]);
+      setTimeout(() => setSprigMsg(null), 2200);
+    }
+  };
+
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
-      <Sprig/>
+      <Sprig onTap={tapSprig}/>
+      {sprigMsg && (
+        <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+          <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>🌿 {sprigMsg}</div>
+        </div>
+      )}
       <div style={{ padding:`${topPad}px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
         <div style={{ display:'flex', alignItems: isDesktop ? 'flex-end' : 'center', justifyContent:'space-between', gap:12 }}>
           <div>
@@ -670,6 +710,32 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
   const isOpen = (id) => activeSec === id;
   const toggleSec = (id) => setActiveSec(s => { const n = s === id ? null : id; GS.set('caulis_set_open', n); return n; });
+
+  // settings search — jumps to and expands the first matching section, and
+  // doubles as the target for an intercepted browser Ctrl/Cmd+F
+  const [settingsQuery, setSettingsQuery] = useState('');
+  const settingsSearchRef = useRef(null);
+  const settingsMatches = settingsQuery.trim()
+    ? Object.keys(SETTINGS_SEARCH_INDEX).filter(id => SETTINGS_SEARCH_INDEX[id].some(kw => kw.includes(settingsQuery.trim().toLowerCase())))
+    : [];
+  useEffect(() => {
+    if (!settingsMatches.length) return;
+    const first = settingsMatches[0];
+    setActiveSec(first);
+    GS.set('caulis_set_open', first);
+    const el = document.getElementById('sec-' + first);
+    if (el) setTimeout(() => el.scrollIntoView({ behavior:'smooth', block:'start' }), 60);
+  }, [settingsQuery]);
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        settingsSearchRef.current && settingsSearchRef.current.focus();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
   const [key, setKey] = useState('');
   const [saved, setSaved] = useState(false);
   const [housePlantsInput, setHousePlantsInput] = useState('');
@@ -894,6 +960,26 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
       </div>
     );
   };
+  // small generic radial dial — magnitude-as-fraction-of-whole reads better as
+  // a ring than a bar when the "whole" is conceptual (a rate, a share) rather
+  // than a literal max value. Single hue only, per the app's sequential palette.
+  const Gauge = ({ label, sub, pct, tone = 'forest' }) => {
+    const r = 26, c = 2 * Math.PI * r;
+    const clamped = Math.max(0, Math.min(1, pct));
+    const color = tone === 'warn' ? STATUS.soon.dot : tone === 'bad' ? STATUS.needs.dot : C.forest;
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'12px 8px', borderRadius:12, background:C.bg }}>
+        <svg width="64" height="64" viewBox="0 0 64 64">
+          <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(45,80,22,0.1)" strokeWidth="6"/>
+          <circle cx="32" cy="32" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round"
+            strokeDasharray={c} strokeDashoffset={c * (1 - clamped)} transform="rotate(-90 32 32)" style={{ transition:'stroke-dashoffset 500ms ease' }}/>
+          <text x="32" y="37" textAnchor="middle" fontFamily={FONT_SANS} fontSize="13" fontWeight="700" fill={C.ink}>{Math.round(clamped * 100)}%</text>
+        </svg>
+        <div style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.ink, textAlign:'center' }}>{label}</div>
+        {sub && <div style={{ fontFamily:FONT_SANS, fontSize:10, color:C.brown, opacity:0.6, textAlign:'center' }}>{sub}</div>}
+      </div>
+    );
+  };
   // radial gauge — how due the next backup is (elapsed / interval), a ring not a bar since it's a cyclical "how full is the clock" read
   const BackupGauge = ({ settings, files }) => {
     if (!settings) return null;
@@ -970,8 +1056,24 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
       <Sprig opacity={0.14}/>
       <ScreenHead eyebrow="Preferences" title="Settings" isDesktop={isDesktop}/>
-      <div style={{ padding:`22px ${sp}px 0`, position:'relative', zIndex:2, display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? 680 : undefined }}>
-        <SettingsSection title="Appearance" open={isOpen('appearance')} onToggle={()=>toggleSec('appearance')}>
+      <div style={{ padding:`22px ${sp}px 0`, position:'relative', zIndex:2, display:'flex', gap:28, alignItems:'flex-start' }}>
+      <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? 680 : undefined }}>
+        <div style={{ position:'relative' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', opacity:0.4, pointerEvents:'none' }}><circle cx="11" cy="11" r="6.5" stroke={C.brown} strokeWidth="1.8"/><path d="M20 20l-4.5-4.5" stroke={C.brown} strokeWidth="1.8" strokeLinecap="round"/></svg>
+          <input
+            ref={settingsSearchRef} value={settingsQuery} onChange={e=>setSettingsQuery(e.target.value)}
+            placeholder={isDesktop ? 'Search settings… (Ctrl+F)' : 'Search settings…'}
+            style={{ width:'100%', boxSizing:'border-box', padding:'11px 14px 11px 38px', borderRadius:14, border:`1px solid ${C.line}`, background:C.input, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
+          {settingsQuery.trim() && (
+            <div style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>{settingsMatches.length ? `${settingsMatches.length} match${settingsMatches.length===1?'':'es'}` : 'No match'}</span>
+              <div onClick={()=>setSettingsQuery('')} style={{ cursor:'pointer', width:22, height:22, borderRadius:999, background:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <svg width="9" height="9" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8" stroke={C.brown} strokeWidth="1.6" strokeLinecap="round"/></svg>
+              </div>
+            </div>
+          )}
+        </div>
+        <SettingsSection title="Appearance" open={isOpen('appearance')} onToggle={()=>toggleSec('appearance')} id={'sec-'+'appearance'} matched={settingsMatches.includes('appearance')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div onClick={onToggleDark} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
               <div>
@@ -1038,7 +1140,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             )}
           </div>
         </SettingsSection>
-        <SettingsSection title="Garden" open={isOpen('garden')} onToggle={()=>toggleSec('garden')}>
+        <SettingsSection title="Garden" open={isOpen('garden')} onToggle={()=>toggleSec('garden')} id={'sec-'+'garden'} matched={settingsMatches.includes('garden')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <Row label="Plants tracked" value={String(plants.length)}/>
             <Row label="Locations" value={String(new Set(plants.map(p=>p.location)).size)}/>
@@ -1064,21 +1166,22 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Opens on launch</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:9 }}>Tab shown when you start Caulis</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:9 }}>What happens when you start Caulis — any button on your nav bar works, not just screens</div>
               <div style={{ display:'flex', gap:6, overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
                 {(() => {
                   const seen = new Set();
-                  const tabs = normalizeNav(navConfig).filter(s => s.action !== 'empty' && NAV_ACTIONS[s.action] && NAV_ACTIONS[s.action].tab && (seen.has(s.action) ? false : seen.add(s.action)));
-                  return tabs.map(s => {
+                  const slots = normalizeNav(navConfig).filter(s => s.action !== 'empty' && NAV_ACTIONS[s.action] && (seen.has(s.action) ? false : seen.add(s.action)));
+                  return slots.map(s => {
                     const on = defaultTab === s.action;
-                    return <div key={s.action} onClick={()=>onSetDefaultTab(s.action)} style={{ flexShrink:0, cursor:'pointer', padding:'6px 13px', borderRadius:999, background:on?C.forest:C.input, color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight:on?600:500, transition:'all 140ms ease' }}>{navLabel(s)}</div>;
+                    const isAction = !NAV_ACTIONS[s.action].tab;
+                    return <div key={s.action} onClick={()=>onSetDefaultTab(s.action)} style={{ flexShrink:0, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, padding:'6px 13px', borderRadius:999, background:on?C.forest:C.input, color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight:on?600:500, transition:'all 140ms ease' }}>{navLabel(s)}{isAction && <span style={{ opacity:on?0.8:0.5, fontSize:10 }}>↗</span>}</div>;
                   });
                 })()}
               </div>
             </div>
           </div>
         </SettingsSection>
-        <SettingsSection title="Behavior" open={isOpen('behavior')} onToggle={()=>toggleSec('behavior')}>
+        <SettingsSection title="Behavior" open={isOpen('behavior')} onToggle={()=>toggleSec('behavior')} id={'sec-'+'behavior'} matched={settingsMatches.includes('behavior')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div onClick={onToggleConfirmDelete} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
               <div>
@@ -1109,7 +1212,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </div>
         </SettingsSection>
-        <SettingsSection title="Notifications" open={isOpen('notif')} onToggle={()=>toggleSec('notif')}>
+        <SettingsSection title="Notifications" open={isOpen('notif')} onToggle={()=>toggleSec('notif')} id={'sec-'+'notif'} matched={settingsMatches.includes('notif')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Watering reminders</span><Toggle on/>
@@ -1119,7 +1222,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </div>
         </SettingsSection>
-        <SettingsSection title="Printing" open={isOpen('printing')} onToggle={()=>toggleSec('printing')}>
+        <SettingsSection title="Printing" open={isOpen('printing')} onToggle={()=>toggleSec('printing')} id={'sec-'+'printing'} matched={settingsMatches.includes('printing')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:C.hair }}>
               <div>
@@ -1153,7 +1256,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </div>
         </SettingsSection>
-        <SettingsSection title="Plant data" open={isOpen('data')} onToggle={()=>toggleSec('data')}>
+        <SettingsSection title="Plant data" open={isOpen('data')} onToggle={()=>toggleSec('data')} id={'sec-'+'data'} matched={settingsMatches.includes('data')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:14 }}>
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Perenual — species photos &amp; care data</div>
@@ -1268,7 +1371,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
           </div>
         </SettingsSection>
         {(installPrompt || /iphone|ipad|ipod/i.test(navigator.userAgent)) && (
-          <SettingsSection title="App" open={isOpen('app')} onToggle={()=>toggleSec('app')}>
+          <SettingsSection title="App" open={isOpen('app')} onToggle={()=>toggleSec('app')} id={'sec-'+'app'} matched={settingsMatches.includes('app')}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px' }}>
               {installPrompt ? (
                 <div onClick={onInstall} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
@@ -1287,7 +1390,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </SettingsSection>
         )}
-        <SettingsSection title="Google sync" open={isOpen('google')} onToggle={()=>toggleSec('google')}>
+        <SettingsSection title="Google sync" open={isOpen('google')} onToggle={()=>toggleSec('google')} id={'sec-'+'google'} matched={settingsMatches.includes('google')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Sync to</div>
@@ -1354,7 +1457,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </>)}
           </div>
         </SettingsSection>
-        <SettingsSection title="Cloud sync" open={isOpen('cloud')} onToggle={()=>toggleSec('cloud')}>
+        <SettingsSection title="Cloud sync" open={isOpen('cloud')} onToggle={()=>toggleSec('cloud')} id={'sec-'+'cloud'} matched={settingsMatches.includes('cloud')}>
           {!SYNC_READY && (
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:'14px 16px' }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Firebase not configured. Fill in FIREBASE_CONFIG in caulis-firebase.jsx.</div>
@@ -1472,7 +1575,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           )}
         </SettingsSection>
-        <SettingsSection title="Backup" open={isOpen('backup')} onToggle={()=>toggleSec('backup')}>
+        <SettingsSection title="Backup" open={isOpen('backup')} onToggle={()=>toggleSec('backup')} id={'sec-'+'backup'} matched={settingsMatches.includes('backup')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Export your whole garden (plants, photos, queue) to a JSON file, or restore from one.</div>
             <input ref={importRef} type="file" accept="application/json,.json" onChange={onImportFile} style={{ display:'none' }}/>
@@ -1542,7 +1645,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             <div onClick={enabled ? onClick : undefined} style={{ cursor: enabled ? 'pointer' : 'default', opacity: enabled ? 0.6 : 0.18, lineHeight:1, fontSize:11, color:C.brown, padding:'1px 3px' }}>{dir}</div>
           );
           return (
-          <SettingsSection title="Navigation bar" open={isOpen('nav')} onToggle={()=>toggleSec('nav')}>
+          <SettingsSection title="Navigation bar" open={isOpen('nav')} onToggle={()=>toggleSec('nav')} id={'sec-'+'nav'} matched={settingsMatches.includes('nav')}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:8 }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, padding:'0 2px 2px' }}>Tap a slot to change its button, reorder with the arrows{isDesktop ? '' : ', pick which one is raised in the center'}, and add up to {NAV_MAX}. The “More” button opens everything not on the bar — so nothing is ever out of reach.</div>
               {nav.map((s, i) => {
@@ -1671,7 +1774,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           );
           return (
-          <SettingsSection title="Developer" open={isOpen('dev')} onToggle={()=>toggleSec('dev')}>
+          <SettingsSection title="Developer" open={isOpen('dev')} onToggle={()=>toggleSec('dev')} id={'sec-'+'dev'} matched={settingsMatches.includes('dev')}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:16, display:'flex', flexDirection:'column', gap:18 }}>
               {!devAuthed ? (
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -1714,15 +1817,26 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                       </>
                     ) : (
                       <div style={{ display:'flex', flexDirection:'column', gap:18, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
-                        {adminStats && (
-                          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                        {adminStats && (() => {
+                          const claimedPct = adminStats.totalGardens > 0 ? 1 - (adminStats.unclaimedCount / adminStats.totalGardens) : 0;
+                          const photoPct = adminStats.totalGardens > 0 ? Math.min(1, adminStats.totalPhotoSets / adminStats.totalGardens) : 0;
+                          const densityPct = Math.min(1, adminStats.avgPlantsPerGarden / 20);
+                          const cutoff = Date.now() - 86400000;
+                          const activeToday = (adminStats.mostActive || []).filter(g => new Date(g.updated_at).getTime() >= cutoff).length;
+                          return (
+                          <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                            <div style={grpLabel}>Health dashboard</div>
+                            <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:6 }}>
+                              <Gauge label="Claimed" sub={`${adminStats.totalGardens - adminStats.unclaimedCount}/${adminStats.totalGardens}`} pct={claimedPct}/>
+                              <Gauge label="Photo coverage" sub={`${adminStats.totalPhotoSets} sets`} pct={photoPct} tone={photoPct < 0.3 ? 'warn' : 'forest'}/>
+                              <Gauge label="Density" sub={`${adminStats.avgPlantsPerGarden}/garden`} pct={densityPct}/>
+                            </div>
+                            <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8 }}>
                               {[
                                 ['Gardens', adminStats.totalGardens],
-                                ['Unclaimed', adminStats.unclaimedCount],
                                 ['Plants', adminStats.totalPlants],
-                                ['Avg / garden', adminStats.avgPlantsPerGarden],
-                                ['Photo sets', adminStats.totalPhotoSets],
+                                ['Unclaimed', adminStats.unclaimedCount],
+                                ['Active (24h, top10)', activeToday],
                               ].map(([label, val]) => (
                                 <div key={label} style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
                                   <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
@@ -1736,16 +1850,19 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                                 <Sparkline data={adminStats.gardensPerDay}/>
                               </div>
                             )}
-                            {adminStats.topSpecies.length > 0 && <>
-                              <div style={grpLabel}>Most common species</div>
-                              <BarList rows={adminStats.topSpecies} labelKey="name" valueKey="count"/>
-                            </>}
-                            {adminStats.mostActive.length > 0 && <>
-                              <div style={grpLabel}>Most recently active</div>
-                              <BarList rows={adminStats.mostActive} labelKey="key" valueKey="plant_count" onRowClick={g=>loadAdminGarden(g.key)}/>
-                            </>}
+                            <div style={{ display:'grid', gridTemplateColumns: isDesktop ? '1fr 1fr' : '1fr', gap:12 }}>
+                              {adminStats.topSpecies.length > 0 && <div>
+                                <div style={grpLabel}>Most common species</div>
+                                <BarList rows={adminStats.topSpecies} labelKey="name" valueKey="count"/>
+                              </div>}
+                              {adminStats.mostActive.length > 0 && <div>
+                                <div style={grpLabel}>Most recently active</div>
+                                <BarList rows={adminStats.mostActive} labelKey="key" valueKey="plant_count" onRowClick={g=>loadAdminGarden(g.key)}/>
+                              </div>}
+                            </div>
                           </div>
-                        )}
+                          );
+                        })()}
 
                         <div style={{ height:1, background:C.line }}/>
 
@@ -1834,7 +1951,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
           </SettingsSection>
           );
         })()}
-        <SettingsSection title="About" open={isOpen('about')} onToggle={()=>toggleSec('about')}>
+        <SettingsSection title="About" open={isOpen('about')} onToggle={()=>toggleSec('about')} id={'sec-'+'about'} matched={settingsMatches.includes('about')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div onClick={tapVersion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:C.hair, cursor:'default', userSelect:'none' }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Version</span>
@@ -1857,7 +1974,55 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
         </SettingsSection>
         <div style={{ textAlign:'center', fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.brown, opacity:0.5, marginTop:4 }}>Caulis · grown with care</div>
       </div>
+      {isDesktop && (
+        <div style={{ width:260, flexShrink:0, position:'sticky', top:32, display:'flex', flexDirection:'column', gap:14 }}>
+          <DesktopSettingsAside
+            plants={plants} adminUnlocked={adminUnlocked} adminStats={adminStats}
+            backupSettings={backupSettings} backupFiles={backupFiles} BackupGauge={BackupGauge}/>
+        </div>
+      )}
+      </div>
     </div>
+  );
+}
+
+// desktop-only right rail — the accordion tops out at 680px, leaving a bare
+// column on wide screens. Fills it with an always-useful glance card plus,
+// once the admin panel is unlocked, a condensed live-stat summary.
+function DesktopSettingsAside({ plants, adminUnlocked, adminStats, backupSettings, backupFiles, BackupGauge }) {
+  const needs = plants.filter(p => statusOf(p.days, p.every) !== 'ok').length;
+  return (
+    <>
+      <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:18, display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <Leaf size={22} color={C.forest}/>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, color:C.forest }}>Caulis</div>
+        </div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65 }}>v{APP_VERSION} · {plants.length} plant{plants.length===1?'':'s'} · {needs} thirsty</div>
+        <div style={{ height:1, background:C.line, margin:'2px 0' }}/>
+        <a href="https://github.com/cybutr/Caulis" target="_blank" rel="noopener" style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', color:C.ink, fontFamily:FONT_SANS, fontSize:13, fontWeight:500 }}>
+          <svg width="15" height="15" viewBox="0 0 16 16" fill={C.brown}><path d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.35c-2.22.48-2.69-1.07-2.69-1.07-.36-.92-.89-1.16-.89-1.16-.72-.5.06-.49.06-.49.8.06 1.22.82 1.22.82.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.01.08-2.1 0 0 .67-.22 2.2.82a7.6 7.6 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.09.16 1.9.08 2.1.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 008 0Z"/></svg>
+          GitHub repo
+        </a>
+        <a href="docs.html" target="_blank" rel="noopener" style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', color:C.ink, fontFamily:FONT_SANS, fontSize:13, fontWeight:500 }}>
+          <IconGear s={15} c={C.brown}/> Docs &amp; changelog
+        </a>
+      </div>
+      {adminUnlocked && adminStats && (
+        <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:18, display:'flex', flexDirection:'column', gap:12, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>Admin at a glance</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            {[['Gardens', adminStats.totalGardens], ['Plants', adminStats.totalPlants]].map(([label, val]) => (
+              <div key={label} style={{ padding:'9px 10px', borderRadius:11, background:C.bg }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:10, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
+                <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:19, color:C.forest }}>{val}</div>
+              </div>
+            ))}
+          </div>
+          {backupSettings && BackupGauge && <BackupGauge settings={backupSettings} files={backupFiles}/>}
+        </div>
+      )}
+    </>
   );
 }
 

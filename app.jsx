@@ -139,11 +139,48 @@ function App() {
   const navTo = (action) => { setMoreOpen(false); const meta = NAV_ACTIONS[action]; if (!meta) return; if (meta.tab) setTab(action); else onNavAction(action); };
   // launch: if the saved/default tab isn't in the customized bar, snap to its first tab
   useEffect(() => { const order = navTabOrder(navConfig); if (!order.includes(tab)) setTab(order[0]); }, [navConfig]);
+  // "opens on launch" can now point at a non-tab action (Doctor, Add, More) —
+  // there's no screen to land on for those, so this fires once at mount: land
+  // on a real tab first (the effect above already handles that), then trigger
+  // the action itself right after. Only ever runs once per app load, never on
+  // later navConfig/defaultTab edits — otherwise saving the setting would
+  // re-fire Doctor every time Settings re-renders.
+  const firedLaunchActionRef = useRef(false);
+  useEffect(() => {
+    if (firedLaunchActionRef.current) return;
+    firedLaunchActionRef.current = true;
+    const meta = NAV_ACTIONS[defaultTab];
+    if (meta && !meta.tab) setTimeout(() => onNavAction(defaultTab), 80);
+  }, []);
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [bulkMove, setBulkMove] = useState(null);
   const [bulkRemoveIds, setBulkRemoveIds] = useState(null);
   useEffect(() => { try { document.documentElement.setAttribute('data-rm', reduceMotion ? '1' : '0'); } catch(e) {} }, [reduceMotion]);
   const haptic = (kind = 'light') => { if (haptics) fireHaptic(kind); };
+
+  // ── easter eggs ──────────────────────────────────────────────
+  // konami code, anywhere in the app — a burst of falling leaves, purely decorative
+  const [confetti, setConfetti] = useState(false);
+  useEffect(() => {
+    const seq = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+    let pos = 0;
+    const handler = (e) => {
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (key === seq[pos]) { pos++; if (pos === seq.length) { pos = 0; haptic('success'); setConfetti(true); setTimeout(() => setConfetti(false), 2600); } }
+      else pos = key === seq[0] ? 1 : 0;
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+  // a quiet milestone badge the first time the garden crosses a nice round size
+  const MILESTONES = [5, 10, 25, 50, 100, 200];
+  const [milestoneToast, setMilestoneToast] = useState(null);
+  useEffect(() => {
+    let seen = []; try { seen = lsGet('caulis_milestones_seen', []); } catch(e) {}
+    const hit = MILESTONES.find(m => plants.length >= m && !seen.includes(m));
+    if (hit) { lsSet('caulis_milestones_seen', [...seen, hit]); setMilestoneToast(hit); haptic('success'); setTimeout(() => setMilestoneToast(null), 4000); }
+  }, [plants.length]);
+
   const [monochromePrint, setMonochromePrintRaw] = useState(() => lsGet('caulis_print_mono', false));
   const [gardenPassword, setGardenPassword] = useState(() => { try { return localStorage.getItem('caulis_garden_pw') || ''; } catch(e) { return ''; } });
   const [gardenNode, setGardenNode] = useState(null);
@@ -1074,6 +1111,30 @@ window.onload=()=>{
     </div>
   );
 
+  const confettiEl = confetti && (
+    <div style={{ position:'fixed', inset:0, zIndex:90, pointerEvents:'none', overflow:'hidden' }}>
+      {Array.from({ length: 28 }).map((_, i) => {
+        const left = Math.random() * 100;
+        const delay = Math.random() * 0.4;
+        const dur = 1.8 + Math.random() * 1.2;
+        const size = 12 + Math.random() * 10;
+        const rot = Math.random() * 360;
+        const hue = i % 2 === 0 ? C.forest : C.sage;
+        return (
+          <div key={i} style={{ position:'absolute', top:-24, left:`${left}%`, fontSize:size, opacity:0.9,
+            animation:`confettiFall ${dur}s ease-in ${delay}s forwards`, transform:`rotate(${rot}deg)`, color:hue }}>🌿</div>
+        );
+      })}
+    </div>
+  );
+  const milestoneToastEl = milestoneToast != null && (
+    <div style={{ position:'fixed', top:'calc(18px + env(safe-area-inset-top))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+      <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'11px 20px', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, boxShadow:'0 10px 26px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:8 }}>
+        🌱 {milestoneToast} plants — your garden is growing
+      </div>
+    </div>
+  );
+
   const confirmRemoveEl = confirmRemove != null && (() => {
     const p = plants.find(x => x.id === confirmRemove);
     if (!p) return null;
@@ -1153,6 +1214,8 @@ window.onload=()=>{
         {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
         {undoDeleteEl}
         {storageFullEl}
+        {confettiEl}
+        {milestoneToastEl}
         {confirmRemoveEl}
         {bulkRemoveEl}
         {guestView === 'loading' && <div style={{ position:'fixed', inset:0, zIndex:50, background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', animation:'fade 160ms ease' }}><div style={{ width:38, height:38, borderRadius:999, border:`3px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/></div>}
@@ -1204,6 +1267,8 @@ window.onload=()=>{
       {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
       {undoDeleteEl}
       {storageFullEl}
+      {confettiEl}
+      {milestoneToastEl}
       {confirmRemoveEl}
       {bulkRemoveEl}
       {guestView === 'loading' && <div style={{ position:'fixed', inset:0, zIndex:50, background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', animation:'fade 160ms ease' }}><div style={{ width:38, height:38, borderRadius:999, border:`3px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/></div>}
