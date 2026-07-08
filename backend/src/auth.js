@@ -41,26 +41,29 @@ export async function requireApiKey(req, reply) {
   if (!key) return reply.code(401).send({ error: 'missing x-api-key header' });
 
   const hash = hashApiKey(key);
-  const { rows } = await pool.query('SELECT * FROM api_keys WHERE key_hash = $1', [hash]);
-  if (!rows.length || !rows[0].active) return reply.code(401).send({ error: 'invalid api key' });
-
-  const row = rows[0];
-  const today = new Date().toISOString().slice(0, 10);
-  const sameDay = new Date(row.count_day).toISOString().slice(0, 10) === today;
-  const count = sameDay ? row.request_count : 0;
-
-  if (count >= row.rate_limit_per_day) {
-    return reply.code(429).send({ error: 'rate limit exceeded', limit: row.rate_limit_per_day });
-  }
-
-  await pool.query(
+  // single atomic UPDATE does the day-rollover, the limit check, and the
+  // increment in one round trip — avoids the read-then-write race a
+  // separate SELECT + UPDATE would have under concurrent requests from the
+  // same key, which could otherwise blow past rate_limit_per_day.
+  const { rows } = await pool.query(
     `UPDATE api_keys SET
-       request_count = $1,
+       request_count = CASE WHEN count_day = CURRENT_DATE THEN request_count + 1 ELSE 1 END,
        count_day = CURRENT_DATE,
        last_used_at = now()
-     WHERE id = $2`,
-    [count + 1, row.id]
+     WHERE key_hash = $1 AND active = true
+       AND (count_day != CURRENT_DATE OR request_count < rate_limit_per_day)
+     RETURNING id, label, rate_limit_per_day, request_count`,
+    [hash]
   );
-  req.apiKeyId = row.id;
-  req.apiKeyLabel = row.label;
+
+  if (rows.length) {
+    req.apiKeyId = rows[0].id;
+    req.apiKeyLabel = rows[0].label;
+    return;
+  }
+
+  // update matched nothing — figure out why, without a second race window
+  const { rows: check } = await pool.query('SELECT active, rate_limit_per_day FROM api_keys WHERE key_hash = $1', [hash]);
+  if (!check.length || !check[0].active) return reply.code(401).send({ error: 'invalid api key' });
+  return reply.code(429).send({ error: 'rate limit exceeded', limit: check[0].rate_limit_per_day, retryAfter: 'resets at next UTC midnight' });
 }

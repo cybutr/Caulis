@@ -487,9 +487,10 @@ app.delete('/api/admin/api-keys/:id', { preHandler: requireAdmin }, async (req, 
 // authenticated via x-api-key, independent of garden JWT auth ──
 
 app.get('/api/v1/public/plant-lookup', { preHandler: requireApiKey }, async (req, reply) => {
-  const { q, perenualKey } = req.query;
+  const { q } = req.query;
+  const perenualKey = req.headers['x-upstream-key'];
   if (!q) return reply.code(400).send({ error: 'q (species query) required' });
-  if (!perenualKey) return reply.code(400).send({ error: 'perenualKey required — pass your own Perenual API key' });
+  if (!perenualKey) return reply.code(400).send({ error: 'x-upstream-key header required — pass your own Perenual API key' });
 
   const r = await fetch(`https://perenual.com/api/v2/species-list?q=${encodeURIComponent(q)}&key=${perenualKey}`);
   const data = await r.json();
@@ -497,8 +498,8 @@ app.get('/api/v1/public/plant-lookup', { preHandler: requireApiKey }, async (req
 });
 
 app.get('/api/v1/public/plant-lookup/:id', { preHandler: requireApiKey }, async (req, reply) => {
-  const { perenualKey } = req.query;
-  if (!perenualKey) return reply.code(400).send({ error: 'perenualKey required — pass your own Perenual API key' });
+  const perenualKey = req.headers['x-upstream-key'];
+  if (!perenualKey) return reply.code(400).send({ error: 'x-upstream-key header required — pass your own Perenual API key' });
 
   const r = await fetch(`https://perenual.com/api/v2/species/details/${req.params.id}?key=${perenualKey}`);
   const data = await r.json();

@@ -216,17 +216,19 @@ Content-Type: application/json
 
   <h3>Auth</h3>
   <p>Send <code>x-api-key: ck_…</code> with every request below. Missing or invalid keys get <code>401</code>; an inactive key also gets <code>401</code>.</p>
+  <div class="note">Upstream keys (Perenual, Anthropic) are always sent as headers, never as query-string params — a query string can end up in access logs and browser history, which isn't where a credential belongs.</div>
 
   <h3>Plant lookup</h3>
-  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/v1/public/plant-lookup?q=&amp;perenualKey=</span><div class="desc">Species search by name. Wraps Perenual's species-list endpoint. Requires your own <code>perenualKey</code> query param.</div></div>
-  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/v1/public/plant-lookup/{id}?perenualKey=</span><div class="desc">Full species detail by Perenual id (light, watering, images, etc).</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/v1/public/plant-lookup?q=</span><div class="desc">Species search by name. Wraps Perenual's species-list endpoint. Requires your own Perenual key in the <code>x-upstream-key</code> header.</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/api/v1/public/plant-lookup/{id}</span><div class="desc">Full species detail by Perenual id (light, watering, images, etc). Same <code>x-upstream-key</code> header.</div></div>
 
   <h3>Chat</h3>
   <div class="endpoint"><span class="method post">POST</span><span class="ep">/api/v1/public/chat</span><div class="desc">Body — Anthropic Messages API shape (<code>model</code>, <code>messages</code>, <code>tools</code>, …) plus your own <code>anthropicKey</code>. Caulis proxies straight through to <code>api.anthropic.com/v1/messages</code> and returns the response as-is.</div></div>
 
   <h3>Example</h3>
-  <pre><code>GET /api/v1/public/plant-lookup?q=monstera&amp;perenualKey=…
+  <pre><code>GET /api/v1/public/plant-lookup?q=monstera
 x-api-key: ck_your_key_here
+x-upstream-key: your_perenual_key_here
 
 → 200 OK
 { "data": [ { "id": 1442, "common_name": "Monstera", … } ] }
