@@ -60,6 +60,20 @@ export async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT now()
     );
 
+    -- third-party API keys for the standalone public API product, separate
+    -- from garden JWT auth. key itself is never stored, only its sha256 hash.
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id SERIAL PRIMARY KEY,
+      key_hash TEXT UNIQUE NOT NULL,
+      label TEXT NOT NULL,
+      rate_limit_per_day INTEGER NOT NULL DEFAULT 200,
+      request_count INTEGER NOT NULL DEFAULT 0,
+      count_day DATE NOT NULL DEFAULT CURRENT_DATE,
+      active BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ DEFAULT now(),
+      last_used_at TIMESTAMPTZ
+    );
+
     INSERT INTO admin_settings (key, value) VALUES ('backup_interval_hours', '24') ON CONFLICT DO NOTHING;
     INSERT INTO admin_settings (key, value) VALUES ('backup_keep_count', '14') ON CONFLICT DO NOTHING;
   `);

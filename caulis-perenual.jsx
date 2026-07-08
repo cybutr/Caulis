@@ -419,6 +419,29 @@ const DOCTOR_TOOLS = [
       required: ['plant_id', 'changes', 'reason'],
     },
   },
+  {
+    name: 'check_watering_schedule',
+    description: 'Check whether a saved plant\'s current watering schedule (days since last watered vs its interval, and its light level) looks right, overdue, or worth adjusting. Call this when the user asks if they are watering a plant correctly or too often/rarely.',
+    input_schema: {
+      type: 'object',
+      properties: { plant_id: { type: 'string', description: 'id of the plant to check (from list_garden_plants, or the plant in context)' } },
+      required: ['plant_id'],
+    },
+  },
+  {
+    name: 'lookup_species_care',
+    description: 'Look up general care info (watering interval, light needs) for a plant species the user is asking about that is NOT yet in their garden. Uses the species library/API, not the saved garden data.',
+    input_schema: {
+      type: 'object',
+      properties: { query: { type: 'string', description: 'common or Latin name to search for' } },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'garden_risk_report',
+    description: 'Scan the whole garden and list plants that are overdue or due soon for water, most urgent first. Call this when the user asks a broad question like "what needs attention" or "how is my garden doing".',
+    input_schema: { type: 'object', properties: {} },
+  },
 ];
 
 async function doctorAsk({ messages, plantContext, model, key, withTools }) {

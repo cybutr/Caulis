@@ -887,7 +887,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
   const canSend = !busy && (pendingImage || (input.trim() && hasPhoto));
 
   // execute a tool call locally; returns the string result fed back to the model
-  const runTool = (name, input) => {
+  const runTool = async (name, input) => {
     if (name === 'list_garden_plants') {
       return JSON.stringify((plants || []).map(p => ({ id: p.id, name: p.name, latin: p.latin || '', location: p.location || '' })));
     }
@@ -901,6 +901,33 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
       if (!Object.keys(changes).length) return 'No effective change — the stored data already matches.';
       setThread(t => [...t, { role: 'card', correction: { plantId: target.id, plantName: target.name, changes, reason: input.reason, status: 'pending' } }]);
       return 'Correction shown to the user for review.';
+    }
+    if (name === 'check_watering_schedule') {
+      const target = (plants || []).find(p => String(p.id) === String(input.plant_id)) || activePlant;
+      if (!target) return 'No matching plant found in the garden.';
+      const ratio = target.every ? target.days / target.every : 0;
+      const status = statusOf(target.days, target.every);
+      return JSON.stringify({
+        name: target.name, days: target.days, every: target.every, light: target.light || 'unknown',
+        status, ratio: +ratio.toFixed(2),
+        note: status === 'needs' ? 'overdue for water' : status === 'soon' ? 'due soon' : 'on schedule',
+      });
+    }
+    if (name === 'lookup_species_care') {
+      try {
+        const results = await searchSpecies(input.query || '');
+        if (!results || !results.length) return 'No species found matching that query.';
+        const care = speciesCare(results[0]);
+        return JSON.stringify({ name: results[0].common_name, latin: results[0].scientific_name, every: care.every, light: care.light, watering: care.watering });
+      } catch (e) { return 'Species lookup failed: ' + (e.message || e); }
+    }
+    if (name === 'garden_risk_report') {
+      const risky = (plants || [])
+        .map(p => ({ id: p.id, name: p.name, days: p.days, every: p.every, status: statusOf(p.days, p.every) }))
+        .filter(p => p.status !== 'ok')
+        .sort((a, b) => (b.days / b.every) - (a.days / a.every));
+      if (!risky.length) return 'No plants currently need water — the whole garden is on schedule.';
+      return JSON.stringify(risky.slice(0, 15));
     }
     return 'Unknown tool.';
   };
@@ -933,7 +960,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
         const res = await doctorAsk({ messages, plantContext, model, key: anthropicKey, withTools: true });
         if (res.stop_reason === 'tool_use' && res.toolUses.length) {
           messages = [...messages, { role: 'assistant', content: res.content }];
-          const results = res.toolUses.map(tu => ({ type: 'tool_result', tool_use_id: tu.id, content: runTool(tu.name, tu.input || {}) }));
+          const results = await Promise.all(res.toolUses.map(async tu => ({ type: 'tool_result', tool_use_id: tu.id, content: await runTool(tu.name, tu.input || {}) })));
           messages = [...messages, { role: 'user', content: results }];
           if (res.text) setThread(t => [...t, { role: 'assistant', text: res.text }]);
           continue;

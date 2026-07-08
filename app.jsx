@@ -104,6 +104,7 @@ function App() {
   const [moveTarget, setMoveTarget] = useState(null);
   const [menuPlant, setMenuPlant]   = useState(null);
   const [undoDelete, setUndoDelete] = useState(null);
+  const [undoWaterAll, setUndoWaterAll] = useState(null);
   const [queue, setQueue]         = useState(() => lsGet('caulis_queue', []));
   const [printed, setPrinted]     = useState(false);
   const [globalPrintSize, setGlobalPrintSizeRaw] = useState(() => lsGet('caulis_print_size', 40));
@@ -899,7 +900,26 @@ window.onload=()=>{
   }, [undoDelete]);
   const movePlant   = (id, room) => setPlants(ps => ps.map(p => p.id === id ? { ...p, location: room } : p));
   const bulkWater  = (ids) => ids.forEach(id => water(id, 0));
-  const waterAll = () => { haptic('medium'); const stamp = fmtLocalDate(new Date()); const wa = todayMidnight(); setPlants(ps => ps.map(p => ({ ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), stamp].slice(-60) }))); };
+  const waterAll = () => {
+    haptic('medium');
+    const stamp = fmtLocalDate(new Date());
+    const wa = todayMidnight();
+    let count = 0;
+    setPlants(ps => {
+      setUndoWaterAll({ snapshot: ps });
+      return ps.map(p => { if (p.days > 0) count++; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), stamp].slice(-60) }; });
+    });
+  };
+  const undoWaterAllNow = () => {
+    if (!undoWaterAll) return;
+    setPlants(undoWaterAll.snapshot);
+    setUndoWaterAll(null);
+  };
+  useEffect(() => {
+    if (!undoWaterAll) return;
+    const t = setTimeout(() => setUndoWaterAll(null), 5000);
+    return () => clearTimeout(t);
+  }, [undoWaterAll]);
   const devOffsetDays = (n) => setPlants(ps => ps.map(p => { const wa = (typeof p.wateredAt === 'number' ? p.wateredAt : todayMidnight()) - n * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: daysSinceMidnight(wa) }; }));
   const devSetDays = (id, d) => setPlants(ps => ps.map(p => { if (p.id !== id) return p; const dd = Math.max(0, d | 0); const wa = todayMidnight() - dd * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: dd }; }));
   // repair tool: force-recompute wateredAt/days from the watering log
@@ -1145,6 +1165,18 @@ window.onload=()=>{
     </div>
   );
 
+  const undoWaterAllEl = !undoDelete && undoWaterAll && (
+    <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, background:C.toast, borderRadius:999, padding:'10px 12px 10px 18px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+        <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:500, color:'#fff' }}>Watered all plants</span>
+        <div onClick={undoWaterAllNow} style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, background:'rgba(255,255,255,0.16)', borderRadius:999, padding:'6px 13px' }}>
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M5 3 2 6l3 3M2 6h6.5a3.5 3.5 0 010 7H6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:'#fff' }}>Undo</span>
+        </div>
+      </div>
+    </div>
+  );
+
   const storageFullEl = storageFull && (
     <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:70, padding:'0 18px', animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
       <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#B4472E', borderRadius:18, padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
@@ -1166,8 +1198,10 @@ window.onload=()=>{
         const rot = Math.random() * 360;
         const hue = i % 2 === 0 ? C.forest : C.sage;
         return (
-          <div key={i} style={{ position:'absolute', top:-24, left:`${left}%`, fontSize:size, opacity:0.9,
-            animation:`confettiFall ${dur}s ease-in ${delay}s forwards`, transform:`rotate(${rot}deg)`, color:hue }}>🌿</div>
+          <div key={i} style={{ position:'absolute', top:-24, left:`${left}%`, opacity:0.9,
+            animation:`confettiFall ${dur}s ease-in ${delay}s forwards`, transform:`rotate(${rot}deg)` }}>
+            <Leaf size={size} color={hue}/>
+          </div>
         );
       })}
     </div>
@@ -1180,7 +1214,7 @@ window.onload=()=>{
   const milestoneToastEl = milestoneToast != null && (
     <div style={{ position:'fixed', top:'calc(18px + env(safe-area-inset-top))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
       <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'11px 20px', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, boxShadow:'0 10px 26px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:8 }}>
-        🌱 {milestoneToast} plants — your garden is growing
+        <Leaf size={15} color="#fff"/> {milestoneToast} plants — your garden is growing
       </div>
     </div>
   );
@@ -1263,6 +1297,7 @@ window.onload=()=>{
         )}
         {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
         {undoDeleteEl}
+        {undoWaterAllEl}
         {storageFullEl}
         {confettiEl}
         {milestoneToastEl}
@@ -1317,6 +1352,7 @@ window.onload=()=>{
       )}
       {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
       {undoDeleteEl}
+      {undoWaterAllEl}
       {storageFullEl}
       {confettiEl}
       {milestoneToastEl}

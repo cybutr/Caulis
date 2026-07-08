@@ -9,12 +9,35 @@ const GS = {
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e) {} },
 };
 
+// wraps every literal occurrence of query inside text with a tinted inline
+// span, case-insensitive — used to highlight settings-search matches in place
+function highlightText(text, query) {
+  if (!query) return text;
+  const q = query.trim();
+  if (!q) return text;
+  const lower = text.toLowerCase();
+  const needle = q.toLowerCase();
+  const parts = [];
+  let i = 0, from = 0;
+  while ((i = lower.indexOf(needle, from)) !== -1) {
+    if (i > from) parts.push(text.slice(from, i));
+    parts.push(
+      <span key={i} style={{ background:C.sage, color:C.forest, borderRadius:3, padding:'0 2px' }}>
+        {text.slice(i, i + needle.length)}
+      </span>
+    );
+    from = i + needle.length;
+  }
+  parts.push(text.slice(from));
+  return parts;
+}
+
 // collapsible settings category — module-level so children keep identity (no remount)
-function SettingsSection({ title, open, onToggle, children, id, matched }) {
+function SettingsSection({ title, open, onToggle, children, id, matched, query }) {
   return (
     <div id={id} style={matched ? { borderRadius:16, boxShadow:`0 0 0 2px ${C.forest}`, transition:'box-shadow 200ms ease' } : { transition:'box-shadow 200ms ease' }}>
       <div onClick={onToggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding: matched ? '8px 6px 8px' : '0 6px 8px' }}>
-        <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color: matched ? C.forest : C.brown, opacity: matched ? 1 : 0.6, letterSpacing:0.6, textTransform:'uppercase' }}>{title}</span>
+        <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color: matched ? C.forest : C.brown, opacity: matched ? 1 : 0.6, letterSpacing:0.6, textTransform:'uppercase' }}>{highlightText(title, query)}</span>
         <svg width="13" height="13" viewBox="0 0 24 24" style={{ transform: open?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45 }}><path d="M6 9l6 6 6-6" stroke={C.brown} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
       </div>
       <div style={{ display:'grid', gridTemplateRows: open?'1fr':'0fr', transition:'grid-template-rows 260ms ease' }}>
@@ -306,7 +329,7 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
       <Sprig onTap={tapSprig}/>
       {sprigMsg && (
         <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
-          <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>🌿 {sprigMsg}</div>
+          <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)', display:'flex', alignItems:'center', gap:8 }}><Leaf size={14} color="#fff"/> {sprigMsg}</div>
         </div>
       )}
       <div style={{ padding:`${topPad}px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
@@ -387,6 +410,11 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
         <div style={{ textAlign:'center', padding:'48px 30px', position:'relative', zIndex:2 }}>
           <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:20, color:C.forest }}>No matches</div>
           <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>{nq ? `Nothing matches "${q}".` : 'No plants match these filters.'}</div>
+          {(nq || fStatus !== 'all' || fLoc) && (
+            <div onClick={()=>{ setQ(''); setFStatus('all'); setFLoc(null); }} style={{ display:'inline-flex', alignItems:'center', gap:6, cursor:'pointer', marginTop:16, background:C.line, borderRadius:999, padding:'8px 16px' }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest }}>Clear filters</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -715,9 +743,19 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
   // doubles as the target for an intercepted browser Ctrl/Cmd+F
   const [settingsQuery, setSettingsQuery] = useState('');
   const settingsSearchRef = useRef(null);
-  const settingsMatches = settingsQuery.trim()
-    ? Object.keys(SETTINGS_SEARCH_INDEX).filter(id => SETTINGS_SEARCH_INDEX[id].some(kw => kw.includes(settingsQuery.trim().toLowerCase())))
+  const normalizedQuery = settingsQuery.trim().toLowerCase();
+  // word-boundary aware first: a keyword (or one of its words) starting with
+  // the query outranks a mid-word substring hit — keeps short queries tight.
+  // falls back to substring matching only when no prefix match exists at all,
+  // so recall isn't lost for queries that only appear mid-word (e.g. "id").
+  const prefixIds = normalizedQuery
+    ? Object.keys(SETTINGS_SEARCH_INDEX).filter(id => SETTINGS_SEARCH_INDEX[id].some(kw =>
+        kw.startsWith(normalizedQuery) || kw.split(/\s+/).some(w => w.startsWith(normalizedQuery))))
     : [];
+  const substringIds = normalizedQuery
+    ? Object.keys(SETTINGS_SEARCH_INDEX).filter(id => SETTINGS_SEARCH_INDEX[id].some(kw => kw.includes(normalizedQuery)))
+    : [];
+  const settingsMatches = normalizedQuery ? (prefixIds.length ? prefixIds : substringIds) : [];
   const [settingsMatchIdx, setSettingsMatchIdx] = useState(0);
   const jumpToSection = (id) => {
     setActiveSec(id);
@@ -1098,7 +1136,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           )}
         </div>
-        <SettingsSection title="Appearance" open={isOpen('appearance')} onToggle={()=>toggleSec('appearance')} id={'sec-'+'appearance'} matched={settingsMatches[settingsMatchIdx] === 'appearance'}>
+        <SettingsSection title="Appearance" open={isOpen('appearance')} onToggle={()=>toggleSec('appearance')} id={'sec-'+'appearance'} matched={settingsMatches[settingsMatchIdx] === 'appearance'} query={settingsMatches.includes('appearance') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div onClick={onToggleDark} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
               <div>
@@ -1165,7 +1203,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             )}
           </div>
         </SettingsSection>
-        <SettingsSection title="Garden" open={isOpen('garden')} onToggle={()=>toggleSec('garden')} id={'sec-'+'garden'} matched={settingsMatches[settingsMatchIdx] === 'garden'}>
+        <SettingsSection title="Garden" open={isOpen('garden')} onToggle={()=>toggleSec('garden')} id={'sec-'+'garden'} matched={settingsMatches[settingsMatchIdx] === 'garden'} query={settingsMatches.includes('garden') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <Row label="Plants tracked" value={String(plants.length)}/>
             <Row label="Locations" value={String(new Set(plants.map(p=>p.location)).size)}/>
@@ -1206,7 +1244,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </div>
         </SettingsSection>
-        <SettingsSection title="Behavior" open={isOpen('behavior')} onToggle={()=>toggleSec('behavior')} id={'sec-'+'behavior'} matched={settingsMatches[settingsMatchIdx] === 'behavior'}>
+        <SettingsSection title="Behavior" open={isOpen('behavior')} onToggle={()=>toggleSec('behavior')} id={'sec-'+'behavior'} matched={settingsMatches[settingsMatchIdx] === 'behavior'} query={settingsMatches.includes('behavior') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div onClick={onToggleConfirmDelete} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
               <div>
@@ -1237,7 +1275,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </div>
         </SettingsSection>
-        <SettingsSection title="Notifications" open={isOpen('notif')} onToggle={()=>toggleSec('notif')} id={'sec-'+'notif'} matched={settingsMatches[settingsMatchIdx] === 'notif'}>
+        <SettingsSection title="Notifications" open={isOpen('notif')} onToggle={()=>toggleSec('notif')} id={'sec-'+'notif'} matched={settingsMatches[settingsMatchIdx] === 'notif'} query={settingsMatches.includes('notif') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Watering reminders</span><Toggle on/>
@@ -1247,7 +1285,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </div>
         </SettingsSection>
-        <SettingsSection title="Printing" open={isOpen('printing')} onToggle={()=>toggleSec('printing')} id={'sec-'+'printing'} matched={settingsMatches[settingsMatchIdx] === 'printing'}>
+        <SettingsSection title="Printing" open={isOpen('printing')} onToggle={()=>toggleSec('printing')} id={'sec-'+'printing'} matched={settingsMatches[settingsMatchIdx] === 'printing'} query={settingsMatches.includes('printing') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:C.hair }}>
               <div>
@@ -1281,7 +1319,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </div>
         </SettingsSection>
-        <SettingsSection title="Plant data" open={isOpen('data')} onToggle={()=>toggleSec('data')} id={'sec-'+'data'} matched={settingsMatches[settingsMatchIdx] === 'data'}>
+        <SettingsSection title="Plant data" open={isOpen('data')} onToggle={()=>toggleSec('data')} id={'sec-'+'data'} matched={settingsMatches[settingsMatchIdx] === 'data'} query={settingsMatches.includes('data') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:14 }}>
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Perenual — species photos &amp; care data</div>
@@ -1396,7 +1434,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
           </div>
         </SettingsSection>
         {(installPrompt || /iphone|ipad|ipod/i.test(navigator.userAgent)) && (
-          <SettingsSection title="App" open={isOpen('app')} onToggle={()=>toggleSec('app')} id={'sec-'+'app'} matched={settingsMatches[settingsMatchIdx] === 'app'}>
+          <SettingsSection title="App" open={isOpen('app')} onToggle={()=>toggleSec('app')} id={'sec-'+'app'} matched={settingsMatches[settingsMatchIdx] === 'app'} query={settingsMatches.includes('app') ? settingsQuery : ''}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px' }}>
               {installPrompt ? (
                 <div onClick={onInstall} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
@@ -1415,7 +1453,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           </SettingsSection>
         )}
-        <SettingsSection title="Google sync" open={isOpen('google')} onToggle={()=>toggleSec('google')} id={'sec-'+'google'} matched={settingsMatches[settingsMatchIdx] === 'google'}>
+        <SettingsSection title="Google sync" open={isOpen('google')} onToggle={()=>toggleSec('google')} id={'sec-'+'google'} matched={settingsMatches[settingsMatchIdx] === 'google'} query={settingsMatches.includes('google') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Sync to</div>
@@ -1482,7 +1520,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </>)}
           </div>
         </SettingsSection>
-        <SettingsSection title="Cloud sync" open={isOpen('cloud')} onToggle={()=>toggleSec('cloud')} id={'sec-'+'cloud'} matched={settingsMatches[settingsMatchIdx] === 'cloud'}>
+        <SettingsSection title="Cloud sync" open={isOpen('cloud')} onToggle={()=>toggleSec('cloud')} id={'sec-'+'cloud'} matched={settingsMatches[settingsMatchIdx] === 'cloud'} query={settingsMatches.includes('cloud') ? settingsQuery : ''}>
           {!SYNC_READY && (
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:'14px 16px' }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Firebase not configured. Fill in FIREBASE_CONFIG in caulis-firebase.jsx.</div>
@@ -1600,7 +1638,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           )}
         </SettingsSection>
-        <SettingsSection title="Backup" open={isOpen('backup')} onToggle={()=>toggleSec('backup')} id={'sec-'+'backup'} matched={settingsMatches[settingsMatchIdx] === 'backup'}>
+        <SettingsSection title="Backup" open={isOpen('backup')} onToggle={()=>toggleSec('backup')} id={'sec-'+'backup'} matched={settingsMatches[settingsMatchIdx] === 'backup'} query={settingsMatches.includes('backup') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Export your whole garden (plants, photos, queue) to a JSON file, or restore from one.</div>
             <input ref={importRef} type="file" accept="application/json,.json" onChange={onImportFile} style={{ display:'none' }}/>
@@ -1670,7 +1708,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             <div onClick={enabled ? onClick : undefined} style={{ cursor: enabled ? 'pointer' : 'default', opacity: enabled ? 0.6 : 0.18, lineHeight:1, fontSize:11, color:C.brown, padding:'1px 3px' }}>{dir}</div>
           );
           return (
-          <SettingsSection title="Navigation bar" open={isOpen('nav')} onToggle={()=>toggleSec('nav')} id={'sec-'+'nav'} matched={settingsMatches[settingsMatchIdx] === 'nav'}>
+          <SettingsSection title="Navigation bar" open={isOpen('nav')} onToggle={()=>toggleSec('nav')} id={'sec-'+'nav'} matched={settingsMatches[settingsMatchIdx] === 'nav'} query={settingsMatches.includes('nav') ? settingsQuery : ''}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:8 }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, padding:'0 2px 2px' }}>Tap a slot to change its button, reorder with the arrows{isDesktop ? '' : ', pick which one is raised in the center'}, and add up to {NAV_MAX}. The “More” button opens everything not on the bar — so nothing is ever out of reach.</div>
               {nav.map((s, i) => {
@@ -1799,7 +1837,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
             </div>
           );
           return (
-          <SettingsSection title="Developer" open={isOpen('dev')} onToggle={()=>toggleSec('dev')} id={'sec-'+'dev'} matched={settingsMatches[settingsMatchIdx] === 'dev'}>
+          <SettingsSection title="Developer" open={isOpen('dev')} onToggle={()=>toggleSec('dev')} id={'sec-'+'dev'} matched={settingsMatches[settingsMatchIdx] === 'dev'} query={settingsMatches.includes('dev') ? settingsQuery : ''}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:16, display:'flex', flexDirection:'column', gap:18 }}>
               {!devAuthed ? (
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
@@ -1983,7 +2021,7 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
           </SettingsSection>
           );
         })()}
-        <SettingsSection title="About" open={isOpen('about')} onToggle={()=>toggleSec('about')} id={'sec-'+'about'} matched={settingsMatches[settingsMatchIdx] === 'about'}>
+        <SettingsSection title="About" open={isOpen('about')} onToggle={()=>toggleSec('about')} id={'sec-'+'about'} matched={settingsMatches[settingsMatchIdx] === 'about'} query={settingsMatches.includes('about') ? settingsQuery : ''}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <div onClick={tapVersion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:C.hair, cursor:'default', userSelect:'none' }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Version</span>
@@ -2036,7 +2074,7 @@ function DesktopSettingsAside({ plants, adminUnlocked, adminStats, backupSetting
           <svg width="15" height="15" viewBox="0 0 16 16" fill={C.brown}><path d="M8 0a8 8 0 00-2.53 15.59c.4.07.55-.17.55-.38v-1.35c-2.22.48-2.69-1.07-2.69-1.07-.36-.92-.89-1.16-.89-1.16-.72-.5.06-.49.06-.49.8.06 1.22.82 1.22.82.71 1.22 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.01.08-2.1 0 0 .67-.22 2.2.82a7.6 7.6 0 014 0c1.53-1.04 2.2-.82 2.2-.82.44 1.09.16 1.9.08 2.1.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48v2.2c0 .21.15.46.55.38A8 8 0 008 0Z"/></svg>
           GitHub repo
         </a>
-        <a href="docs.html" target="_blank" rel="noopener" style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', color:C.ink, fontFamily:FONT_SANS, fontSize:13, fontWeight:500 }}>
+        <a href="https://api.caulis.czeddaru.dev/docs" target="_blank" rel="noopener" style={{ display:'flex', alignItems:'center', gap:8, textDecoration:'none', color:C.ink, fontFamily:FONT_SANS, fontSize:13, fontWeight:500 }}>
           <IconGear s={15} c={C.brown}/> Docs &amp; changelog
         </a>
       </div>

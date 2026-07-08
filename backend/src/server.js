@@ -8,7 +8,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import bcrypt from 'bcrypt';
 import { pool, initSchema, getSetting, setSetting } from './db.js';
-import { signToken, requireAuth, requireAdmin } from './auth.js';
+import { signToken, requireAuth, requireAdmin, requireApiKey, hashApiKey } from './auth.js';
 
 // on-demand admin backups, dumped directly with the app's own DB credentials
 // (no sudo, no root cron) — separate from the nightly root-cron full-DB dumps
@@ -37,10 +37,34 @@ function runBackupNow() {
   });
 }
 
+function latestBackupTime() {
+  const files = fs.readdirSync(BACKUP_DIR).filter(f => f.endsWith('.sql.gz'));
+  if (!files.length) return null;
+  const mtimes = files.map(f => fs.statSync(path.join(BACKUP_DIR, f)).mtime.getTime());
+  return new Date(Math.max(...mtimes));
+}
+
+async function checkAndRunBackup() {
+  try {
+    const intervalHours = Number(await getSetting('backup_interval_hours')) || 24;
+    const last = latestBackupTime();
+    const dueAt = last ? last.getTime() + intervalHours * 3600 * 1000 : 0;
+    if (Date.now() < dueAt) return;
+    const outPath = await runBackupNow();
+    app.log.info({ outPath }, 'scheduled backup completed');
+  } catch (e) {
+    app.log.error({ err: e }, 'scheduled backup failed');
+  }
+}
+
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
 
 await initSchema();
+
+const BACKUP_CHECK_MS = 15 * 60 * 1000;
+setInterval(checkAndRunBackup, BACKUP_CHECK_MS);
+checkAndRunBackup();
 
 app.post('/api/gardens/register', async (req, reply) => {
   const { key, password = '' } = req.body || {};
@@ -424,6 +448,78 @@ app.get('/api/tools/shorten/:code/stats', async (req, reply) => {
   const { rows } = await pool.query('SELECT url, hits, created_at FROM shortlinks WHERE code = $1', [req.params.code]);
   if (!rows.length) return reply.code(404).send({ error: 'not found' });
   return rows[0];
+});
+
+// ── Public API key management (admin-only) ──
+
+app.post('/api/admin/api-keys', { preHandler: requireAdmin }, async (req, reply) => {
+  const { label, rateLimitPerDay = 200 } = req.body || {};
+  if (!label) return reply.code(400).send({ error: 'label required' });
+  const rawKey = `ck_${crypto.randomBytes(24).toString('hex')}`;
+  const hash = hashApiKey(rawKey);
+  const { rows } = await pool.query(
+    'INSERT INTO api_keys (key_hash, label, rate_limit_per_day) VALUES ($1, $2, $3) RETURNING id, label, rate_limit_per_day, created_at',
+    [hash, label, Math.max(1, rateLimitPerDay | 0)]
+  );
+  return { ...rows[0], key: rawKey };
+});
+
+app.get('/api/admin/api-keys', { preHandler: requireAdmin }, async (req, reply) => {
+  const { rows } = await pool.query(
+    'SELECT id, label, rate_limit_per_day, request_count, count_day, active, created_at, last_used_at FROM api_keys ORDER BY created_at DESC'
+  );
+  return { keys: rows };
+});
+
+app.patch('/api/admin/api-keys/:id', { preHandler: requireAdmin }, async (req, reply) => {
+  const { active, rateLimitPerDay } = req.body || {};
+  if (active != null) await pool.query('UPDATE api_keys SET active = $1 WHERE id = $2', [!!active, req.params.id]);
+  if (rateLimitPerDay != null) await pool.query('UPDATE api_keys SET rate_limit_per_day = $1 WHERE id = $2', [Math.max(1, rateLimitPerDay | 0), req.params.id]);
+  return { ok: true };
+});
+
+app.delete('/api/admin/api-keys/:id', { preHandler: requireAdmin }, async (req, reply) => {
+  await pool.query('DELETE FROM api_keys WHERE id = $1', [req.params.id]);
+  return { ok: true };
+});
+
+// ── Public Developer API (/api/v1/public) — third-party product surface,
+// authenticated via x-api-key, independent of garden JWT auth ──
+
+app.get('/api/v1/public/plant-lookup', { preHandler: requireApiKey }, async (req, reply) => {
+  const { q, perenualKey } = req.query;
+  if (!q) return reply.code(400).send({ error: 'q (species query) required' });
+  if (!perenualKey) return reply.code(400).send({ error: 'perenualKey required — pass your own Perenual API key' });
+
+  const r = await fetch(`https://perenual.com/api/v2/species-list?q=${encodeURIComponent(q)}&key=${perenualKey}`);
+  const data = await r.json();
+  return reply.code(r.status).send(data);
+});
+
+app.get('/api/v1/public/plant-lookup/:id', { preHandler: requireApiKey }, async (req, reply) => {
+  const { perenualKey } = req.query;
+  if (!perenualKey) return reply.code(400).send({ error: 'perenualKey required — pass your own Perenual API key' });
+
+  const r = await fetch(`https://perenual.com/api/v2/species/details/${req.params.id}?key=${perenualKey}`);
+  const data = await r.json();
+  return reply.code(r.status).send(data);
+});
+
+app.post('/api/v1/public/chat', { preHandler: requireApiKey }, async (req, reply) => {
+  const { anthropicKey, ...body } = req.body || {};
+  if (!anthropicKey) return reply.code(400).send({ error: 'anthropicKey required — pass your own Anthropic API key' });
+
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-api-key': anthropicKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json();
+  return reply.code(r.status).send(data);
 });
 
 app.get('/health', async () => ({ ok: true }));
