@@ -146,11 +146,17 @@ function App() {
   // later navConfig/defaultTab edits — otherwise saving the setting would
   // re-fire Doctor every time Settings re-renders.
   const firedLaunchActionRef = useRef(false);
+  const [launchActionToast, setLaunchActionToast] = useState(null);
   useEffect(() => {
     if (firedLaunchActionRef.current) return;
     firedLaunchActionRef.current = true;
     const meta = NAV_ACTIONS[defaultTab];
-    if (meta && !meta.tab) setTimeout(() => onNavAction(defaultTab), 80);
+    if (!meta || meta.tab) return;
+    // a beat of visible context before the overlay pops — without it, opening
+    // straight into Doctor's camera/chat UI on cold launch reads as a glitch
+    // rather than the deliberate shortcut it is
+    setLaunchActionToast(meta.label);
+    setTimeout(() => { onNavAction(defaultTab); setTimeout(() => setLaunchActionToast(null), 500); }, 420);
   }, []);
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [bulkMove, setBulkMove] = useState(null);
@@ -159,24 +165,39 @@ function App() {
   const haptic = (kind = 'light') => { if (haptics) fireHaptic(kind); };
 
   // ── easter eggs ──────────────────────────────────────────────
-  // konami code, anywhere in the app — a burst of falling leaves, purely decorative
+  // konami code, anywhere in the app — a burst of falling leaves, purely decorative.
+  // Skipped outright under reduceMotion rather than relying on the global CSS
+  // animation-kill, since this is pure decoration with nothing to gracefully degrade to.
   const [confetti, setConfetti] = useState(false);
   useEffect(() => {
     const seq = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
     let pos = 0;
     const handler = (e) => {
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (key === seq[pos]) { pos++; if (pos === seq.length) { pos = 0; haptic('success'); setConfetti(true); setTimeout(() => setConfetti(false), 2600); } }
-      else pos = key === seq[0] ? 1 : 0;
+      if (key === seq[pos]) {
+        pos++;
+        if (pos === seq.length) { pos = 0; haptic('success'); if (!reduceMotion) { setConfetti(true); setTimeout(() => setConfetti(false), 2600); } }
+      } else pos = key === seq[0] ? 1 : 0;
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
-  // a quiet milestone badge the first time the garden crosses a nice round size
+  }, [reduceMotion]);
+  // a quiet milestone badge the first time the garden crosses a nice round size —
+  // but only for growth that happens *in this session*. Plants load asynchronously
+  // (local cache first, then a possibly-larger Firebase sync), so without the
+  // "already primed" guard, a fresh browser joining an existing 30-plant garden
+  // would fire "25 plants!" for growth it never witnessed.
   const MILESTONES = [5, 10, 25, 50, 100, 200];
   const [milestoneToast, setMilestoneToast] = useState(null);
+  const milestonePrimedRef = useRef(false);
   useEffect(() => {
     let seen = []; try { seen = lsGet('caulis_milestones_seen', []); } catch(e) {}
+    if (!milestonePrimedRef.current) {
+      milestonePrimedRef.current = true;
+      const already = MILESTONES.filter(m => plants.length >= m);
+      if (already.length) lsSet('caulis_milestones_seen', [...new Set([...seen, ...already])]);
+      return;
+    }
     const hit = MILESTONES.find(m => plants.length >= m && !seen.includes(m));
     if (hit) { lsSet('caulis_milestones_seen', [...seen, hit]); setMilestoneToast(hit); haptic('success'); setTimeout(() => setMilestoneToast(null), 4000); }
   }, [plants.length]);
@@ -1127,6 +1148,11 @@ window.onload=()=>{
       })}
     </div>
   );
+  const launchActionToastEl = launchActionToast != null && (
+    <div style={{ position:'fixed', top:'calc(18px + env(safe-area-inset-top))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:66, animation:'fade 160ms ease', pointerEvents:'none' }}>
+      <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>Opening {launchActionToast}…</div>
+    </div>
+  );
   const milestoneToastEl = milestoneToast != null && (
     <div style={{ position:'fixed', top:'calc(18px + env(safe-area-inset-top))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
       <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'11px 20px', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, boxShadow:'0 10px 26px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:8 }}>
@@ -1216,6 +1242,7 @@ window.onload=()=>{
         {storageFullEl}
         {confettiEl}
         {milestoneToastEl}
+        {launchActionToastEl}
         {confirmRemoveEl}
         {bulkRemoveEl}
         {guestView === 'loading' && <div style={{ position:'fixed', inset:0, zIndex:50, background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', animation:'fade 160ms ease' }}><div style={{ width:38, height:38, borderRadius:999, border:`3px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/></div>}
@@ -1269,6 +1296,7 @@ window.onload=()=>{
       {storageFullEl}
       {confettiEl}
       {milestoneToastEl}
+      {launchActionToastEl}
       {confirmRemoveEl}
       {bulkRemoveEl}
       {guestView === 'loading' && <div style={{ position:'fixed', inset:0, zIndex:50, background:C.bg, display:'flex', alignItems:'center', justifyContent:'center', animation:'fade 160ms ease' }}><div style={{ width:38, height:38, borderRadius:999, border:`3px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/></div>}

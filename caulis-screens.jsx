@@ -1820,8 +1820,15 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                         {adminStats && (() => {
                           const claimedPct = adminStats.totalGardens > 0 ? 1 - (adminStats.unclaimedCount / adminStats.totalGardens) : 0;
                           const photoPct = adminStats.totalGardens > 0 ? Math.min(1, adminStats.totalPhotoSets / adminStats.totalGardens) : 0;
-                          const densityPct = Math.min(1, adminStats.avgPlantsPerGarden / 20);
+                          // "density" has no natural 100% — 20/garden is just a display
+                          // ceiling to keep the ring readable, not a target, so the sub-label
+                          // says so plainly rather than implying a real rate like the other two
+                          const densityCap = 20;
+                          const densityPct = Math.min(1, adminStats.avgPlantsPerGarden / densityCap);
                           const cutoff = Date.now() - 86400000;
+                          // only the top-10-by-size gardens are ever fetched from the backend,
+                          // so this can only ever answer "how many of the 10 biggest gardens
+                          // touched their data in the last day" — not true sitewide activity
                           const activeToday = (adminStats.mostActive || []).filter(g => new Date(g.updated_at).getTime() >= cutoff).length;
                           return (
                           <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -1829,14 +1836,14 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
                             <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:6 }}>
                               <Gauge label="Claimed" sub={`${adminStats.totalGardens - adminStats.unclaimedCount}/${adminStats.totalGardens}`} pct={claimedPct}/>
                               <Gauge label="Photo coverage" sub={`${adminStats.totalPhotoSets} sets`} pct={photoPct} tone={photoPct < 0.3 ? 'warn' : 'forest'}/>
-                              <Gauge label="Density" sub={`${adminStats.avgPlantsPerGarden}/garden`} pct={densityPct}/>
+                              <Gauge label="Density" sub={`${adminStats.avgPlantsPerGarden}/garden · cap ${densityCap}`} pct={densityPct}/>
                             </div>
                             <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:8 }}>
                               {[
                                 ['Gardens', adminStats.totalGardens],
                                 ['Plants', adminStats.totalPlants],
-                                ['Unclaimed', adminStats.unclaimedCount],
-                                ['Active (24h, top10)', activeToday],
+                                ['Active today · top 10', activeToday],
+                                ['Avg / garden', adminStats.avgPlantsPerGarden],
                               ].map(([label, val]) => (
                                 <div key={label} style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
                                   <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
