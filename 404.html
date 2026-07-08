@@ -27,6 +27,10 @@
           padding:13px 24px; border-radius:12px; font-weight:600; font-size:14px; }
   .leaf { position:absolute; opacity:0.5; }
   @keyframes drift { 0% { transform:translateY(-10vh) rotate(0deg); opacity:0; } 10% { opacity:0.5; } 100% { transform:translateY(110vh) rotate(220deg); opacity:0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .wobble { animation:none; }
+    .leaf { display:none; }
+  }
 </style>
 </head>
 <body>
@@ -51,7 +55,8 @@
 </div>
 <script>
   const emoji = ['🍃','🌿'];
-  for (let i = 0; i < 10; i++) {
+  const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  for (let i = 0; i < (reduceMotion ? 0 : 10); i++) {
     const el = document.createElement('div');
     el.className = 'leaf';
     el.textContent = emoji[i % 2];

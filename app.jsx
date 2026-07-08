@@ -156,7 +156,9 @@ function App() {
     // straight into Doctor's camera/chat UI on cold launch reads as a glitch
     // rather than the deliberate shortcut it is
     setLaunchActionToast(meta.label);
-    setTimeout(() => { onNavAction(defaultTab); setTimeout(() => setLaunchActionToast(null), 500); }, 420);
+    // clear right as the action fires, not after — the toast is meant to precede
+    // the handoff, not float on top of the now-open overlay behind it
+    setTimeout(() => { onNavAction(defaultTab); setLaunchActionToast(null); }, 420);
   }, []);
   const [confirmRemove, setConfirmRemove] = useState(null);
   const [bulkMove, setBulkMove] = useState(null);
@@ -166,9 +168,11 @@ function App() {
 
   // ── easter eggs ──────────────────────────────────────────────
   // konami code, anywhere in the app — a burst of falling leaves, purely decorative.
-  // Skipped outright under reduceMotion rather than relying on the global CSS
-  // animation-kill, since this is pure decoration with nothing to gracefully degrade to.
+  // Skipped outright under reduceMotion (the app's own setting) OR the OS-level
+  // prefers-reduced-motion — someone who never opened Settings but has the OS
+  // preference on shouldn't get the full burst either.
   const [confetti, setConfetti] = useState(false);
+  const prefersReducedMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(e) { return false; } };
   useEffect(() => {
     const seq = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
     let pos = 0;
@@ -176,7 +180,7 @@ function App() {
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       if (key === seq[pos]) {
         pos++;
-        if (pos === seq.length) { pos = 0; haptic('success'); if (!reduceMotion) { setConfetti(true); setTimeout(() => setConfetti(false), 2600); } }
+        if (pos === seq.length) { pos = 0; haptic('success'); if (!reduceMotion && !prefersReducedMotion()) { setConfetti(true); setTimeout(() => setConfetti(false), 2600); } }
       } else pos = key === seq[0] ? 1 : 0;
     };
     window.addEventListener('keydown', handler);
@@ -184,16 +188,19 @@ function App() {
   }, [reduceMotion]);
   // a quiet milestone badge the first time the garden crosses a nice round size —
   // but only for growth that happens *in this session*. Plants load asynchronously
-  // (local cache first, then a possibly-larger Firebase sync), so without the
-  // "already primed" guard, a fresh browser joining an existing 30-plant garden
-  // would fire "25 plants!" for growth it never witnessed.
+  // (local cache first, then a possibly-larger Firebase sync that can land a few
+  // seconds later for a device freshly joining an existing garden), so a single
+  // "already primed on first render" flag isn't enough — a fresh device would still
+  // prime against 0, then get bumped to 30 by the sync and read that as fresh growth.
+  // Instead: any milestone crossed within a short settling window after mount is
+  // silently marked seen, never toasted — only crossings after that window count.
   const MILESTONES = [5, 10, 25, 50, 100, 200];
   const [milestoneToast, setMilestoneToast] = useState(null);
-  const milestonePrimedRef = useRef(false);
+  const milestoneMountRef = useRef(Date.now());
   useEffect(() => {
     let seen = []; try { seen = lsGet('caulis_milestones_seen', []); } catch(e) {}
-    if (!milestonePrimedRef.current) {
-      milestonePrimedRef.current = true;
+    const settling = Date.now() - milestoneMountRef.current < 4000;
+    if (settling) {
       const already = MILESTONES.filter(m => plants.length >= m);
       if (already.length) lsSet('caulis_milestones_seen', [...new Set([...seen, ...already])]);
       return;
