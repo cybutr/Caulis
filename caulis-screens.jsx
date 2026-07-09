@@ -563,7 +563,7 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
 
   return (
     <div data-noswipe="1" style={{ position:'relative', borderRadius:18, overflow:'hidden' }}>
-      <div onClick={doSnooze} style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:22, background:STATUS.soon.soft, cursor:'pointer' }}>
+      <div onClick={doSnooze} role="button" aria-label={`Snooze ${plant.name} 2 days`} style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:22, background:STATUS.soon.soft, cursor:'pointer' }}>
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.soon.dot }}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke={STATUS.soon.dot} strokeWidth="1.7"/><path d="M12 9.5V13l2.5 1.5M9 3.5h6" stroke={STATUS.soon.dot} strokeWidth="1.7" strokeLinecap="round"/></svg>
           <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700 }}>+2d</span>
@@ -2499,7 +2499,7 @@ function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true }) {
         const label = navLabel(s);
         if (s.center) {
           return (
-            <div key={i} onClick={()=>fire(s.action)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, cursor:'pointer' }}>
+            <div key={i} onClick={()=>fire(s.action)} role="button" aria-label={label} aria-current={active ? 'page' : undefined} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, cursor:'pointer' }}>
               <div style={{
                 width:58, height:58, borderRadius:999, marginTop:-30,
                 background: s.color ? accent : `linear-gradient(160deg, ${C.sage} 0%, ${C.forest} 90%)`,
@@ -2515,7 +2515,7 @@ function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true }) {
         }
         const col = active ? accent : C.brown;
         return (
-          <div key={i} onClick={()=>fire(s.action)} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer', paddingBottom:2 }}>
+          <div key={i} onClick={()=>fire(s.action)} role="button" aria-label={label} aria-current={active ? 'page' : undefined} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer', paddingBottom:2 }}>
             <meta.Icon s={23} c={col} a={active?1:0.55}/>
             {showLabels && <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight: active?600:500, color:col, opacity: active?1:0.65, letterSpacing:0.2 }}>{label}</span>}
           </div>

@@ -678,7 +678,10 @@ function App() {
   useEffect(() => {
     const sync = () => setPlants(ps => ps.map(p => {
       const d = daysSinceMidnight(p.wateredAt);
-      return d === p.days ? p : { ...p, days: d };
+      const lapsed = p.snoozedUntil != null && todayMidnight() >= p.snoozedUntil;
+      if (d === p.days && !lapsed) return p;
+      const next = d === p.days ? p : { ...p, days: d };
+      return lapsed ? { ...next, snoozedUntil: undefined } : next;
     }));
     document.addEventListener('visibilitychange', sync);
     window.addEventListener('focus', sync);
@@ -1294,7 +1297,11 @@ window.onload=()=>{
     setPlants(ps => ps.map(p => {
       if (p.id !== plantId) return p;
       const next = { ...p, ...changes };
-      if (changes.every != null) next.benchmark = `${changes.every} days`;
+      if (changes.every != null) {
+        const n = parseInt(changes.every, 10);
+        next.every = Number.isFinite(n) ? Math.min(365, Math.max(1, n)) : p.every;
+        next.benchmark = `${next.every} days`;
+      }
       return next;
     }));
   };
