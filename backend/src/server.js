@@ -8,8 +8,85 @@ import { spawn } from 'child_process';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import bcrypt from 'bcrypt';
+import webpush from 'web-push';
 import { pool, initSchema, getSetting, setSetting } from './db.js';
 import { signToken, requireAuth, requireAdmin, requireApiKey, hashApiKey } from './auth.js';
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails('mailto:hello@caulis.czeddaru.dev', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+// same days/every ratio as statusOf() in caulis-core.jsx, and the same
+// wateredAt-derivation rules as deriveWateredAt() — kept in sync by hand
+// since this backend has no build step to share the frontend module with.
+const DAY_MS = 86400000;
+function todayMidnightUTC() { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d.getTime(); }
+function midnightFromStamp(stamp) {
+  const [y, m, d] = String(stamp).split('-').map(Number);
+  return Date.UTC(y, (m || 1) - 1, d || 1);
+}
+function deriveWateredAt(p) {
+  if (p.wv === 3 && typeof p.wateredAt === 'number') return p.wateredAt;
+  const h = Array.isArray(p.history) ? p.history : [];
+  if (h.length) return midnightFromStamp(h[h.length - 1]);
+  return todayMidnightUTC() - (p.days || 0) * DAY_MS;
+}
+function plantNeedsWater(p) {
+  const days = Math.max(0, Math.round((todayMidnightUTC() - deriveWateredAt(p)) / DAY_MS));
+  const every = p.every || p.benchmark || 7;
+  return days / every >= 1;
+}
+
+async function sendPush(sub, payload) {
+  try {
+    await webpush.sendNotification(sub.subscription, JSON.stringify(payload));
+    return true;
+  } catch (e) {
+    if (e.statusCode === 404 || e.statusCode === 410) {
+      await pool.query('DELETE FROM push_subscriptions WHERE id = $1', [sub.id]);
+    }
+    return false;
+  }
+}
+
+async function checkAndSendPushes() {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  // fires within one hour window per day (checked every 15 min, gated below
+  // by last_*_sent_on so it only actually sends once) — 8am UTC is a
+  // reasonable "morning" slot without per-garden timezone data
+  if (new Date().getUTCHours() !== 8) return;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isMonday = new Date().getUTCDay() === 1;
+
+  const { rows: subs } = await pool.query(
+    `SELECT ps.*, gd.plants FROM push_subscriptions ps
+     JOIN garden_data gd ON gd.garden_id = ps.garden_id
+     WHERE ps.watering_enabled = true OR ps.digest_enabled = true`
+  );
+
+  for (const sub of subs) {
+    const plants = Array.isArray(sub.plants) ? sub.plants : [];
+    const needsWater = plants.filter(plantNeedsWater);
+
+    if (sub.watering_enabled && needsWater.length && sub.last_watering_sent_on !== todayStr) {
+      const body = needsWater.length === 1
+        ? `${needsWater[0].name || 'A plant'} needs water today.`
+        : `${needsWater.length} plants need water today.`;
+      const ok = await sendPush(sub, { title: 'Caulis', body, tag: 'watering' });
+      if (ok) await pool.query('UPDATE push_subscriptions SET last_watering_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
+    }
+
+    if (sub.digest_enabled && isMonday && sub.last_digest_sent_on !== todayStr) {
+      const body = needsWater.length
+        ? `${needsWater.length} of ${plants.length} plants need water this week.`
+        : `All ${plants.length} plants are watered. Nice work.`;
+      const ok = await sendPush(sub, { title: 'Weekly garden digest', body, tag: 'digest' });
+      if (ok) await pool.query('UPDATE push_subscriptions SET last_digest_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
+    }
+  }
+}
 
 // on-demand admin backups, dumped directly with the app's own DB credentials
 // (no sudo, no root cron) — separate from the nightly root-cron full-DB dumps
@@ -72,6 +149,9 @@ await initSchema();
 const BACKUP_CHECK_MS = 15 * 60 * 1000;
 setInterval(checkAndRunBackup, BACKUP_CHECK_MS);
 checkAndRunBackup();
+
+const PUSH_CHECK_MS = 15 * 60 * 1000;
+setInterval(() => checkAndSendPushes().catch(e => app.log.error({ err: e }, 'push check failed')), PUSH_CHECK_MS);
 
 app.post('/api/gardens/register', async (req, reply) => {
   const { key, password = '' } = req.body || {};
@@ -251,6 +331,44 @@ app.get('/api/garden/photos/:plantId', { preHandler: requireAuth }, async (req, 
 
 app.delete('/api/garden/photos/:plantId', { preHandler: requireAuth }, async (req, reply) => {
   await pool.query('DELETE FROM garden_photos WHERE garden_id = $1 AND plant_id = $2', [req.gardenId, req.params.plantId]);
+  return { ok: true };
+});
+
+app.get('/api/push/vapid-key', async (req, reply) => {
+  if (!VAPID_PUBLIC_KEY) return reply.code(503).send({ error: 'push not configured' });
+  return { key: VAPID_PUBLIC_KEY };
+});
+
+app.post('/api/push/subscribe', { preHandler: requireAuth }, async (req, reply) => {
+  const { subscription, wateringEnabled = true, digestEnabled = false } = req.body || {};
+  if (!subscription?.endpoint) return reply.code(400).send({ error: 'subscription required' });
+  await pool.query(
+    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (endpoint) DO UPDATE SET
+       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5`,
+    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled]
+  );
+  return { ok: true };
+});
+
+app.put('/api/push/prefs', { preHandler: requireAuth }, async (req, reply) => {
+  const { endpoint, wateringEnabled, digestEnabled } = req.body || {};
+  if (!endpoint) return reply.code(400).send({ error: 'endpoint required' });
+  await pool.query(
+    `UPDATE push_subscriptions SET
+       watering_enabled = COALESCE($1, watering_enabled),
+       digest_enabled = COALESCE($2, digest_enabled)
+     WHERE endpoint = $3 AND garden_id = $4`,
+    [wateringEnabled, digestEnabled, endpoint, req.gardenId]
+  );
+  return { ok: true };
+});
+
+app.delete('/api/push/subscribe', { preHandler: requireAuth }, async (req, reply) => {
+  const { endpoint } = req.body || {};
+  if (!endpoint) return reply.code(400).send({ error: 'endpoint required' });
+  await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1 AND garden_id = $2', [endpoint, req.gardenId]);
   return { ok: true };
 });
 

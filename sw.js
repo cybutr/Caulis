@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v116';
+const CACHE = 'caulis-v117';
 const SHELL = [
   './',
   './index.html',
@@ -46,6 +46,26 @@ self.addEventListener('activate', e => {
       Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('push', e => {
+  let payload = { title: 'Caulis', body: 'You have a garden update.' };
+  try { payload = e.data.json(); } catch (err) {}
+  e.waitUntil(self.registration.showNotification(payload.title || 'Caulis', {
+    body: payload.body || '',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    tag: payload.tag || 'caulis',
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const clientList = await self.clients.matchAll({ type: 'window' });
+    for (const client of clientList) { if ('focus' in client) return client.focus(); }
+    if (self.clients.openWindow) return self.clients.openWindow('./');
+  })());
 });
 
 self.addEventListener('fetch', e => {

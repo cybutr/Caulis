@@ -207,9 +207,43 @@ function adminBackupDownloadUrl(secret, name) {
   return `${BACKEND_URL}/api/admin/backup/download/${encodeURIComponent(name)}?secret=${encodeURIComponent(secret)}`;
 }
 
+// web push: VAPID key + subscription CRUD, all scoped to the active garden's session
+async function pushVapidKey() {
+  const { ok, data } = await _api('/api/push/vapid-key');
+  return ok ? data.key : null;
+}
+
+async function pushSubscribe(subscription, wateringEnabled, digestEnabled) {
+  const token = getActiveToken();
+  if (!token) return false;
+  const { ok } = await _api('/api/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify({ subscription, wateringEnabled, digestEnabled }),
+  }, token);
+  return ok;
+}
+
+async function pushSetPrefs(endpoint, wateringEnabled, digestEnabled) {
+  const token = getActiveToken();
+  if (!token) return false;
+  const { ok } = await _api('/api/push/prefs', {
+    method: 'PUT',
+    body: JSON.stringify({ endpoint, wateringEnabled, digestEnabled }),
+  }, token);
+  return ok;
+}
+
+async function pushUnsubscribe(endpoint) {
+  const token = getActiveToken();
+  if (!token) return false;
+  const { ok } = await _api('/api/push/subscribe', { method: 'DELETE', body: JSON.stringify({ endpoint }) }, token);
+  return ok;
+}
+
 Object.assign(window, {
   listenGarden, pushGarden, gardenExists, renameGarden, fetchGardenOnce, gardenNodeId, changeGardenPassword, verifyGardenPassword,
   SYNC_READY, pushPhoto, fetchPhotos, deletePhotos, setActiveGarden, getActiveToken, BACKEND_URL,
   adminListGardens, adminGetGarden, adminPushGarden, adminDeleteGarden, adminBulkDelete, adminGetStats,
   adminGetSettings, adminSaveSettings, adminRunBackup, adminListBackups, adminBackupDownloadUrl, adminGetSystem,
+  pushVapidKey, pushSubscribe, pushSetPrefs, pushUnsubscribe,
 });

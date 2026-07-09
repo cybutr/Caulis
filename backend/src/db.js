@@ -74,6 +74,18 @@ export async function initSchema() {
       last_used_at TIMESTAMPTZ
     );
 
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id SERIAL PRIMARY KEY,
+      garden_id INTEGER NOT NULL REFERENCES gardens(id) ON DELETE CASCADE,
+      endpoint TEXT UNIQUE NOT NULL,
+      subscription JSONB NOT NULL,
+      watering_enabled BOOLEAN NOT NULL DEFAULT true,
+      digest_enabled BOOLEAN NOT NULL DEFAULT false,
+      last_watering_sent_on DATE,
+      last_digest_sent_on DATE,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+
     INSERT INTO admin_settings (key, value) VALUES ('backup_interval_hours', '24') ON CONFLICT DO NOTHING;
     INSERT INTO admin_settings (key, value) VALUES ('backup_keep_count', '14') ON CONFLICT DO NOTHING;
   `);
