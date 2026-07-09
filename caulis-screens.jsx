@@ -138,19 +138,19 @@ function PlantCard({ plant, tint, onOpen, onLongPress, onWater, czechMode, grip,
   const timer = useRef(null);
   const longed = useRef(false);
   const startX = useRef(0), startY = useRef(0);
-  const swiping = useRef(false), dxRef = useRef(0);
+  const swiping = useRef(false), dxRef = useRef(0), down = useRef(false);
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
   const WATER_THRESH = 74;
   const setX = (v) => { dxRef.current = v; setDx(v); };
   const start = (e) => {
     if (selectable) return;
-    setPress(true); longed.current = false; swiping.current = false;
+    down.current = true; setPress(true); longed.current = false; swiping.current = false;
     startX.current = e.clientX; startY.current = e.clientY;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
     timer.current = setTimeout(() => { longed.current = true; setPress(false); onLongPress && onLongPress(plant); }, 480);
   };
   const move = (e) => {
-    if (selectable) return;
+    if (selectable || !down.current) return;
     const mx = e.clientX - startX.current, my = e.clientY - startY.current;
     if (!swiping.current && Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my)) {
       swiping.current = true; if (timer.current) clearTimeout(timer.current); setPress(false);
@@ -158,7 +158,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress, onWater, czechMode, grip,
     if (swiping.current) setX(Math.max(0, Math.min(WATER_THRESH + 24, mx)));
   };
   const end = () => {
-    setPress(false); if (timer.current) clearTimeout(timer.current);
+    down.current = false; setPress(false); if (timer.current) clearTimeout(timer.current);
     if (swiping.current) {
       swiping.current = false;
       if (dxRef.current >= WATER_THRESH) onWater && onWater(plant.id);
@@ -525,7 +525,7 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
   const timer = useRef(null);
   const longed = useRef(false);
   const startX = useRef(0), startY = useRef(0);
-  const swiping = useRef(false), openRef = useRef(false), dxRef = useRef(0);
+  const swiping = useRef(false), openRef = useRef(false), dxRef = useRef(0), down = useRef(false);
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
   const OPEN = -84;      // left-swipe (dx negative): reveal-and-tap snooze
   const WATER_MAX = 96;  // right-swipe (dx positive): swipe-through-to-water
@@ -533,12 +533,13 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
   const setX = (v) => { dxRef.current = v; setDx(v); };
 
   const start = (e) => {
-    setPress(true); longed.current = false; swiping.current = false;
+    down.current = true; setPress(true); longed.current = false; swiping.current = false;
     startX.current = e.clientX; startY.current = e.clientY;
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
     timer.current = setTimeout(() => { longed.current = true; setPress(false); onLongPress && onLongPress(plant); }, 480);
   };
   const move = (e) => {
+    if (!down.current) return;
     const mx = e.clientX - startX.current, my = e.clientY - startY.current;
     if (!swiping.current && Math.abs(mx) > 8 && Math.abs(mx) > Math.abs(my)) {
       swiping.current = true; if (timer.current) clearTimeout(timer.current); setPress(false);
@@ -546,7 +547,7 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
     if (swiping.current) setX(Math.max(OPEN, Math.min(WATER_MAX, (openRef.current ? OPEN : 0) + mx)));
   };
   const end = () => {
-    setPress(false); if (timer.current) clearTimeout(timer.current);
+    down.current = false; setPress(false); if (timer.current) clearTimeout(timer.current);
     if (swiping.current) {
       swiping.current = false;
       if (dxRef.current >= WATER_THRESH) { onWater && onWater(plant.id); openRef.current = false; setX(0); return; }
