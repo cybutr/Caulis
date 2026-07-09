@@ -16,6 +16,19 @@ export function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET);
 }
 
+// narrow, short-lived token embedded in a push notification's "mark as
+// watered" action — scoped to one plant, one purpose, and expires quickly so
+// a stale/lingering notification can't be used to water the wrong day.
+export function signActionToken(gardenId, plantId, action) {
+  return jwt.sign({ gardenId, plantId, action, kind: 'push-action' }, JWT_SECRET, { expiresIn: '36h' });
+}
+
+export function verifyActionToken(token) {
+  const claims = jwt.verify(token, JWT_SECRET);
+  if (claims.kind !== 'push-action') throw new Error('not an action token');
+  return claims;
+}
+
 export async function requireAuth(req, reply) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;

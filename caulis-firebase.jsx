@@ -334,22 +334,22 @@ async function pushVapidKey() {
   return ok ? data.key : null;
 }
 
-async function pushSubscribe(subscription, wateringEnabled, digestEnabled) {
+async function pushSubscribe(subscription, wateringEnabled, digestEnabled, lang) {
   const token = getActiveToken();
   if (!token) return false;
   const { ok } = await _api('/api/push/subscribe', {
     method: 'POST',
-    body: JSON.stringify({ subscription, wateringEnabled, digestEnabled }),
+    body: JSON.stringify({ subscription, wateringEnabled, digestEnabled, lang }),
   }, token);
   return ok;
 }
 
-async function pushSetPrefs(endpoint, wateringEnabled, digestEnabled) {
+async function pushSetPrefs(endpoint, wateringEnabled, digestEnabled, lang) {
   const token = getActiveToken();
   if (!token) return false;
   const { ok } = await _api('/api/push/prefs', {
     method: 'PUT',
-    body: JSON.stringify({ endpoint, wateringEnabled, digestEnabled }),
+    body: JSON.stringify({ endpoint, wateringEnabled, digestEnabled, lang }),
   }, token);
   return ok;
 }
@@ -361,10 +361,54 @@ async function pushUnsubscribe(endpoint) {
   return ok;
 }
 
+async function pushSendTest(kind) {
+  const token = getActiveToken();
+  if (!token) return false;
+  const { ok } = await _api('/api/push/test', { method: 'POST', body: JSON.stringify({ kind }) }, token);
+  return ok;
+}
+
+// dev/self-service sync tools (Settings → Developer): raw rev visibility
+// plus the two manual overrides for when a garden is stuck in a bad sync
+// state — bypassing the normal 3-way merge entirely, on purpose.
+function getSessionInfo(key) {
+  const session = _sessions[key];
+  if (!session) return null;
+  return { rev: session.rev, hasToken: !!session.token };
+}
+
+// pulls the server's copy and makes it the new local truth + new merge
+// ancestor, discarding whatever's only-local right now.
+async function forcePullGarden(key) {
+  const session = _sessions[key];
+  if (!session?.token) return null;
+  const { ok, data } = await _api('/api/garden', {}, session.token);
+  if (!ok) return null;
+  session.rev = data.rev;
+  session.base = { plants: data.plants, locations: data.locations, queue: data.queue };
+  return { plants: data.plants, locations: data.locations, queue: data.queue };
+}
+
+// unconditional overwrite: sends rev:null, which the server's conflict check
+// treats as "no known rev" and skips entirely (same escape hatch older
+// pre-rev clients rely on) — so this always wins, discarding any remote
+// writes this session hasn't seen. Confirm hard before wiring this to a UI.
+async function forcePushGarden(key, data) {
+  const session = _sessions[key];
+  if (!session?.token) return false;
+  const clean = JSON.parse(JSON.stringify(data, (_, v) => v === undefined ? null : v));
+  const { ok, data: resp } = await _api('/api/garden', { method: 'PUT', body: JSON.stringify({ ...clean, rev: null }) }, session.token);
+  if (!ok) return false;
+  session.rev = resp?.rev ?? session.rev;
+  session.base = { plants: clean.plants, locations: clean.locations, queue: clean.queue };
+  return true;
+}
+
 Object.assign(window, {
   listenGarden, pushGarden, gardenExists, renameGarden, fetchGardenOnce, gardenNodeId, changeGardenPassword, verifyGardenPassword,
   SYNC_READY, pushPhoto, fetchPhotos, deletePhotos, setActiveGarden, getActiveToken, BACKEND_URL,
   adminListGardens, adminGetGarden, adminPushGarden, adminDeleteGarden, adminBulkDelete, adminGetStats,
   adminGetSettings, adminSaveSettings, adminRunBackup, adminListBackups, adminBackupDownloadUrl, adminGetSystem,
-  pushVapidKey, pushSubscribe, pushSetPrefs, pushUnsubscribe,
+  pushVapidKey, pushSubscribe, pushSetPrefs, pushUnsubscribe, pushSendTest,
+  getSessionInfo, forcePullGarden, forcePushGarden,
 });

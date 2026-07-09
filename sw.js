@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v125';
+const CACHE = 'caulis-v126';
 const SHELL = [
   './',
   './index.html',
@@ -56,15 +56,40 @@ self.addEventListener('push', e => {
     icon: './icon-192.png',
     badge: './icon-192.png',
     tag: payload.tag || 'caulis',
+    data: payload.data || { url: payload.url || './' },
+    actions: payload.actions || [],
   }));
 });
 
 self.addEventListener('notificationclick', e => {
+  const data = e.notification.data || {};
+  const url = data.url || './';
+
+  // "Mark watered" fires straight from the notification, no app UI needed —
+  // record it server-side (idempotent, signed, single-plant token) and only
+  // fall through to opening the app if that request fails, so the user has
+  // a way to see/fix it manually.
+  if (e.action === 'water' && data.actionToken) {
+    e.notification.close();
+    e.waitUntil(
+      fetch('https://api.caulis.czeddaru.dev/api/push/action', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: data.actionToken, action: 'water' }),
+      }).catch(() => {})
+    );
+    return;
+  }
+
   e.notification.close();
+  const target = new URL(url, self.registration.scope).href;
   e.waitUntil((async () => {
     const clientList = await self.clients.matchAll({ type: 'window' });
-    for (const client of clientList) { if ('focus' in client) return client.focus(); }
-    if (self.clients.openWindow) return self.clients.openWindow('./');
+    for (const client of clientList) {
+      if ('navigate' in client) { try { await client.navigate(target); } catch (err) {} }
+      if ('focus' in client) return client.focus();
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(target);
   })());
 });
 

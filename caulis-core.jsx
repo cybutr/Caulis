@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '125'; // keep in sync with sw.js CACHE
+const APP_VERSION = '126'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -379,9 +379,10 @@ const NAV_ACTIONS = {
   settings: { label:'Settings', Icon:IconGear,   tab:true },
   add:      { label:'Add',      Icon:IconPlus,   tab:false },
   doctor:   { label:'Doctor',   Icon:IconDoctor, tab:false },
+  digest:   { label:'This week', Icon:IconGarden, tab:false },
   more:     { label:'More',     Icon:IconMore,   tab:false },
 };
-const NAV_ORDER = ['garden','needs','scanner','print','settings','add','doctor','more'];
+const NAV_ORDER = ['garden','needs','scanner','print','settings','add','doctor','digest','more'];
 const NAV_MAX = 7;
 const DEFAULT_NAV = [
   { action:'garden' }, { action:'needs' }, { action:'scanner', center:true }, { action:'print' }, { action:'settings' },

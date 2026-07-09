@@ -10,7 +10,7 @@ import cors from '@fastify/cors';
 import bcrypt from 'bcrypt';
 import webpush from 'web-push';
 import { pool, initSchema, getSetting, setSetting } from './db.js';
-import { signToken, requireAuth, requireAdmin, requireApiKey, hashApiKey } from './auth.js';
+import { signToken, requireAuth, requireAdmin, requireApiKey, hashApiKey, signActionToken, verifyActionToken } from './auth.js';
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
@@ -52,6 +52,55 @@ async function sendPush(sub, payload) {
   }
 }
 
+// copy matches the app's own voice elsewhere (Doctor system prompt, empty-
+// garden states): warm, a little wry, botanical — no emojis, no exclamation
+// marks, and specific to the garden's real numbers rather than boilerplate.
+function buildWateringPush(gardenId, plants, lang) {
+  const needsWater = plants.filter(plantNeedsWater);
+  if (!needsWater.length) return null;
+  const cs = lang === 'cs';
+  let title, body, url, actions, data;
+  if (needsWater.length === 1) {
+    const p = needsWater[0];
+    const name = (cs && p.czech) ? p.czech : (p.name || (cs ? 'Jedna rostlina' : 'One plant'));
+    title = cs ? 'Žízeň v květináči' : 'Thirsty in the pot';
+    body = cs ? `${name} si dnes říká o vodu.` : `${name} is asking for water today.`;
+    url = `./?plant=${encodeURIComponent(p.id)}`;
+    data = { url, gardenId, plantId: p.id, actionToken: signActionToken(gardenId, p.id, 'water') };
+    actions = [{ action: 'water', title: cs ? 'Zalito' : 'Mark watered' }];
+  } else {
+    title = cs ? 'Zahrada čeká na konev' : 'The garden is waiting on the watering can';
+    body = cs
+      ? `${needsWater.length} rostlin si dnes říká o vodu.`
+      : `${needsWater.length} plants are asking for water today.`;
+    url = './?shortcut=needs';
+    data = { url, gardenId };
+  }
+  return { title, body, tag: 'watering', url, actions, data };
+}
+
+function buildDigestPush(gardenId, plants, lang) {
+  const cutoff = todayMidnightUTC() - 6 * DAY_MS;
+  let wateredCount = 0;
+  plants.forEach(p => {
+    const h = Array.isArray(p.history) ? p.history : [];
+    wateredCount += h.filter(stamp => midnightFromStamp(stamp) >= cutoff).length;
+  });
+  const needsNow = plants.filter(plantNeedsWater).length;
+  const cs = lang === 'cs';
+  const title = cs ? 'Týden ve vaší zahradě' : 'This week in your garden';
+  let body;
+  if (!plants.length) body = cs ? 'Zatím žádné rostliny — přidejte první.' : 'No plants yet — add the first one.';
+  else if (needsNow) body = cs
+    ? `${wateredCount} zalití tento týden. ${needsNow} rostlin právě čeká na vodu.`
+    : `${wateredCount} waterings this week. ${needsNow} plants waiting on you right now.`;
+  else body = cs
+    ? `${wateredCount} zalití tento týden. Všechno zalito — pěkná práce.`
+    : `${wateredCount} waterings this week. Everything's watered — nice work.`;
+  const url = './?shortcut=digest';
+  return { title, body, tag: 'digest', url, data: { url, gardenId } };
+}
+
 async function checkAndSendPushes() {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
   // fires any time from 8am UTC onward (checked every 15 min, gated below by
@@ -71,21 +120,17 @@ async function checkAndSendPushes() {
 
   for (const sub of subs) {
     const plants = Array.isArray(sub.plants) ? sub.plants : [];
-    const needsWater = plants.filter(plantNeedsWater);
 
-    if (sub.watering_enabled && needsWater.length && sub.last_watering_sent_on !== todayStr) {
-      const body = needsWater.length === 1
-        ? `${needsWater[0].name || 'A plant'} needs water today.`
-        : `${needsWater.length} plants need water today.`;
-      const ok = await sendPush(sub, { title: 'Caulis', body, tag: 'watering' });
-      if (ok) await pool.query('UPDATE push_subscriptions SET last_watering_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
+    if (sub.watering_enabled && sub.last_watering_sent_on !== todayStr) {
+      const push = buildWateringPush(sub.garden_id, plants, sub.lang);
+      if (push) {
+        const ok = await sendPush(sub, push);
+        if (ok) await pool.query('UPDATE push_subscriptions SET last_watering_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
+      }
     }
 
     if (sub.digest_enabled && isMonday && sub.last_digest_sent_on !== todayStr) {
-      const body = needsWater.length
-        ? `${needsWater.length} of ${plants.length} plants need water this week.`
-        : `All ${plants.length} plants are watered. Nice work.`;
-      const ok = await sendPush(sub, { title: 'Weekly garden digest', body, tag: 'digest' });
+      const ok = await sendPush(sub, buildDigestPush(sub.garden_id, plants, sub.lang));
       if (ok) await pool.query('UPDATE push_subscriptions SET last_digest_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
     }
   }
@@ -400,27 +445,28 @@ app.get('/api/push/vapid-key', async (req, reply) => {
 });
 
 app.post('/api/push/subscribe', { preHandler: requireAuth }, async (req, reply) => {
-  const { subscription, wateringEnabled = true, digestEnabled = false } = req.body || {};
+  const { subscription, wateringEnabled = true, digestEnabled = false, lang = 'en' } = req.body || {};
   if (!subscription?.endpoint) return reply.code(400).send({ error: 'subscription required' });
   await pool.query(
-    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled, lang)
+     VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (endpoint) DO UPDATE SET
-       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5`,
-    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled]
+       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5, lang = $6`,
+    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled, lang === 'cs' ? 'cs' : 'en']
   );
   return { ok: true };
 });
 
 app.put('/api/push/prefs', { preHandler: requireAuth }, async (req, reply) => {
-  const { endpoint, wateringEnabled, digestEnabled } = req.body || {};
+  const { endpoint, wateringEnabled, digestEnabled, lang } = req.body || {};
   if (!endpoint) return reply.code(400).send({ error: 'endpoint required' });
   await pool.query(
     `UPDATE push_subscriptions SET
        watering_enabled = COALESCE($1, watering_enabled),
-       digest_enabled = COALESCE($2, digest_enabled)
-     WHERE endpoint = $3 AND garden_id = $4`,
-    [wateringEnabled, digestEnabled, endpoint, req.gardenId]
+       digest_enabled = COALESCE($2, digest_enabled),
+       lang = COALESCE($3, lang)
+     WHERE endpoint = $4 AND garden_id = $5`,
+    [wateringEnabled, digestEnabled, lang === 'cs' || lang === 'en' ? lang : null, endpoint, req.gardenId]
   );
   return { ok: true };
 });
@@ -430,6 +476,73 @@ app.delete('/api/push/subscribe', { preHandler: requireAuth }, async (req, reply
   if (!endpoint) return reply.code(400).send({ error: 'endpoint required' });
   await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1 AND garden_id = $2', [endpoint, req.gardenId]);
   return { ok: true };
+});
+
+// dev-panel "send me a test" — same content-building logic as the real cron,
+// just fired on demand and ignoring the once-a-day gate, so the once-a-day
+// columns are deliberately left untouched here.
+app.post('/api/push/test', { preHandler: requireAuth }, async (req, reply) => {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return reply.code(503).send({ error: 'push not configured' });
+  const { kind } = req.body || {};
+  const { rows: subs } = await pool.query('SELECT * FROM push_subscriptions WHERE garden_id = $1', [req.gardenId]);
+  if (!subs.length) return reply.code(400).send({ error: 'not subscribed' });
+  const { rows: gdRows } = await pool.query('SELECT plants FROM garden_data WHERE garden_id = $1', [req.gardenId]);
+  const plants = Array.isArray(gdRows[0]?.plants) ? gdRows[0].plants : [];
+  let sent = 0;
+  for (const sub of subs) {
+    const push = kind === 'digest' ? buildDigestPush(req.gardenId, plants, sub.lang)
+      : (buildWateringPush(req.gardenId, plants, sub.lang) || {
+          title: sub.lang === 'cs' ? 'Zkušební oznámení' : 'Test notification',
+          body: sub.lang === 'cs' ? 'Právě teď nic nepotřebuje zalít — všechno v pořádku.' : 'Nothing needs water right now — all quiet in the garden.',
+          tag: 'watering', data: { url: './?shortcut=needs', gardenId: req.gardenId },
+        });
+    if (await sendPush(sub, push)) sent++;
+  }
+  return { ok: sent > 0, sent };
+});
+
+// fired from the service worker's notificationclick handler when the user
+// taps the "Mark watered" action button directly on a watering-reminder
+// notification — never trusts anything but the signed, single-purpose,
+// short-lived token minted into that specific notification's payload.
+app.post('/api/push/action', async (req, reply) => {
+  const { token, action } = req.body || {};
+  if (!token) return reply.code(400).send({ error: 'token required' });
+  let claims;
+  try { claims = verifyActionToken(token); } catch (e) { return reply.code(401).send({ error: 'invalid or expired token' }); }
+  if (claims.action !== 'water' || action !== 'water') return reply.code(400).send({ error: 'unsupported action' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query('SELECT plants, rev FROM garden_data WHERE garden_id = $1 FOR UPDATE', [claims.gardenId]);
+    if (!rows.length) { await client.query('ROLLBACK'); return reply.code(404).send({ error: 'garden not found' }); }
+    const plants = Array.isArray(rows[0].plants) ? rows[0].plants : [];
+    const idx = plants.findIndex(p => String(p.id) === String(claims.plantId));
+    if (idx === -1) { await client.query('ROLLBACK'); return reply.code(404).send({ error: 'plant not found' }); }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const p = plants[idx];
+    const history = Array.isArray(p.history) ? p.history : [];
+    // idempotent: tapping the action twice (or once after already watering
+    // in-app) must never produce the same duplicate-consecutive-date bug
+    // this whole dev-panel scan tool exists to catch.
+    if (history[history.length - 1] !== todayStr) {
+      const nextHistory = [...history, todayStr].slice(-60);
+      plants[idx] = { ...p, history: nextHistory, wateredAt: todayMidnightUTC(), wv: 3, days: 0 };
+      await client.query(
+        'UPDATE garden_data SET plants = $1, rev = rev + 1, updated_at = now() WHERE garden_id = $2',
+        [JSON.stringify(plants), claims.gardenId]
+      );
+    }
+    await client.query('COMMIT');
+    return { ok: true };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    return reply.code(500).send({ error: 'failed to record watering' });
+  } finally {
+    client.release();
+  }
 });
 
 app.get('/api/admin/gardens', { preHandler: requireAdmin }, async (req, reply) => {

@@ -94,6 +94,11 @@ export async function initSchema() {
   // current content becomes the baseline), no downtime, no data loss.
   // Powers conditional-write conflict detection on PUT /api/garden.
   await pool.query(`ALTER TABLE garden_data ADD COLUMN IF NOT EXISTS rev INTEGER NOT NULL DEFAULT 1`);
+
+  // which language to write the push notification copy in for this
+  // subscription — mirrors the client's own Czech-mode toggle, sent along at
+  // subscribe time and whenever the toggle changes.
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'en'`);
 }
 
 export async function getSetting(key) {

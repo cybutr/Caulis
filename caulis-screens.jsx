@@ -598,6 +598,75 @@ function WaterForecast({ plants }) {
   );
 }
 
+// "This week in your garden" — reachable from Settings, the Garden screen,
+// and a weekly-digest push notification's deep link alike. Pulls real
+// numbers out of each plant's history[] rather than showing boilerplate —
+// the same substance also drives the push notification body server-side.
+function WeeklyDigest({ plants, onBack, isDesktop, czechMode }) {
+  const cutoff = todayMidnight() - 6 * 86400000;
+  let wateredCount = 0;
+  const recentlyWatered = [];
+  plants.forEach(p => {
+    const h = Array.isArray(p.history) ? p.history : [];
+    const inWeek = h.filter(stamp => midnightFromStamp(stamp) >= cutoff);
+    wateredCount += inWeek.length;
+    if (inWeek.length) recentlyWatered.push({ plant: p, last: inWeek[inWeek.length - 1] });
+  });
+  recentlyWatered.sort((a, b) => midnightFromStamp(b.last) - midnightFromStamp(a.last));
+  const needsNow = plants.filter(p => statusOf(p.days, p.every) === 'needs');
+  const highlight = recentlyWatered.find(r => r.plant.userImage || r.plant.image);
+  const name = p => czechMode && p.czech ? p.czech : p.name;
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:52, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
+      <div style={{ flexShrink:0, padding:'calc(18px + env(safe-area-inset-top)) 18px 14px', display:'flex', alignItems:'center', gap:12 }}>
+        <div onClick={onBack} role="button" style={{ width:36, height:36, borderRadius:999, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><IconBack/></div>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest }}>This week in your garden</div>
+      </div>
+      <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', display:'flex', flexDirection:'column', gap:18 }}>
+        {highlight && (
+          <div style={{ borderRadius:20, overflow:'hidden', position:'relative', height:180, flexShrink:0 }}>
+            <img src={highlight.plant.userImage || highlight.plant.image} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+            <div style={{ position:'absolute', left:0, right:0, bottom:0, padding:'28px 16px 12px', background:'linear-gradient(transparent, rgba(0,0,0,0.55))' }}>
+              <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, color:'#fff' }}>{name(highlight.plant)}</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'rgba(255,255,255,0.8)' }}>most recently watered</div>
+            </div>
+          </div>
+        )}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+          <div style={{ padding:'14px 16px', borderRadius:16, background:C.panel, border:C.hair }}>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:30, color:C.forest }}>{wateredCount}</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>waterings this week</div>
+          </div>
+          <div style={{ padding:'14px 16px', borderRadius:16, background:C.panel, border:C.hair }}>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:30, color: needsNow.length ? STATUS.needs.dot : C.forest }}>{needsNow.length}</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>need water right now</div>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Next 7 days</div>
+          <WaterForecast plants={plants}/>
+        </div>
+        {needsNow.length > 0 && (
+          <div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Waiting on you</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {needsNow.slice(0, 6).map(p => (
+                <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:14, background:C.panel, border:C.hair }}>
+                  <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest }}>{name(p)}</span>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{p.location}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!plants.length && (
+          <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.brown, opacity:0.6, textAlign:'center', marginTop:40 }}>Nothing to report yet — add a plant to start the week.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // scope picker for "Water all" — one tap opens it, one tap on a row runs it.
 // Defaults to whichever scope makes sense for where it was triggered from
 // (defaultScope), since blasting the whole garden regardless of status was
@@ -957,7 +1026,7 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1135,6 +1204,16 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
     const fixed = onDevResyncFromHistory();
     setResyncMsg(fixed ? `Fixed ${fixed} plant${fixed===1?'':'s'} from the watering log` : 'Already matched the watering log');
     setTimeout(() => setResyncMsg(null), 3000);
+  };
+  const [historyPlantId, setHistoryPlantId] = useState(null);
+  const [testPushBusy, setTestPushBusy] = useState(null); // 'watering' | 'digest' | null
+  const [testPushMsg, setTestPushMsg] = useState(null);
+  const runTestPush = async (kind) => {
+    setTestPushBusy(kind);
+    const ok = await onDevTestPush(kind);
+    setTestPushBusy(null);
+    setTestPushMsg(ok ? 'Sent — check your notifications' : 'Failed to send. Are you subscribed?');
+    setTimeout(() => setTestPushMsg(null), 3500);
   };
   const [adminSecret, setAdminSecretState] = useState(() => { try { return localStorage.getItem('caulis_admin_secret') || ''; } catch(e) { return ''; } });
   const setAdminSecret = (v) => { setAdminSecretState(v); try { localStorage.setItem('caulis_admin_secret', v); } catch(e) {} };
@@ -1590,6 +1669,13 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             </div>
             {!pushSupported && <div style={{ padding:'10px 16px', fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, borderTop:C.hair }}>Not supported in this browser.</div>}
             {pushError && <div style={{ padding:'10px 16px', fontFamily:FONT_SANS, fontSize:11.5, color:'#B4472E', borderTop:C.hair }}>{pushError}</div>}
+            <div onClick={onOpenDigest} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>This week in your garden</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>See the digest now, any day</div>
+              </div>
+              <span style={{ fontFamily:FONT_SANS, fontSize:18, color:C.brown, opacity:0.4 }}>&rsaquo;</span>
+            </div>
           </div>
         </SettingsSection>
         <SettingsSection title="Printing" open={isOpen('printing')} onToggle={()=>toggleSec('printing')} id={'sec-'+'printing'} matched={settingsMatches[settingsMatchIdx] === 'printing'} query={settingsMatches.includes('printing') ? settingsQuery : ''} bodyRef={registerSection('printing')}>
@@ -1864,7 +1950,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, lineHeight:1.5 }}>
                       {gardenPassword ? 'New password. Leave empty to remove protection.' : 'Prevent others from joining without a password.'}
                     </div>
-                    <input type="password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="Password…"
+                    <input type="password" autoComplete="new-password" value={newPassword} onChange={e=>setNewPassword(e.target.value)} placeholder="Password…"
                       style={{ boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
                     <div style={{ display:'flex', gap:8 }}>
                       <div onClick={()=>{ setSettingPassword(false); setNewPassword(''); }} style={{ flex:1, height:36, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
@@ -1907,9 +1993,9 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                   <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>
                     {joinStatus==='notFound' ? "No garden found. Create it now?" : "Enter the garden key and its password (if any). Your current plants will be replaced."}
                   </div>
-                  <input value={joinKey} onChange={e=>{ setJoinKey(e.target.value); setJoinStatus('idle'); }} placeholder="garden-key"
+                  <input value={joinKey} onChange={e=>{ setJoinKey(e.target.value); setJoinStatus('idle'); }} placeholder="garden-key" autoComplete="username" name="garden-key"
                     style={{ boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-                  <input type="password" value={joinPassword} onChange={e=>{ setJoinPassword(e.target.value); setJoinStatus('idle'); }} onKeyDown={e=>{ if(e.key==='Enter') submitJoin(); }} placeholder="Password (leave empty if none)"
+                  <input type="password" autoComplete="current-password" name="garden-password" value={joinPassword} onChange={e=>{ setJoinPassword(e.target.value); setJoinStatus('idle'); }} onKeyDown={e=>{ if(e.key==='Enter') submitJoin(); }} placeholder="Password (leave empty if none)"
                     style={{ boxSizing:'border-box', height:42, borderRadius:10, border:C.hair, background:C.input, padding:'0 12px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
                   {joinStatus==='checking' && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>Checking…</div>}
                   <div style={{ display:'flex', gap:8 }}>
@@ -1962,7 +2048,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             {pwGate && (
               <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.75 }}>Confirm your garden password to {pwGate}.</div>
-                <input type="password" value={pwGateInput} onChange={e=>{ setPwGateInput(e.target.value); setPwGateErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') confirmGate(); }} placeholder="Garden password" style={dInput} autoFocus/>
+                <input type="password" autoComplete="current-password" name="garden-password" value={pwGateInput} onChange={e=>{ setPwGateInput(e.target.value); setPwGateErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') confirmGate(); }} placeholder="Garden password" style={dInput} autoFocus/>
                 {pwGateErr && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Wrong password</div>}
                 <div style={{ display:'flex', gap:8 }}>
                   <div onClick={()=>setPwGate(null)} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
@@ -2143,6 +2229,44 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               ))}
             </div>
           );
+          // scan for the exact bug pattern that caused the July incident
+          // (consecutive duplicate watering-log dates from a phantom
+          // pointer-event bug), plus other obvious anomalies — read-only
+          // until "Clean up" is tapped per plant.
+          const issues = plants.map(p => {
+            const h = Array.isArray(p.history) ? p.history : [];
+            let dupRuns = 0;
+            for (let i = 1; i < h.length; i++) if (h[i] === h[i-1]) dupRuns++;
+            const oversized = h.length >= 55;
+            if (!dupRuns && !oversized) return null;
+            return { plant: p, dupRuns, size: h.length, oversized };
+          }).filter(Boolean);
+          const historyRow = (p) => {
+            const h = Array.isArray(p.history) ? p.history : [];
+            const open = historyPlantId === p.id;
+            return (
+              <div key={p.id} style={{ borderRadius:11, background:C.bg, overflow:'hidden' }}>
+                <div onClick={()=>setHistoryPlantId(open ? null : p.id)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 10px', cursor:'pointer' }}>
+                  <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14.5, color:C.forest, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6, flexShrink:0 }}>{h.length} entries {open ? '▾' : '▸'}</span>
+                </div>
+                {open && (
+                  <div style={{ padding:'0 10px 10px', display:'flex', flexDirection:'column', gap:4, maxHeight:220, overflowY:'auto' }}>
+                    {h.length === 0 && <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6, padding:'6px 0' }}>No watering log yet.</div>}
+                    {h.map((stamp, i) => (
+                      <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 8px', borderRadius:8, background:C.panel }}>
+                        <span style={{ fontFamily:'ui-monospace,Menlo,monospace', fontSize:12.5, color:C.ink }}>{stamp}</span>
+                        <div onClick={()=>onDevDeleteHistoryEntry(p.id, i)} style={{ cursor:'pointer', color:STATUS.needs.dot, fontSize:16, lineHeight:1, padding:'2px 6px' }}>×</div>
+                      </div>
+                    ))}
+                    {h.length > 0 && (
+                      <div onClick={()=>onDevDedupeHistory(p.id)} style={{ ...dBtn(false), fontSize:12.5, marginTop:4 }}>Collapse consecutive duplicates</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          };
           return (
           <SettingsSection title="Developer" open={isOpen('dev')} onToggle={()=>toggleSec('dev')} id={'sec-'+'dev'} matched={settingsMatches[settingsMatchIdx] === 'dev'} query={settingsMatches.includes('dev') ? settingsQuery : ''} bodyRef={registerSection('dev')}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:16, display:'flex', flexDirection:'column', gap:18 }}>
@@ -2173,6 +2297,68 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     </div>
                     <div style={grpLabel}>Per plant · days since watered</div>
                     {plantEditor(plants, onDevSetDays)}
+                  </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <div style={grpLabel}>Scan for issues</div>
+                    {issues.length === 0 ? (
+                      <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>Nothing looks wrong — no duplicate log entries or oversized histories.</div>
+                    ) : (
+                      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                        {issues.map(({ plant, dupRuns, size, oversized }) => (
+                          <div key={plant.id} style={{ padding:'10px 12px', borderRadius:12, background:'rgba(201,138,43,0.1)', border:'1px solid rgba(201,138,43,0.25)' }}>
+                            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+                              <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14.5, color:C.forest }}>{plant.name}</span>
+                              {dupRuns > 0 && <div onClick={()=>onDevDedupeHistory(plant.id)} style={{ ...dBtn(true), padding:'5px 12px', fontSize:12.5 }}>Clean up</div>}
+                            </div>
+                            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#C98A2B', marginTop:3 }}>
+                              {dupRuns > 0 && `${dupRuns} duplicate consecutive log ${dupRuns===1?'entry':'entries'}`}
+                              {dupRuns > 0 && oversized && ' · '}
+                              {oversized && `${size} entries logged (near the cap)`}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                    <div style={grpLabel}>Watering log · per plant</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:300, overflowY:'auto' }}>
+                      {plants.map(historyRow)}
+                    </div>
+                  </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <div style={grpLabel}>Sync / rev</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>
+                      Server rev: <span style={{ fontWeight:600 }}>{sessionInfo ? sessionInfo.rev : '—'}</span>
+                    </div>
+                    <div style={{ display:'flex', gap:10 }}>
+                      <div onClick={()=>onDevForcePull()} style={{ ...dBtn(false), flex:1 }}>{syncBusy==='pull' ? 'Pulling…' : 'Force refresh from server'}</div>
+                      <div onClick={()=>onDevForcePush()} style={{ ...dBtn(false), flex:1, color:STATUS.needs.dot, borderColor:'rgba(180,71,46,0.3)' }}>{syncBusy==='push' ? 'Pushing…' : 'Force push local as truth'}</div>
+                    </div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, lineHeight:1.5 }}>
+                      Refresh replaces what's on this device with the server's copy. Push overwrites the server with what's on this device right now — either can discard changes made elsewhere. Use only when a garden is stuck out of sync.
+                    </div>
+                    {syncMsg && <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.8 }}>{syncMsg}</div>}
+                  </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    <div style={grpLabel}>Push notifications</div>
+                    <div style={{ display:'flex', gap:10 }}>
+                      <div onClick={()=>runTestPush('watering')} style={{ ...dBtn(false), flex:1 }}>{testPushBusy==='watering' ? 'Sending…' : 'Test watering reminder'}</div>
+                      <div onClick={()=>runTestPush('digest')} style={{ ...dBtn(false), flex:1 }}>{testPushBusy==='digest' ? 'Sending…' : 'Test weekly digest'}</div>
+                    </div>
+                    {testPushMsg && <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.8 }}>{testPushMsg}</div>}
                   </div>
 
                   <div style={{ height:1, background:C.line }}/>
@@ -2653,5 +2839,5 @@ function DesktopModal({ onClose, children, maxWidth = 520, noBackdropClose = fal
 Object.assign(window, {
   PlantCard, ScreenHead, GardenScreen, NeedsWaterScreen, ScannerScreen,
   PrintQueueScreen, SettingsScreen, BottomNav, MoveSheet, ContextMenu,
-  DesktopSidebar, DesktopModal, PlantNotFoundScreen,
+  DesktopSidebar, DesktopModal, PlantNotFoundScreen, WeeklyDigest,
 });
