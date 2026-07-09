@@ -55,6 +55,9 @@ async function sendPush(sub, payload) {
 // copy matches the app's own voice elsewhere (Doctor system prompt, empty-
 // garden states): warm, a little wry, botanical — no emojis, no exclamation
 // marks, and specific to the garden's real numbers rather than boilerplate.
+// notification chrome stays English always — the Czech toggle only swaps a
+// plant's display name (same as it does everywhere else in the app), it was
+// never meant to translate the app's own voice
 function buildWateringPush(gardenId, plants, lang) {
   const needsWater = plants.filter(plantNeedsWater);
   if (!needsWater.length) return null;
@@ -62,17 +65,15 @@ function buildWateringPush(gardenId, plants, lang) {
   let title, body, url, actions, data;
   if (needsWater.length === 1) {
     const p = needsWater[0];
-    const name = (cs && p.czech) ? p.czech : (p.name || (cs ? 'Jedna rostlina' : 'One plant'));
-    title = cs ? 'Žízeň v květináči' : 'Thirsty in the pot';
-    body = cs ? `${name} si dnes říká o vodu.` : `${name} is asking for water today.`;
+    const name = (cs && p.czech) ? p.czech : (p.name || 'One plant');
+    title = 'Thirsty in the pot';
+    body = `${name} is asking for water today.`;
     url = `./?plant=${encodeURIComponent(p.id)}`;
     data = { url, gardenId, plantId: p.id, actionToken: signActionToken(gardenId, p.id, 'water') };
-    actions = [{ action: 'water', title: cs ? 'Zalito' : 'Mark watered' }];
+    actions = [{ action: 'water', title: 'Mark watered' }];
   } else {
-    title = cs ? 'Zahrada čeká na konev' : 'The garden is waiting on the watering can';
-    body = cs
-      ? `${needsWater.length} rostlin si dnes říká o vodu.`
-      : `${needsWater.length} plants are asking for water today.`;
+    title = 'The garden is waiting on the watering can';
+    body = `${needsWater.length} plants are asking for water today.`;
     url = './?shortcut=needs';
     data = { url, gardenId };
   }
@@ -87,16 +88,11 @@ function buildDigestPush(gardenId, plants, lang) {
     wateredCount += h.filter(stamp => midnightFromStamp(stamp) >= cutoff).length;
   });
   const needsNow = plants.filter(plantNeedsWater).length;
-  const cs = lang === 'cs';
-  const title = cs ? 'Týden ve vaší zahradě' : 'This week in your garden';
+  const title = 'This week in your garden';
   let body;
-  if (!plants.length) body = cs ? 'Zatím žádné rostliny — přidejte první.' : 'No plants yet — add the first one.';
-  else if (needsNow) body = cs
-    ? `${wateredCount} zalití tento týden. ${needsNow} rostlin právě čeká na vodu.`
-    : `${wateredCount} waterings this week. ${needsNow} plants waiting on you right now.`;
-  else body = cs
-    ? `${wateredCount} zalití tento týden. Všechno zalito — pěkná práce.`
-    : `${wateredCount} waterings this week. Everything's watered — nice work.`;
+  if (!plants.length) body = 'No plants yet — add the first one.';
+  else if (needsNow) body = `${wateredCount} waterings this week. ${needsNow} plants waiting on you right now.`;
+  else body = `${wateredCount} waterings this week. Everything's watered — nice work.`;
   const url = './?shortcut=digest';
   return { title, body, tag: 'digest', url, data: { url, gardenId } };
 }
@@ -499,8 +495,8 @@ app.post('/api/push/test', { preHandler: requireAuth }, async (req, reply) => {
   for (const sub of subs) {
     const push = kind === 'digest' ? buildDigestPush(req.gardenId, plants, sub.lang)
       : (buildWateringPush(req.gardenId, plants, sub.lang) || {
-          title: sub.lang === 'cs' ? 'Zkušební oznámení' : 'Test notification',
-          body: sub.lang === 'cs' ? 'Právě teď nic nepotřebuje zalít — všechno v pořádku.' : 'Nothing needs water right now — all quiet in the garden.',
+          title: 'Test notification',
+          body: 'Nothing needs water right now — all quiet in the garden.',
           tag: 'watering', data: { url: './?shortcut=needs', gardenId: req.gardenId },
         });
     if (await sendPush(sub, push)) sent++;
