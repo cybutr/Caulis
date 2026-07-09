@@ -80,7 +80,7 @@ function PhotoCarousel({ images, tint, height = 196, radius = 22 }) {
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
-function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, roomLight, isDesktop, readonly = false, czechMode = false }) {
+function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, onOpenPlant, plants, roomLight, isDesktop, readonly = false, czechMode = false }) {
   const [justWatered, setJustWatered] = useState(false);
   const [waterOffset, setWaterOffset] = useState(0); // days ago
   const prevRef = useRef(null);
@@ -138,6 +138,26 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
               <StatusTag status={justWatered ? 'ok' : status}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5 }}>{agoLabel(plant.days)}</span>
             </div>
+            {(() => {
+              if (!plants) return null;
+              const parent = plant.propagatedFrom != null ? plants.find(p => p.id === plant.propagatedFrom) : null;
+              const children = plants.filter(p => p.propagatedFrom === plant.id);
+              if (!parent && !children.length) return null;
+              return (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginTop:10 }}>
+                  {parent && (
+                    <span onClick={()=>onOpenPlant && onOpenPlant(parent.id)} style={{ cursor: onOpenPlant ? 'pointer' : 'default', display:'inline-flex', alignItems:'center', gap:5, padding:'5px 11px', borderRadius:999, background:'rgba(107,76,42,0.08)', fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.brown }}>
+                      <LeafOutline size={11} color={C.brown} sw={1.6}/> Propagated from {parent.name}
+                    </span>
+                  )}
+                  {children.map(c => (
+                    <span key={c.id} onClick={()=>onOpenPlant && onOpenPlant(c.id)} style={{ cursor: onOpenPlant ? 'pointer' : 'default', display:'inline-flex', alignItems:'center', gap:5, padding:'5px 11px', borderRadius:999, background:'rgba(122,158,78,0.1)', fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.sage }}>
+                      <LeafOutline size={11} color={C.sage} sw={1.6}/> Parent of {c.name}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
 
           {/* water button */}
@@ -311,7 +331,7 @@ function SparkIcon({ s = 20, c = C.forest }) {
   </svg>);
 }
 
-function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop, czechMode }) {
+function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, isDesktop, czechMode }) {
   const [name, setName] = useState(editing ? editing.name : '');
   const [czech, setCzech] = useState(editing ? (editing.czech || '') : '');
   const [latin, setLatin] = useState(editing && editing.latin !== '\u2014' ? editing.latin : '');
@@ -330,6 +350,21 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   const [care, setCare] = useState(editing ? editing.care || '' : '');
   const [fact, setFact] = useState(editing ? editing.fact || '' : '');
   const [lastWatered, setLastWatered] = useState(editing ? (editing.days || 0) : 0);
+  const [propagatedFrom, setPropagatedFrom] = useState(editing ? (editing.propagatedFrom || null) : null);
+  // a plant can't be propagated from one of its own descendants — walk each
+  // candidate's chain back and exclude it if it ever reaches this plant
+  const propagationOptions = (plants || []).filter(p => {
+    if (!editing || p.id !== editing.id) {
+      let cur = p, hops = 0;
+      while (cur && cur.propagatedFrom != null && hops < 50) {
+        if (editing && cur.propagatedFrom === editing.id) return false;
+        cur = (plants || []).find(x => x.id === cur.propagatedFrom);
+        hops++;
+      }
+      return true;
+    }
+    return false;
+  });
   const [suggestions, setSuggestions] = useState([]);
   const [loadingSpecies, setLoadingSpecies] = useState(false);
   const [candidates, setCandidates] = useState([]);
@@ -668,6 +703,12 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
           <Field label="Fun fact">
             <textarea value={fact} onChange={e=>setFact(e.target.value)} placeholder="Something interesting about this plant…" rows={2} style={{ ...inputStyle(), height:'auto', minHeight:56, paddingTop:12, paddingBottom:12, resize:'vertical', lineHeight:1.5 }}/>
           </Field>
+          <Field label="Propagated from">
+            <select value={propagatedFrom == null ? '' : propagatedFrom} onChange={e=>setPropagatedFrom(e.target.value ? +e.target.value : null)} style={inputStyle()}>
+              <option value="">None — grown or bought independently</option>
+              {propagationOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </Field>
           <Field label="Last watered">
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
               <div onClick={()=>setLastWatered(d=>Math.max(0, d-1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>−</div>
@@ -699,7 +740,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
 
       {/* save bar */}
       <div style={{ flexShrink:0, padding:'12px 18px 26px', borderTop:'0.5px solid rgba(45,80,22,0.1)', background:C.bg+'F2', backdropFilter:'blur(14px)' }}>
-        <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, photos, every, light:light.trim(), care:care.trim(), fact:fact.trim(), days:lastWatered, toxicToPets }) : undefined}
+        <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, photos, every, light:light.trim(), care:care.trim(), fact:fact.trim(), days:lastWatered, toxicToPets, propagatedFrom }) : undefined}
           style={{
             height:52, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
             background: canSave ? C.forest : 'rgba(45,80,22,0.18)', color:'#fff',

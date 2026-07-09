@@ -1297,6 +1297,7 @@ window.onload=()=>{
         if (data.days != null) { next.days = data.days; next.wateredAt = todayMidnight() - data.days * 86400000; next.wv = WATER_SCHEMA; }
         next.photos = data.photos || [];
         next.image = data.presetImage != null ? data.presetImage : p.image;
+        next.propagatedFrom = data.propagatedFrom || null;
         delete next.userImage;
         if (gardenNode) pushPhoto(gardenNode, next.id, next.photos);
         return next;
@@ -1314,6 +1315,7 @@ window.onload=()=>{
         toxicToPets: typeof data.toxicToPets === 'boolean' ? data.toxicToPets : care.toxicToPets,
         image: data.presetImage != null ? data.presetImage : care.image,
         photos: data.photos || [],
+        propagatedFrom: data.propagatedFrom || null,
         aiV: APP_VERSION,
       }]);
       setTab('garden');
@@ -1435,6 +1437,8 @@ window.onload=()=>{
       onGoQueue={()=>{ closeDetail(); setTab('print'); }}
       onEdit={p=>{ closeDetail(); setForm({mode:'edit', plant:p}); }}
       onAskDoctor={p=>{ closeDetail(); setDoctor({ plant:p }); }}
+      onOpenPlant={id=>openDetail(id)}
+      plants={plants}
       isDesktop={isDesktop}
       czechMode={identifyLang === 'cs'}
     />
@@ -1483,7 +1487,7 @@ window.onload=()=>{
   const formEl = form && (
     <AddPlant
       key={form.mode === 'edit' ? 'edit-'+form.plant.id : 'add'}
-      locations={locations} editing={form.mode === 'edit' ? form.plant : null}
+      locations={locations} plants={plants} editing={form.mode === 'edit' ? form.plant : null}
       onBack={()=>setForm(null)} onSave={savePlant} onAddLocation={addLocation}
       isDesktop={isDesktop} czechMode={identifyLang === 'cs'}/>
   );
