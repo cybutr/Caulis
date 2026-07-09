@@ -787,10 +787,70 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
   );
 }
 
+// rooms are now a first-class list (locations = derived-from-plants ∪
+// extraLocations, see app.jsx addLocation/renameLocation/removeLocation) —
+// this lets a room be pre-created empty, renamed across every plant that
+// lives there in one move, and removed once it's empty again. Previously
+// onAddLocation was wired to a no-op everywhere, so a "room" only ever
+// existed for as long as some plant happened to sit in it.
+function LocationsManager({ plants, locations, onAdd, onRename, onRemove }) {
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [editing, setEditing] = useState(null);
+  const [editVal, setEditVal] = useState('');
+  const counts = {};
+  plants.forEach(p => { counts[p.location] = (counts[p.location] || 0) + 1; });
+  const submitNew = () => { const v = newName.trim(); if (v) onAdd(v); setNewName(''); setAdding(false); };
+  const submitRename = (old) => { const v = editVal.trim(); if (v && v !== old) onRename(old, v); setEditing(null); };
+  const rowInput = { flex:1, boxSizing:'border-box', height:34, borderRadius:9, border:`1px solid ${C.forest}`, background:C.bg, padding:'0 10px', fontFamily:FONT_SANS, fontSize:13, color:C.ink, outline:'none' };
+  return (
+    <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+      <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, marginBottom:9 }}>Rooms</div>
+      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+        {locations.map(l => (
+          <div key={l} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px', borderRadius:10, background:'rgba(45,80,22,0.05)' }}>
+            {editing === l ? (
+              <>
+                <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') submitRename(l); if(e.key==='Escape') setEditing(null); }} style={rowInput}/>
+                <span onClick={()=>submitRename(l)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.forest }}>Save</span>
+                <span onClick={()=>setEditing(null)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>Cancel</span>
+              </>
+            ) : (
+              <>
+                <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>{l}</span>
+                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.55 }}>{counts[l] || 0} plant{counts[l] === 1 ? '' : 's'}</span>
+                <span onClick={()=>{ setEditing(l); setEditVal(l); }} style={{ cursor:'pointer', padding:4 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" fill="none" stroke={C.brown} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </span>
+                {!counts[l] && (
+                  <span onClick={()=>onRemove(l)} style={{ cursor:'pointer', padding:4 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke={STATUS.needs.dot} strokeWidth="1.8" strokeLinecap="round"/></svg>
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+      {adding ? (
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8 }}>
+          <input autoFocus value={newName} onChange={e=>setNewName(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') submitNew(); if(e.key==='Escape') setAdding(false); }} placeholder="Room name…" style={rowInput}/>
+          <span onClick={submitNew} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.forest }}>Add</span>
+        </div>
+      ) : (
+        <div onClick={()=>setAdding(true)} style={{ marginTop:9, display:'inline-flex', alignItems:'center', gap:5, cursor:'pointer' }}>
+          <IconPlus s={12} c={C.forest}/>
+          <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest }}>Add empty room</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1335,7 +1395,8 @@ function SettingsScreen({ plants, isDesktop, gardenKey, gardenHistory, onRemoveH
         <SettingsSection title="Garden" open={isOpen('garden')} onToggle={()=>toggleSec('garden')} id={'sec-'+'garden'} matched={settingsMatches[settingsMatchIdx] === 'garden'} query={settingsMatches.includes('garden') ? settingsQuery : ''} bodyRef={registerSection('garden')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <Row label="Plants tracked" value={String(plants.length)}/>
-            <Row label="Locations" value={String(new Set(plants.map(p=>p.location)).size)}/>
+            <Row label="Locations" value={String(locations.length)}/>
+            <LocationsManager plants={plants} locations={locations} onAdd={onAddLocationSetting} onRename={onRenameLocation} onRemove={onRemoveLocation}/>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Default watering</div>

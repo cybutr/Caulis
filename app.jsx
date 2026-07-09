@@ -96,7 +96,30 @@ function App() {
     const wateredAt = deriveWateredAt({ ...p, history });
     return { ...p, history, wateredAt, wv: WATER_SCHEMA, days: daysSinceMidnight(wateredAt), photos: photos || (legacy ? [legacy] : (p.photos || [])) };
   }));
-  const locations = [...new Set(plants.map(p => p.location).filter(Boolean))].sort();
+  // rooms are mostly derived from where plants actually live, but a room
+  // with zero plants in it (freshly created, or emptied by moving the last
+  // plant out) has nowhere else to be remembered — extraLocations is that
+  // small first-class list, merged in below and persisted/synced like any
+  // other garden field
+  const [extraLocations, setExtraLocations] = useState(() => lsGet('caulis_extra_locations', []));
+  const derivedLocations = [...new Set(plants.map(p => p.location).filter(Boolean))];
+  const locations = [...new Set([...derivedLocations, ...extraLocations])].sort();
+  const addLocation = (name) => {
+    const n = (name || '').trim(); if (!n) return;
+    if (locations.some(l => l.toLowerCase() === n.toLowerCase())) return;
+    setExtraLocations(ls => { const next = [...ls, n]; lsSet('caulis_extra_locations', next); return next; });
+  };
+  const removeLocation = (name) => {
+    if (derivedLocations.includes(name)) return; // only an empty room can be removed
+    setExtraLocations(ls => { const next = ls.filter(l => l !== name); lsSet('caulis_extra_locations', next); return next; });
+  };
+  const renameLocation = (oldName, newName) => {
+    const n = (newName || '').trim();
+    if (!n || n === oldName) return;
+    if (locations.some(l => l.toLowerCase() === n.toLowerCase() && l !== oldName)) return;
+    setPlants(ps => ps.map(p => p.location === oldName ? { ...p, location: n } : p));
+    setExtraLocations(ls => { const next = ls.map(l => l === oldName ? n : l); lsSet('caulis_extra_locations', next); return next; });
+  };
   const photosReady = useRef(false);
   const [tab, setTab]             = useState(() => lsGet('caulis_default_tab', 'garden'));
   const [detail, setDetail]       = useState(null);
@@ -1184,7 +1207,7 @@ window.onload=()=>{
     <AddPlant
       key={form.mode === 'edit' ? 'edit-'+form.plant.id : 'add'}
       locations={locations} editing={form.mode === 'edit' ? form.plant : null}
-      onBack={()=>setForm(null)} onSave={savePlant} onAddLocation={()=>{}}
+      onBack={()=>setForm(null)} onSave={savePlant} onAddLocation={addLocation}
       isDesktop={isDesktop} czechMode={identifyLang === 'cs'}/>
   );
 
@@ -1298,7 +1321,7 @@ window.onload=()=>{
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} onWaterAll={waterAll} confirmDelete={confirmDelete} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} locations={locations} onAddLocationSetting={addLocation} onRenameLocation={renameLocation} onRemoveLocation={removeLocation} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
@@ -1324,10 +1347,10 @@ window.onload=()=>{
         {doctor && <div style={{ position:'fixed', inset:0, zIndex:46 }}>{doctorEl}</div>}
         {moreEl}
         {moving && (
-          <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={()=>{}} isDesktop/>
+          <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={addLocation} isDesktop/>
         )}
         {bulkMove && bulkMove.length > 0 && (
-          <MoveSheet ids={bulkMove} locations={locations} onClose={()=>setBulkMove(null)} onPick={movePlant} onAddLocation={()=>{}} isDesktop/>
+          <MoveSheet ids={bulkMove} locations={locations} onClose={()=>setBulkMove(null)} onPick={movePlant} onAddLocation={addLocation} isDesktop/>
         )}
         {menuPlant && (
           <ContextMenu
@@ -1381,10 +1404,10 @@ window.onload=()=>{
       {doctor && doctorEl}
       {moreEl}
       {moving && (
-        <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={()=>{}}/>
+        <MoveSheet plant={moving} locations={locations} onClose={()=>setMoveTarget(null)} onPick={movePlant} onAddLocation={addLocation}/>
       )}
       {bulkMove && bulkMove.length > 0 && (
-        <MoveSheet ids={bulkMove} locations={locations} onClose={()=>setBulkMove(null)} onPick={movePlant} onAddLocation={()=>{}}/>
+        <MoveSheet ids={bulkMove} locations={locations} onClose={()=>setBulkMove(null)} onPick={movePlant} onAddLocation={addLocation}/>
       )}
       {menuPlant && (
         <ContextMenu
