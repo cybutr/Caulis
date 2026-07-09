@@ -12,9 +12,78 @@
 const BACKEND_URL = 'https://api.caulis.czeddaru.dev';
 const SYNC_READY = true;
 
-// key -> { password, token }
+// key -> { password, token, rev, base }
+// `rev` is the last revision this session knows the server holds; `base` is
+// the {plants,locations,queue} that was true at that rev — the common
+// ancestor a 3-way merge diffs against when a push conflicts.
 const _sessions = {};
 let _activeKey = null;
+
+function sameJSON(a, b) { return JSON.stringify(a) === JSON.stringify(b); }
+
+function indexById(arr) {
+  const m = new Map();
+  (arr || []).forEach(p => { if (p && p.id != null) m.set(p.id, p); });
+  return m;
+}
+
+// per-plant 3-way merge: unchanged-on-one-side wins cleanly; a real edit-vs-
+// edit conflict on the same plant prefers the remote copy (so nothing this
+// device hasn't seen yet gets thrown away) and is flagged so the caller can
+// tell the user a merge happened. Deletes never silently eat an edit made on
+// the other side — an edited-elsewhere plant survives even if this device
+// tried to delete it (and vice versa).
+function mergePlants(base, local, remote) {
+  const B = indexById(base), L = indexById(local), R = indexById(remote);
+  const ids = new Set([...B.keys(), ...L.keys(), ...R.keys()]);
+  const merged = [];
+  let conflict = false;
+  for (const id of ids) {
+    const b = B.get(id), l = L.get(id), r = R.get(id);
+    const lChanged = b ? (l ? !sameJSON(l, b) : true) : !!l;
+    const rChanged = b ? (r ? !sameJSON(r, b) : true) : !!r;
+    if (!l && !r) continue; // deleted on both sides
+    if (l && !r) {
+      if (!b) { merged.push(l); continue; } // new local plant
+      if (lChanged) { merged.push(l); conflict = true; } // edited locally after remote deleted it — keep the edit
+      continue; // remote deletion wins, nothing local changed
+    }
+    if (!l && r) {
+      if (!b) { merged.push(r); continue; } // new remote plant
+      if (rChanged) { merged.push(r); conflict = true; } // edited remotely after local deleted it — keep the edit
+      continue; // local deletion wins
+    }
+    // present on both sides
+    if (!lChanged) { merged.push(r); continue; }
+    if (!rChanged) { merged.push(l); continue; }
+    if (sameJSON(l, r)) { merged.push(l); continue; } // changed identically, no real conflict
+    merged.push(r); // both edited the same plant differently — prefer remote, flag it
+    conflict = true;
+  }
+  return { plants: merged, conflict };
+}
+
+// locations/queue are plain arrays (room names / plant ids) — no per-item
+// identity worth a 3-way diff, so: unchanged side defers to the other,
+// otherwise union (local order first) rather than picking one wholesale.
+function mergeArray(base, local, remote) {
+  if (sameJSON(local, base)) return remote || [];
+  if (sameJSON(remote, base)) return local || [];
+  const out = [...(local || [])];
+  (remote || []).forEach(v => { if (!out.includes(v)) out.push(v); });
+  return out;
+}
+
+function mergeGarden(base, local, remote) {
+  const b = base || {};
+  const { plants, conflict } = mergePlants(b.plants, local.plants, remote.plants);
+  return {
+    plants,
+    locations: mergeArray(b.locations, local.locations, remote.locations),
+    queue: mergeArray(b.queue, local.queue, remote.queue),
+    conflict,
+  };
+}
 
 async function _api(path, opts = {}, token) {
   const headers = { 'content-type': 'application/json', ...(opts.headers || {}) };
@@ -71,7 +140,12 @@ function listenGarden(key, onData) {
   let stopped = false;
   const poll = async () => {
     const { ok, data } = await _api('/api/garden', {}, session.token);
-    if (ok && data && data.updated_at !== lastStamp) {
+    if (!ok || !data) return;
+    // always keep rev/base current, even when updated_at hasn't moved and we
+    // skip calling onData below — pushGarden needs the freshest ancestor.
+    session.rev = data.rev;
+    session.base = { plants: data.plants, locations: data.locations, queue: data.queue };
+    if (data.updated_at !== lastStamp) {
       lastStamp = data.updated_at;
       onData({ plants: data.plants, locations: data.locations, queue: data.queue });
     }
@@ -85,23 +159,61 @@ function listenGarden(key, onData) {
 // callers can surface it — a save that silently never reaches the server is
 // worse than one that visibly fails, especially for something people treat
 // as a cloud backup of their plant collection.
-async function pushGarden(key, data) {
+//
+// Conflict handling lives here, once, so every call site stays a plain
+// "push this state" call: a 409 (someone else wrote since our last known
+// rev) triggers a 3-way merge against the server's current copy and a single
+// retry with the new rev. `onMerge(merged)` — if given — is called with the
+// merged {plants,locations,queue} whenever a merge actually happened, so the
+// caller can reconcile its own in-memory state instead of re-pushing the
+// pre-merge version next time around. `onConflictNote(hadRealConflict)` is
+// called alongside it so the UI can decide whether to surface a toast (only
+// needed when the merge had to pick a side on the same plant, not for the
+// common case of two different plants edited on two devices).
+async function pushGarden(key, data, onMerge) {
   const session = _sessions[key];
   if (!session?.token) return false;
   const clean = JSON.parse(JSON.stringify(data, (_, v) => v === undefined ? null : v));
-  try {
-    const { ok } = await _api('/api/garden', { method: 'PUT', body: JSON.stringify(clean) }, session.token);
-    return ok;
-  } catch (e) {
-    return false;
+  const put = async (payload) => {
+    try {
+      const { ok, status, data: resp } = await _api('/api/garden', { method: 'PUT', body: JSON.stringify(payload) }, session.token);
+      return { ok, status, resp };
+    } catch (e) {
+      return { ok: false, status: 0, resp: null };
+    }
+  };
+
+  const rev = session.rev;
+  const first = await put({ ...clean, rev });
+  if (first.ok) {
+    session.rev = first.resp?.rev ?? session.rev;
+    session.base = { plants: clean.plants, locations: clean.locations, queue: clean.queue };
+    return true;
   }
+  if (first.status !== 409 || !first.resp) return false;
+
+  // conflict: merge our attempted write against the server's current copy,
+  // using the last-known-common state (session.base) as the 3-way ancestor.
+  const remote = first.resp;
+  const merged = mergeGarden(session.base, clean, remote);
+  const retryPayload = { ...clean, plants: merged.plants, locations: merged.locations, queue: merged.queue, rev: remote.rev };
+  const second = await put(retryPayload);
+  if (!second.ok) return false; // another concurrent write raced us again — give up, next debounced push or poll will retry
+
+  session.rev = second.resp?.rev ?? remote.rev + 1;
+  session.base = { plants: merged.plants, locations: merged.locations, queue: merged.queue };
+  if (onMerge) onMerge({ plants: merged.plants, locations: merged.locations, queue: merged.queue, conflict: merged.conflict });
+  return true;
 }
 
 async function fetchGardenOnce(key) {
   const session = _sessions[key];
   if (!session?.token) return null;
   const { ok, data } = await _api('/api/garden', {}, session.token);
-  return ok ? { plants: data.plants, locations: data.locations, queue: data.queue } : null;
+  if (!ok) return null;
+  session.rev = data.rev;
+  session.base = { plants: data.plants, locations: data.locations, queue: data.queue };
+  return { plants: data.plants, locations: data.locations, queue: data.queue };
 }
 
 async function gardenExists(key) {

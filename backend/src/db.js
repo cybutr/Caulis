@@ -89,6 +89,11 @@ export async function initSchema() {
     INSERT INTO admin_settings (key, value) VALUES ('backup_interval_hours', '24') ON CONFLICT DO NOTHING;
     INSERT INTO admin_settings (key, value) VALUES ('backup_keep_count', '14') ON CONFLICT DO NOTHING;
   `);
+
+  // additive, backward-compatible: existing rows default to rev 1 (their
+  // current content becomes the baseline), no downtime, no data loss.
+  // Powers conditional-write conflict detection on PUT /api/garden.
+  await pool.query(`ALTER TABLE garden_data ADD COLUMN IF NOT EXISTS rev INTEGER NOT NULL DEFAULT 1`);
 }
 
 export async function getSetting(key) {

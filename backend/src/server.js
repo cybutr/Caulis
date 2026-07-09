@@ -253,21 +253,52 @@ app.delete('/api/gardens/me', { preHandler: requireAuth }, async (req, reply) =>
 
 app.get('/api/garden', { preHandler: requireAuth }, async (req, reply) => {
   const { rows } = await pool.query(
-    'SELECT plants, locations, queue, updated_at FROM garden_data WHERE garden_id = $1',
+    'SELECT plants, locations, queue, rev, updated_at FROM garden_data WHERE garden_id = $1',
     [req.gardenId]
   );
   if (!rows.length) return reply.code(404).send({ error: 'not found' });
   return rows[0];
 });
 
+// conditional write: the client sends the rev it last knew about. If the
+// stored rev has moved on since (another device/session wrote in the
+// meantime) this rejects with 409 + the current server state so the client
+// can merge instead of blindly clobbering it. rev == null (older cached
+// client) falls back to the old unconditional behavior rather than breaking
+// it outright — the stale-shell update banner nudges those clients current.
+// FOR UPDATE + a single transaction closes the read-then-write race between
+// two requests that both read the same rev before either commits.
 app.put('/api/garden', { preHandler: requireAuth }, async (req, reply) => {
-  const { plants = [], locations = [], queue = [] } = req.body || {};
-  await pool.query(
-    `UPDATE garden_data SET plants = $1, locations = $2, queue = $3, updated_at = now()
-     WHERE garden_id = $4`,
-    [JSON.stringify(plants), JSON.stringify(locations), JSON.stringify(queue), req.gardenId]
-  );
-  return { ok: true };
+  const { plants = [], locations = [], queue = [], rev } = req.body || {};
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { rows } = await client.query(
+      'SELECT rev, plants, locations, queue FROM garden_data WHERE garden_id = $1 FOR UPDATE',
+      [req.gardenId]
+    );
+    if (!rows.length) { await client.query('ROLLBACK'); return reply.code(404).send({ error: 'not found' }); }
+    const current = rows[0];
+    if (rev != null && Number(rev) !== Number(current.rev)) {
+      await client.query('ROLLBACK');
+      return reply.code(409).send({
+        error: 'conflict', plants: current.plants, locations: current.locations, queue: current.queue, rev: current.rev,
+      });
+    }
+    const newRev = Number(current.rev) + 1;
+    await client.query(
+      `UPDATE garden_data SET plants = $1, locations = $2, queue = $3, rev = $4, updated_at = now()
+       WHERE garden_id = $5`,
+      [JSON.stringify(plants), JSON.stringify(locations), JSON.stringify(queue), newRev, req.gardenId]
+    );
+    await client.query('COMMIT');
+    return { ok: true, rev: newRev };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
 });
 
 app.put('/api/garden/keys', { preHandler: requireAuth }, async (req, reply) => {
@@ -427,8 +458,11 @@ app.put('/api/admin/gardens/:key', { preHandler: requireAdmin }, async (req, rep
   const { rows } = await pool.query('SELECT id FROM gardens WHERE key = $1', [req.params.key]);
   if (!rows.length) return reply.code(404).send({ error: 'not found' });
   const { plants = [], locations = [], queue = [] } = req.body || {};
+  // admin override is intentionally unconditional (bypasses rev check), but
+  // still bumps rev so a garden's own client doesn't spuriously 409 forever
+  // against a rev it can no longer match.
   await pool.query(
-    `UPDATE garden_data SET plants = $1, locations = $2, queue = $3, updated_at = now() WHERE garden_id = $4`,
+    `UPDATE garden_data SET plants = $1, locations = $2, queue = $3, rev = rev + 1, updated_at = now() WHERE garden_id = $4`,
     [JSON.stringify(plants), JSON.stringify(locations), JSON.stringify(queue), rows[0].id]
   );
   return { ok: true };

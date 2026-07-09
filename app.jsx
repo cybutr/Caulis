@@ -89,6 +89,7 @@ function App() {
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e) { if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014)) setStorageFull(true); return false; } };
   const [storageFull, setStorageFull] = useState(false);
   const [syncError, setSyncError] = useState(false);
+  const [syncMerged, setSyncMerged] = useState(false);
 
   const [plants, setPlants]       = useState(() => lsGet('caulis_plants', []).map(p => {
     const photos = lsGet('caulis_imgs_' + p.id, null);
@@ -573,6 +574,13 @@ function App() {
   }, [darkMode, palette]);
 
   const fromRemoteRef = useRef(false);
+  // true whenever a local edit has an 800ms push debounce armed (or a push is
+  // in flight) that hasn't landed on the server yet. The 20s poll in
+  // listenGarden checks this before overwriting `plants` wholesale — without
+  // it, a poll landing in that ~800ms window would blow away the very edit
+  // the debounce is about to send, since the poll's own setPlants cancels the
+  // pending push timer as a side effect of changing `plants` again.
+  const pushPendingRef = useRef(false);
   const [plantNotFound, setPlantNotFound] = useState(false);
   const [guestView, setGuestView] = useState(null);
 
@@ -632,6 +640,7 @@ function App() {
       lsSet('caulis_gardens', hist);
     } catch(e) {}
     switchingGardenRef.current = true;
+    pushPendingRef.current = false;
     setGardenNode(null);
     setGardenKeyState(k);
     setGardenPassword(pw || '');
@@ -764,6 +773,13 @@ function App() {
     if (!gardenNode) return;
     const toArr = v => v ? (Array.isArray(v) ? v : Object.values(v)) : [];
     const unsubscribe = listenGarden(gardenNode, (data) => {
+      // an unsynced local edit is currently debounced (or its push is in
+      // flight) — applying this poll's snapshot now would both show stale
+      // data and cancel the pending push (setPlants below would replace the
+      // very state that timer is about to send). Skip; the next poll (after
+      // this device's push has landed, merging server-side if needed) will
+      // pick up the authoritative state.
+      if (pushPendingRef.current) return;
       fromRemoteRef.current = true;
       setRemoteSynced(true); // first authoritative snapshot for this garden has landed — safe to compare milestones now
       if (data.plants) {
@@ -801,10 +817,33 @@ function App() {
     if (!gardenNode) return;
     if (fromRemoteRef.current) { fromRemoteRef.current = false; return; }
     if (switchingGardenRef.current) { switchingGardenRef.current = false; return; }
+    pushPendingRef.current = true;
     const timer = setTimeout(() => {
       const cleanPlants = plants.map(({ photos, ...rest }) => rest);
-      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null})
-        .then(ok => setSyncError(!ok));
+      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null}, (merged) => {
+        // the server rejected our rev (someone else wrote first) and
+        // pushGarden already retried with a 3-way merge — reconcile local
+        // state to the merged truth so the next debounced push sends that,
+        // not the pre-merge version that would otherwise silently re-clobber
+        // whatever the merge just preserved.
+        fromRemoteRef.current = true;
+        setPlants(prev => merged.plants.map(p => {
+          const local = prev.find(lp => lp.id === p.id);
+          const photos = (p.photos && p.photos.length) ? p.photos : (local ? (local.photos || []) : []);
+          if (!photos.length) {
+            fetchPhotos(gardenNode, p.id).then(ph => {
+              if (ph && ph.length) {
+                setPlants(curr => curr.map(cp => cp.id === p.id && (!cp.photos || !cp.photos.length) ? { ...cp, photos: ph } : cp));
+              }
+            });
+          }
+          const history = Array.isArray(p.history) ? p.history : [];
+          const wateredAt = deriveWateredAt({ ...p, history });
+          return { ...p, history, wateredAt, wv: WATER_SCHEMA, days: daysSinceMidnight(wateredAt), photos };
+        }));
+        setQueue(merged.queue);
+        if (merged.conflict) setSyncMerged(true);
+      }).then(ok => { pushPendingRef.current = false; setSyncError(!ok); });
     }, 800);
     return () => clearTimeout(timer);
   }, [plants, locations, queue, gardenNode, perenualKey, plantIdKey, housePlantsKey, anthropicKey]);
@@ -813,6 +852,11 @@ function App() {
     const t = setTimeout(() => setSyncError(false), 6000);
     return () => clearTimeout(t);
   }, [syncError]);
+  useEffect(() => {
+    if (!syncMerged) return;
+    const t = setTimeout(() => setSyncMerged(false), 6000);
+    return () => clearTimeout(t);
+  }, [syncMerged]);
 
   const updateApp = async () => {
     // Force a sync of any pending changes before wiping caches and reloading
@@ -1054,6 +1098,11 @@ window.onload=()=>{
     const { plants: removed, queuedIds } = undoDelete;
     setPlants(ps => [...ps, ...removed.filter(p => !ps.some(x => x.id === p.id))]);
     if (queuedIds.length) setQueue(q => [...q, ...queuedIds.filter(id => !q.includes(id))]);
+    // removePlant already called deletePhotos() server-side — that delete
+    // isn't undone by restoring local state, so without this the photos
+    // survive on this device (IndexedDB) but are gone for good everywhere
+    // else the moment the next sync round-trips.
+    if (gardenNode) removed.forEach(p => { if (p.photos && p.photos.length) pushPhoto(gardenNode, p.id, p.photos); });
     setUndoDelete(null);
   };
   useEffect(() => {
@@ -1399,6 +1448,17 @@ window.onload=()=>{
     </div>
   );
 
+  const syncMergedEl = syncMerged && (
+    <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:70, padding:'0 18px', animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#C98A2B', borderRadius:18, padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+        <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:500, color:'#fff', lineHeight:1.4 }}>This garden changed elsewhere — changes were merged automatically.</span>
+        <div onClick={()=>setSyncMerged(false)} style={{ cursor:'pointer', flexShrink:0, width:26, height:26, borderRadius:999, background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+  );
+
   const confettiEl = confetti && (
     <div style={{ position:'fixed', inset:0, zIndex:90, pointerEvents:'none', overflow:'hidden' }}>
       {Array.from({ length: 28 }).map((_, i) => {
@@ -1527,6 +1587,7 @@ window.onload=()=>{
         {undoWaterAllEl}
         {storageFullEl}
         {syncErrorEl}
+        {syncMergedEl}
         {confettiEl}
         {milestoneToastEl}
         {holidayToastEl}
@@ -1585,6 +1646,7 @@ window.onload=()=>{
       {undoWaterAllEl}
       {storageFullEl}
       {syncErrorEl}
+      {syncMergedEl}
       {confettiEl}
       {milestoneToastEl}
       {holidayToastEl}
