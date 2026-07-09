@@ -132,59 +132,29 @@ function GripIcon({ c = C.brown }) {
 }
 
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress, onWater, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact }) {
   const [press, setPress] = useState(false);
-  const [dx, setDx] = useState(0);
   const timer = useRef(null);
   const longed = useRef(false);
-  const startX = useRef(0), startY = useRef(0);
-  const swiping = useRef(false), dxRef = useRef(0), down = useRef(false);
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
-  const WATER_THRESH = 74;
-  const setX = (v) => { dxRef.current = v; setDx(v); };
-  const start = (e) => {
+  const start = () => {
     if (selectable) return;
-    down.current = true; setPress(true); longed.current = false; swiping.current = false;
-    startX.current = e.clientX; startY.current = e.clientY;
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch(_) {}
+    setPress(true); longed.current = false;
     timer.current = setTimeout(() => { longed.current = true; setPress(false); onLongPress && onLongPress(plant); }, 480);
   };
-  const move = (e) => {
-    if (selectable || !down.current) return;
-    const mx = e.clientX - startX.current, my = e.clientY - startY.current;
-    if (!swiping.current && Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(my)) {
-      swiping.current = true; if (timer.current) clearTimeout(timer.current); setPress(false);
-    }
-    if (swiping.current) setX(Math.max(0, Math.min(WATER_THRESH + 24, mx)));
-  };
-  const end = () => {
-    down.current = false; setPress(false); if (timer.current) clearTimeout(timer.current);
-    if (swiping.current) {
-      swiping.current = false;
-      if (dxRef.current >= WATER_THRESH) onWater && onWater(plant.id);
-      setX(0);
-    }
-  };
-  const click = () => { if (selectable) { onToggleSelect(plant.id); return; } if (longed.current) { longed.current = false; return; } if (dxRef.current !== 0) return; onOpen(plant.id); };
-  const waterPull = Math.max(0, Math.min(1, dx / WATER_THRESH));
+  const end = () => { setPress(false); if (timer.current) clearTimeout(timer.current); };
+  const click = () => { if (selectable) { onToggleSelect(plant.id); return; } if (longed.current) { longed.current = false; return; } onOpen(plant.id); };
   return (
     <div data-noswipe="1" style={{ position:'relative', borderRadius: compact ? 16 : 22, overflow:'hidden' }}>
-      {dx > 0 && (
-        <div style={{ position:'absolute', inset:0, borderRadius: compact ? 16 : 22, display:'flex', alignItems:'center', justifyContent:'flex-start', paddingLeft:14, background:`rgba(110,154,62,${0.16 + waterPull*0.24})`, transition:'background 120ms linear' }}>
-          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.ok.dot, transform:`scale(${0.85 + waterPull*0.25})`, transition:'transform 120ms linear' }}>
-            {waterPull >= 1 ? <IconCheck s={16} c={STATUS.ok.dot} w={2.4}/> : <IconDrop s={16} c={STATUS.ok.dot}/>}
-          </div>
-        </div>
-      )}
       <div
-        onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} onClick={click}
+        onPointerDown={start} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} onClick={click}
         style={{
           background:C.panel, borderRadius: compact ? 16 : 22, padding: compact ? 8 : 12, minWidth:0,
           boxShadow: press ? '0 1px 3px rgba(43,42,38,0.06)' : '0 1px 2px rgba(43,42,38,0.04), 0 8px 22px rgba(45,80,22,0.05)',
           border: selected ? `1.5px solid ${C.forest}` : over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)',
-          transform: `translateX(${dx}px) scale(${press ? 0.975 : 1})`,
+          transform: `scale(${press ? 0.975 : 1})`,
           opacity: dragging ? 0.5 : 1,
-          transition: swiping.current ? 'box-shadow 180ms ease' : 'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease, opacity 140ms ease, border-color 140ms ease',
+          transition: 'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease, opacity 140ms ease, border-color 140ms ease',
           cursor:'pointer', position:'relative', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y',
         }}>
         <div style={{ position:'relative' }}>
