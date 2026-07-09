@@ -104,6 +104,10 @@ export async function initSchema() {
   // expiry) is invalidated in one step — without this, a leaked/stolen token
   // keeps working for months after the owner reacts and changes the password.
   await pool.query(`ALTER TABLE gardens ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`);
+
+  // earned achievement badges: [{id, earnedAt}] — append-only, never edited in
+  // place, so it merges as a plain union across devices with no conflict logic
+  await pool.query(`ALTER TABLE garden_data ADD COLUMN IF NOT EXISTS badges JSONB DEFAULT '[]'`);
 }
 
 export async function getSetting(key) {

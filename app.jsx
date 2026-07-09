@@ -90,6 +90,42 @@ function App() {
   const [storageFull, setStorageFull] = useState(false);
   const [syncError, setSyncError] = useState(false);
   const [syncMerged, setSyncMerged] = useState(false);
+  // a redeemed migration-link payload (index.html) is staged here, never
+  // applied straight to localStorage — a migration code is bearer-credential
+  // transfer (garden key + password included), and anyone can mint one from
+  // their own garden and send the resulting link to someone else. Requiring
+  // an explicit confirm in-app is what actually stops that, since a person
+  // who didn't generate the link themselves has no reason to recognize the
+  // garden key it names and can decline.
+  const [pendingMigration, setPendingMigration] = useState(() => {
+    try { const raw = sessionStorage.getItem('caulis_pending_migration'); return raw ? JSON.parse(raw) : null; } catch(e) { return null; }
+  });
+  const confirmMigration = () => {
+    if (!pendingMigration) return;
+    for (const k in pendingMigration) {
+      try { if (localStorage.getItem(k) === null) localStorage.setItem(k, pendingMigration[k]); } catch(e) {}
+    }
+    try { sessionStorage.removeItem('caulis_pending_migration'); } catch(e) {}
+    location.reload();
+  };
+  const dismissMigration = () => {
+    try { sessionStorage.removeItem('caulis_pending_migration'); } catch(e) {}
+    setPendingMigration(null);
+  };
+  const migrationConfirmEl = pendingMigration && (
+    <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(42,42,38,0.55)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div style={{ background:C.bg, borderRadius:22, padding:26, maxWidth:340, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest, marginBottom:10 }}>Switch to a shared garden?</div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, opacity:0.8, lineHeight:1.5, marginBottom:20 }}>
+          A migration link wants to connect this device to garden <b>{pendingMigration.caulis_garden_key || 'unknown'}</b>. Only continue if you generated this link yourself, on another device.
+        </div>
+        <div style={{ display:'flex', gap:10 }}>
+          <div onClick={dismissMigration} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, border:`1px solid ${C.forest}`, color:C.forest, fontFamily:FONT_SANS, fontWeight:600, fontSize:14, cursor:'pointer' }}>Not me — ignore</div>
+          <div onClick={confirmMigration} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:C.forest, color:'#fff', fontFamily:FONT_SANS, fontWeight:600, fontSize:14, cursor:'pointer' }}>Yes, continue</div>
+        </div>
+      </div>
+    </div>
+  );
 
   const [plants, setPlants]       = useState(() => lsGet('caulis_plants', []).map(p => {
     const photos = lsGet('caulis_imgs_' + p.id, null);
@@ -149,6 +185,19 @@ function App() {
   const [undoDelete, setUndoDelete] = useState(null);
   const [undoWaterAll, setUndoWaterAll] = useState(null);
   const [queue, setQueue]         = useState(() => lsGet('caulis_queue', []));
+  // earned badges: [{id, earnedAt}] — append-only, synced through the same
+  // garden-data path as plants/locations/queue (see mergeBadges in
+  // caulis-firebase.jsx). Never edited in place, only appended to.
+  const [badges, setBadges]       = useState(() => lsGet('caulis_badges', []));
+  const [badgeToast, setBadgeToast] = useState(null);
+  const [ambientBadges, setAmbientBadgesRaw] = useState(() => lsGet('caulis_badge_ambient', true));
+  const setAmbientBadges = (v) => { setAmbientBadgesRaw(v); lsSet('caulis_badge_ambient', v); };
+  const [badgeDensity, setBadgeDensityRaw] = useState(() => lsGet('caulis_badge_density', 'normal'));
+  const setBadgeDensity = (v) => { setBadgeDensityRaw(v); lsSet('caulis_badge_density', v); };
+  // curated shelf list: which earned badge ids show up in the interactive
+  // shelf — null means "show every earned badge" (the default, no curation yet)
+  const [badgeShelfCurated, setBadgeShelfCuratedRaw] = useState(() => lsGet('caulis_badge_shelf', null));
+  const setBadgeShelfCurated = (v) => { setBadgeShelfCuratedRaw(v); lsSet('caulis_badge_shelf', v); };
   const [printed, setPrinted]     = useState(false);
   const [globalPrintSize, setGlobalPrintSizeRaw] = useState(() => lsGet('caulis_print_size', 40));
   const [queueSizes, setQueueSizes] = useState(() => lsGet('caulis_queue_sizes', {}));
@@ -313,7 +362,6 @@ function App() {
   // by the Firebase listener). `remoteSyncedFallbackMs` is a generous fail-open
   // safety net only — for a garden with no remote session at all, the listener
   // would otherwise never fire and milestones would silently never prime.
-  const MILESTONES = [5, 10, 25, 50, 100, 200];
   const [milestoneToast, setMilestoneToast] = useState(null);
   const [remoteSynced, setRemoteSynced] = useState(false);
   const milestonePrimedRef = useRef(false);
@@ -336,6 +384,36 @@ function App() {
     const hit = unseen[0];
     lsSet('caulis_milestones_seen', [...seen, hit]); setMilestoneToast(hit); haptic('success'); setTimeout(() => setMilestoneToast(null), 4000);
   }, [plants.length, gardenNode, remoteSynced]);
+  // badge unlock detection — same gating as milestones above (wait for the
+  // first authoritative remote snapshot before comparing) so restoring a
+  // garden on a fresh device doesn't replay every badge as newly earned.
+  // Checked against current garden state on every plant/location change;
+  // debounced by the effect dependency array itself (React only re-runs this
+  // once React settles the render, not per keystroke).
+  const badgePrimedRef = useRef(false);
+  useEffect(() => {
+    const baselineReady = !gardenNode || remoteSynced;
+    if (!baselineReady) return;
+    const state = { plants, locations, roomLight };
+    const earnedIds = new Set(badges.map(b => b.id));
+    const satisfied = BADGE_DEFS.filter(d => { try { return d.check(state); } catch(e) { return false; } }).map(d => d.id);
+    const newlyEarned = satisfied.filter(id => !earnedIds.has(id));
+    if (!newlyEarned.length) return;
+    if (!badgePrimedRef.current) {
+      // first comparison once a baseline exists seeds silently — this is the
+      // device's starting point, not achievements it witnessed happen
+      badgePrimedRef.current = true;
+      setBadges(prev => [...prev, ...newlyEarned.map(id => ({ id, earnedAt: Date.now() }))]);
+      return;
+    }
+    const hit = newlyEarned[0];
+    setBadges(prev => [...prev, { id: hit, earnedAt: Date.now() }]);
+    const def = BADGE_DEFS.find(d => d.id === hit);
+    haptic('success');
+    if (!reduceMotion && !prefersReducedMotion()) { setConfetti(true); setTimeout(() => setConfetti(false), 2600); }
+    setBadgeToast(def || { name: hit });
+    setTimeout(() => setBadgeToast(null), 4200);
+  }, [plants, locations, roomLight, gardenNode, remoteSynced]);
   // a quiet one-off toast on plant-adjacent calendar dates — checked once per
   // mount against a per-year seen-flag so it can never repeat in the same year
   // and never blocks anything if the check throws
@@ -772,6 +850,7 @@ function App() {
     return () => { cancelled = true; };
   }, []);
   useEffect(() => { lsSet('caulis_queue', queue); }, [queue]);
+  useEffect(() => { lsSet('caulis_badges', badges); }, [badges]);
   useEffect(() => { lsSet('caulis_queue_sizes', queueSizes); }, [queueSizes]);
   useEffect(() => { lsSet('caulis_default_every', defaultEvery); }, [defaultEvery]);
   useEffect(() => { lsSet('caulis_gcal_eids', googleEventIds); }, [googleEventIds]);
@@ -835,6 +914,7 @@ function App() {
         }));
       }
       if (data.queue)     setQueue(toArr(data.queue).filter(Boolean));
+      if (data.badges)    setBadges(toArr(data.badges).filter(Boolean));
       if (data.perenualKey) { setApiKey(data.perenualKey); setPerenualKeyState(data.perenualKey); }
       if (data.plantIdKey) { setPlantIdKey(data.plantIdKey); setPlantIdKeyState(data.plantIdKey); }
       if (data.housePlantsKey) { setHousePlantsKey(data.housePlantsKey); setHousePlantsKeyState(data.housePlantsKey); }
@@ -851,7 +931,7 @@ function App() {
     pushPendingRef.current = true;
     const timer = setTimeout(() => {
       const cleanPlants = plants.map(({ photos, ...rest }) => rest);
-      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null}, (merged) => {
+      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, badges, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null}, (merged) => {
         // the server rejected our rev (someone else wrote first) and
         // pushGarden already retried with a 3-way merge — reconcile local
         // state to the merged truth so the next debounced push sends that,
@@ -873,11 +953,12 @@ function App() {
           return { ...p, history, wateredAt, wv: WATER_SCHEMA, days: daysSinceMidnight(wateredAt), photos };
         }));
         setQueue(merged.queue);
+        if (merged.badges) setBadges(merged.badges);
         if (merged.conflict) setSyncMerged(true);
       }).then(ok => { pushPendingRef.current = false; setSyncError(!ok); });
     }, 800);
     return () => clearTimeout(timer);
-  }, [plants, locations, queue, gardenNode, perenualKey, plantIdKey, housePlantsKey, anthropicKey]);
+  }, [plants, locations, queue, badges, gardenNode, perenualKey, plantIdKey, housePlantsKey, anthropicKey]);
   useEffect(() => {
     if (!syncError) return;
     const t = setTimeout(() => setSyncError(false), 6000);
@@ -893,9 +974,9 @@ function App() {
     // Force a sync of any pending changes before wiping caches and reloading
     if (gardenNode) {
       const cleanPlants = plants.map(({ photos, ...rest }) => rest);
-      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null });
+      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, badges, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null });
     }
-    
+
     try {
       if ('serviceWorker' in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations();
@@ -1068,6 +1149,14 @@ function App() {
   const printAll = () => {
     const items = queue.map(id => plants.find(p => p.id === id)).filter(Boolean);
     if (!items.length) return;
+    // this label sheet is built as a raw HTML string and injected via
+    // document.write into a same-origin popup — plant name/latin/czech are
+    // free text (settable via the add/edit form, a migration payload, or a
+    // Doctor suggest_correction card) and must never reach that string
+    // unescaped, or a plant "named" with an <img onerror=...> payload would
+    // execute with access to this origin's localStorage (garden key,
+    // API keys) the moment someone hits Print.
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
     const mono = monochromePrint;
     const czechMode = identifyLang === 'cs';
     const qrInk    = mono ? '000000' : '2D5016';
@@ -1091,8 +1180,8 @@ function App() {
         <div class="mark tl"></div><div class="mark tr"></div>
         <div class="mark bl"></div><div class="mark br"></div>
         <img src="${qrSrc(PLANT_QR_URL(p.id), qrPx)}" alt="" style="width:${qrMm}mm;height:${qrMm}mm"/>
-        <div class="name" style="font-size:${namePt}pt;width:${textW}mm;color:${nameCol}">${czechMode && p.czech ? p.czech : p.name}</div>
-        <div class="latin" style="font-size:${latinPt}pt;width:${textW}mm;color:${latinCol}">${p.latin}</div>
+        <div class="name" style="font-size:${namePt}pt;width:${textW}mm;color:${nameCol}">${esc(czechMode && p.czech ? p.czech : p.name)}</div>
+        <div class="latin" style="font-size:${latinPt}pt;width:${textW}mm;color:${latinCol}">${esc(p.latin)}</div>
       </div>
     </div>`;
     }).join('');
@@ -1280,7 +1369,7 @@ window.onload=()=>{
   const adminSaveSettingsFn = (secret, settings) => adminSaveSettings(secret, settings);
   const adminRunBackupFn = (secret) => adminRunBackup(secret);
   const adminListBackupsFn = (secret) => adminListBackups(secret);
-  const adminBackupUrl = (secret, name) => adminBackupDownloadUrl(secret, name);
+  const adminBackupUrl = (secret, name) => adminDownloadBackup(secret, name);
   const bulkQueue  = (ids) => { haptic('medium'); setQueue(q => { const s = new Set(q); ids.forEach(id => s.add(id)); return [...s]; }); setPrinted(false); };
   const doBulkRemove = () => {
     const ids = bulkRemoveIds || [];
@@ -1392,7 +1481,7 @@ window.onload=()=>{
   };
 
   const exportGarden = () => {
-    const data = { version: APP_VERSION, exportedAt: new Date().toISOString(), gardenKey, locations, queue, plants };
+    const data = { version: APP_VERSION, exportedAt: new Date().toISOString(), gardenKey, locations, queue, plants, badges };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1409,6 +1498,7 @@ window.onload=()=>{
     if (mode === 'replace') {
       setPlants(incoming);
       setQueue(Array.isArray(data.queue) ? data.queue.filter(id => incoming.some(p => p.id === id)) : []);
+      if (Array.isArray(data.badges)) setBadges(data.badges);
       if (gardenNode) {
          incoming.forEach(p => {
              if (p.photos && p.photos.length) pushPhoto(gardenNode, p.id, p.photos);
@@ -1596,6 +1686,16 @@ window.onload=()=>{
       </div>
     </div>
   );
+  const badgeToastEl = badgeToast != null && (
+    <div style={{ position:'fixed', top:'calc(18px + env(safe-area-inset-top))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+      <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 20px 10px 12px', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, boxShadow:'0 10px 26px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ width:26, height:26, borderRadius:999, background:'rgba(255,255,255,0.16)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          {badgeToast.Icon ? <badgeToast.Icon s={15} c="#fff"/> : <Leaf size={14} color="#fff"/>}
+        </div>
+        <span>Badge earned — <span style={{ fontStyle:'italic', fontFamily:FONT_SERIF }}>{badgeToast.name || 'New badge'}</span></span>
+      </div>
+    </div>
+  );
   const holidayToastEl = holidayToast != null && (
     <div style={{ position:'fixed', top:'calc(18px + env(safe-area-inset-top))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
       <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'11px 20px', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, boxShadow:'0 10px 26px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:8 }}>
@@ -1694,10 +1794,12 @@ window.onload=()=>{
         {undoDeleteEl}
         {undoWaterAllEl}
         {storageFullEl}
+        {migrationConfirmEl}
         {syncErrorEl}
         {syncMergedEl}
         {confettiEl}
         {milestoneToastEl}
+        {badgeToastEl}
         {holidayToastEl}
         {updateReadyEl}
         {launchActionToastEl}
@@ -1754,10 +1856,12 @@ window.onload=()=>{
       {undoDeleteEl}
       {undoWaterAllEl}
       {storageFullEl}
+      {migrationConfirmEl}
       {syncErrorEl}
       {syncMergedEl}
       {confettiEl}
       {milestoneToastEl}
+      {badgeToastEl}
       {holidayToastEl}
       {updateReadyEl}
       {launchActionToastEl}

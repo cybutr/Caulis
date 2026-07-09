@@ -288,7 +288,7 @@ function EmptyGarden({ onAdd }) {
   );
 }
 
-function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne }) {
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, badgeShelfCurated }) {
   const [healthOpen, setHealthOpen] = useState(false);
   const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
@@ -357,6 +357,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
       <Sprig onTap={tapSprig}/>
+      <AmbientBadgeLayer badges={badges} enabled={ambientBadges} density={badgeDensity} isDesktop={isDesktop}/>
       {sprigMsg && (
         <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
           <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)', display:'flex', alignItems:'center', gap:8 }}><Leaf size={14} color="#fff"/> {sprigMsg}</div>
@@ -410,6 +411,12 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
       </div>
 
       {empty && <EmptyGarden onAdd={onAdd}/>}
+
+      {!empty && badges && badges.length > 0 && (
+        <div style={{ padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
+          <BadgeShelf badges={badges} curatedIds={badgeShelfCurated} isDesktop={isDesktop}/>
+        </div>
+      )}
 
       {!empty && (
         <div style={{ padding:`12px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
@@ -1377,6 +1384,33 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
   };
+  const fmtAgo = (iso) => {
+    const sec = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (sec < 90) return 'just now';
+    const m = Math.floor(sec / 60); if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`;
+    return `${Math.floor(d / 30)}mo ago`;
+  };
+  // recency isn't a bar-friendly magnitude like a count is — the list is
+  // already ordered newest-first by the backend query, so the bar here is
+  // purely rank-based (row 0 fullest, decreasing) and the real signal is the
+  // relative-time label, not a value comparison
+  const RecencyList = ({ rows, onRowClick }) => (
+    <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+      {rows.map((r, i) => (
+        <div key={r.key} onClick={onRowClick ? ()=>onRowClick(r) : undefined} style={{ cursor:onRowClick?'pointer':'default' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:3 }}>
+            <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink }}>{r.key}</span>
+            <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{fmtAgo(r.updated_at)}</span>
+          </div>
+          <div style={{ height:6, borderRadius:999, background:'rgba(45,80,22,0.08)', overflow:'hidden' }}>
+            <div style={{ height:'100%', width:`${100 - i * (80/Math.max(1,rows.length-1||1))}%`, borderRadius:999, background: i===0?C.forest:'rgba(122,158,78,0.7)', transition:'width 300ms ease' }}/>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
   // small collapsible sub-card scoped to the admin block — same open/chevron
   // language as the outer Settings accordion, namespaced under its own key so
   // it never collides with caulis_set_open
@@ -2378,9 +2412,13 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
 
                   <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
                     <div style={grpLabel}>Watering log · per plant</div>
-                    <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:300, overflowY:'auto' }}>
-                      {plants.map(historyRow)}
-                    </div>
+                    {plants.length === 0 ? (
+                      <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>This device isn't logged into a garden with any plants yet — these tools act on whatever garden you're currently in, not on a garden loaded elsewhere in Admin.</div>
+                    ) : (
+                      <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:300, overflowY:'auto' }}>
+                        {plants.map(historyRow)}
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ height:1, background:C.line }}/>
@@ -2391,8 +2429,8 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                       Server rev: <span style={{ fontWeight:600 }}>{sessionInfo ? sessionInfo.rev : '—'}</span>
                     </div>
                     <div style={{ display:'flex', gap:10 }}>
-                      <div onClick={()=>onDevForcePull()} style={{ ...dBtn(false), flex:1 }}>{syncBusy==='pull' ? 'Pulling…' : 'Force refresh from server'}</div>
-                      <div onClick={()=>onDevForcePush()} style={{ ...dBtn(false), flex:1, color:STATUS.needs.dot, borderColor:'rgba(180,71,46,0.3)' }}>{syncBusy==='push' ? 'Pushing…' : 'Force push local as truth'}</div>
+                      <div onClick={()=>{ if (confirm('Discard this device\'s unsynced local changes and reload whatever the server currently has?')) onDevForcePull(); }} style={{ ...dBtn(false), flex:1 }}>{syncBusy==='pull' ? 'Pulling…' : 'Force refresh from server'}</div>
+                      <div onClick={()=>{ if (confirm('Overwrite the server with this device\'s local data? Bypasses conflict detection — any change another device made since this device last synced will be lost.')) onDevForcePush(); }} style={{ ...dBtn(false), flex:1, color:STATUS.needs.dot, borderColor:'rgba(180,71,46,0.3)' }}>{syncBusy==='push' ? 'Pushing…' : 'Force push local as truth'}</div>
                     </div>
                     <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, lineHeight:1.5 }}>
                       Refresh replaces what's on this device with the server's copy. Push overwrites the server with what's on this device right now — either can discard changes made elsewhere. Use only when a garden is stuck out of sync.
@@ -2470,7 +2508,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                               </div>}
                               {adminStats.mostActive.length > 0 && <div>
                                 <div style={grpLabel}>Most recently active</div>
-                                <BarList rows={adminStats.mostActive} labelKey="key" valueKey="plant_count" onRowClick={g=>loadAdminGarden(g.key)}/>
+                                <RecencyList rows={adminStats.mostActive} onRowClick={g=>loadAdminGarden(g.key)}/>
                               </div>}
                             </div>
                           </div>
@@ -2533,10 +2571,10 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                               {backupFiles && (
                                 <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:220, overflowY:'auto' }}>
                                   {backupFiles.map(f => (
-                                    <a key={f.name} href={onAdminBackupUrl(adminSecret, f.name)} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair, textDecoration:'none' }}>
+                                    <div key={f.name} onClick={()=>onAdminBackupUrl(adminSecret, f.name)} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
                                       <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.forest, fontWeight:600 }}>{f.name}</span>
                                       <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{fmtBytes(f.size)}</span>
-                                    </a>
+                                    </div>
                                   ))}
                                   {backupFiles.length === 0 && <div style={{ padding:12, fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>No backups yet</div>}
                                 </div>

@@ -55,7 +55,16 @@
     // a human-shared short-token link (moved.html, or Settings > Get
     // migration link) — this runs in a real browser tab on the real domain,
     // not an isolated app container, so a sync XHR here is reliable and
-    // still finishes before app.jsx's synchronous useState() reads run
+    // still finishes before app.jsx's synchronous useState() reads run.
+    //
+    // the redeemed payload is staged into sessionStorage, NOT written to
+    // localStorage here — a migration code is bearer-credential transfer
+    // (it carries the garden key + password), and anyone can mint one from
+    // their own garden and send the resulting link to someone else. app.jsx
+    // shows an explicit confirm screen naming the garden before adopting
+    // any of it, so a person who didn't generate the link themselves has a
+    // real chance to notice and decline instead of silently being switched
+    // onto a stranger's garden.
     const params = new URLSearchParams(location.search);
     const token = params.get('_migrate');
     if (token) {
@@ -65,7 +74,7 @@
         xhr.send();
         if (xhr.status < 400) {
           const { payload } = JSON.parse(xhr.responseText);
-          for (const k in payload) if (localStorage.getItem(k) === null) localStorage.setItem(k, payload[k]);
+          sessionStorage.setItem('caulis_pending_migration', JSON.stringify(payload));
         }
       } catch (e) {}
       params.delete('_migrate');
@@ -155,6 +164,7 @@
   @keyframes slideFromR { from { transform: translateX(26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes slideFromL { from { transform: translateX(-26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes confettiFall { from { transform: translateY(0) rotate(0deg); opacity: 0.95; } to { transform: translateY(105vh) rotate(340deg); opacity: 0; } }
+  @keyframes badgeDrift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
   html[data-rm="1"] *, html[data-rm="1"] *::before, html[data-rm="1"] *::after {
     animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important; scroll-behavior: auto !important;
@@ -184,6 +194,7 @@
 <script type="text/babel" src="caulis-firebase.jsx"></script>
 <script type="text/babel" src="caulis-screens.jsx"></script>
 <script type="text/babel" src="caulis-detail.jsx"></script>
+<script type="text/babel" src="caulis-badges.jsx"></script>
 <script type="text/babel" src="app.jsx"></script>
 <script>
   if ('serviceWorker' in navigator) {

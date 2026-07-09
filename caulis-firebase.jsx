@@ -84,6 +84,18 @@ function mergeArray(base, local, remote) {
   return out;
 }
 
+// badges are append-only records ({id, earnedAt}) that never contradict each
+// other — the same badge earned on two devices always has the same id, so a
+// plain union keyed by id (keeping the earliest earnedAt, in case two devices
+// raced to unlock the same one at slightly different moments) is the whole
+// merge, no 3-way diff needed the way plant edits require.
+function mergeBadges(base, local, remote) {
+  const m = new Map();
+  const add = (b) => { if (!b || b.id == null) return; const ex = m.get(b.id); if (!ex || (b.earnedAt < ex.earnedAt)) m.set(b.id, { id: b.id, earnedAt: b.earnedAt }); };
+  (base || []).forEach(add); (local || []).forEach(add); (remote || []).forEach(add);
+  return [...m.values()].sort((a, b) => a.earnedAt - b.earnedAt);
+}
+
 function mergeGarden(base, local, remote) {
   const b = base || {};
   const { plants, conflict } = mergePlants(b.plants, local.plants, remote.plants);
@@ -91,6 +103,7 @@ function mergeGarden(base, local, remote) {
     plants,
     locations: mergeArray(b.locations, local.locations, remote.locations),
     queue: mergeArray(b.queue, local.queue, remote.queue),
+    badges: mergeBadges(b.badges, local.badges, remote.badges),
     conflict,
   };
 }
@@ -164,10 +177,10 @@ function listenGarden(key, onData, isPushPending) {
     // or via a genuine 409+merge) will pick up the authoritative state.
     if (isPushPending && isPushPending()) return;
     session.rev = data.rev;
-    session.base = { plants: data.plants, locations: data.locations, queue: data.queue };
+    session.base = { plants: data.plants, locations: data.locations, queue: data.queue, badges: data.badges };
     if (data.updated_at !== lastStamp) {
       lastStamp = data.updated_at;
-      onData({ plants: data.plants, locations: data.locations, queue: data.queue });
+      onData({ plants: data.plants, locations: data.locations, queue: data.queue, badges: data.badges });
     }
   };
   poll();
@@ -207,7 +220,7 @@ async function pushGarden(key, data, onMerge) {
   const first = await put({ ...clean, rev });
   if (first.ok) {
     session.rev = first.resp?.rev ?? session.rev;
-    session.base = { plants: clean.plants, locations: clean.locations, queue: clean.queue };
+    session.base = { plants: clean.plants, locations: clean.locations, queue: clean.queue, badges: clean.badges };
     return true;
   }
   if (first.status !== 409 || !first.resp) return false;
@@ -216,13 +229,13 @@ async function pushGarden(key, data, onMerge) {
   // using the last-known-common state (session.base) as the 3-way ancestor.
   const remote = first.resp;
   const merged = mergeGarden(session.base, clean, remote);
-  const retryPayload = { ...clean, plants: merged.plants, locations: merged.locations, queue: merged.queue, rev: remote.rev };
+  const retryPayload = { ...clean, plants: merged.plants, locations: merged.locations, queue: merged.queue, badges: merged.badges, rev: remote.rev };
   const second = await put(retryPayload);
   if (!second.ok) return false; // another concurrent write raced us again — give up, next debounced push or poll will retry
 
   session.rev = second.resp?.rev ?? remote.rev + 1;
-  session.base = { plants: merged.plants, locations: merged.locations, queue: merged.queue };
-  if (onMerge) onMerge({ plants: merged.plants, locations: merged.locations, queue: merged.queue, conflict: merged.conflict });
+  session.base = { plants: merged.plants, locations: merged.locations, queue: merged.queue, badges: merged.badges };
+  if (onMerge) onMerge({ plants: merged.plants, locations: merged.locations, queue: merged.queue, badges: merged.badges, conflict: merged.conflict });
   return true;
 }
 
@@ -232,8 +245,8 @@ async function fetchGardenOnce(key) {
   const { ok, data } = await _api('/api/garden', {}, session.token);
   if (!ok) return null;
   session.rev = data.rev;
-  session.base = { plants: data.plants, locations: data.locations, queue: data.queue };
-  return { plants: data.plants, locations: data.locations, queue: data.queue };
+  session.base = { plants: data.plants, locations: data.locations, queue: data.queue, badges: data.badges };
+  return { plants: data.plants, locations: data.locations, queue: data.queue, badges: data.badges };
 }
 
 async function gardenExists(key) {
@@ -348,8 +361,26 @@ async function adminListBackups(secret) {
   return ok ? data.files : null;
 }
 
-function adminBackupDownloadUrl(secret, name) {
-  return `${BACKEND_URL}/api/admin/backup/download/${encodeURIComponent(name)}?secret=${encodeURIComponent(secret)}`;
+// fetches the backup file with the admin secret as a header (like every
+// other admin call) instead of a query-string ?secret=... on a plain <a
+// href> — that URL form was the one admin route still exposing the secret
+// to browser history and, more importantly, reverse-proxy access logs on
+// every click. Triggers the browser's normal save dialog via a throwaway
+// object URL once the bytes are actually in hand.
+async function adminDownloadBackup(secret, name) {
+  try {
+    const r = await fetch(`${BACKEND_URL}/api/admin/backup/download/${encodeURIComponent(name)}`, {
+      headers: { 'x-admin-secret': secret },
+    });
+    if (!r.ok) return false;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    return true;
+  } catch (e) { return false; }
 }
 
 // web push: VAPID key + subscription CRUD, all scoped to the active garden's session
@@ -432,7 +463,7 @@ Object.assign(window, {
   listenGarden, pushGarden, gardenExists, renameGarden, fetchGardenOnce, gardenNodeId, changeGardenPassword, verifyGardenPassword,
   SYNC_READY, pushPhoto, fetchPhotos, deletePhotos, setActiveGarden, getActiveToken, BACKEND_URL,
   adminListGardens, adminGetGarden, adminPushGarden, adminDeleteGarden, adminBulkDelete, adminGetStats,
-  adminGetSettings, adminSaveSettings, adminRunBackup, adminListBackups, adminBackupDownloadUrl, adminGetSystem,
+  adminGetSettings, adminSaveSettings, adminRunBackup, adminListBackups, adminDownloadBackup, adminGetSystem,
   pushVapidKey, pushSubscribe, pushSetPrefs, pushUnsubscribe, pushSendTest,
   getSessionInfo, forcePullGarden, forcePushGarden,
 });

@@ -305,7 +305,7 @@ app.delete('/api/gardens/me', { preHandler: requireAuth }, async (req, reply) =>
 
 app.get('/api/garden', { preHandler: requireAuth }, async (req, reply) => {
   const { rows } = await pool.query(
-    'SELECT plants, locations, queue, rev, updated_at FROM garden_data WHERE garden_id = $1',
+    'SELECT plants, locations, queue, badges, rev, updated_at FROM garden_data WHERE garden_id = $1',
     [req.gardenId]
   );
   if (!rows.length) return reply.code(404).send({ error: 'not found' });
@@ -321,12 +321,12 @@ app.get('/api/garden', { preHandler: requireAuth }, async (req, reply) => {
 // FOR UPDATE + a single transaction closes the read-then-write race between
 // two requests that both read the same rev before either commits.
 app.put('/api/garden', { preHandler: requireAuth }, async (req, reply) => {
-  const { plants = [], locations = [], queue = [], rev } = req.body || {};
+  const { plants = [], locations = [], queue = [], badges = [], rev } = req.body || {};
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      'SELECT rev, plants, locations, queue FROM garden_data WHERE garden_id = $1 FOR UPDATE',
+      'SELECT rev, plants, locations, queue, badges FROM garden_data WHERE garden_id = $1 FOR UPDATE',
       [req.gardenId]
     );
     if (!rows.length) { await client.query('ROLLBACK'); return reply.code(404).send({ error: 'not found' }); }
@@ -334,14 +334,14 @@ app.put('/api/garden', { preHandler: requireAuth }, async (req, reply) => {
     if (rev != null && Number(rev) !== Number(current.rev)) {
       await client.query('ROLLBACK');
       return reply.code(409).send({
-        error: 'conflict', plants: current.plants, locations: current.locations, queue: current.queue, rev: current.rev,
+        error: 'conflict', plants: current.plants, locations: current.locations, queue: current.queue, badges: current.badges, rev: current.rev,
       });
     }
     const newRev = Number(current.rev) + 1;
     await client.query(
-      `UPDATE garden_data SET plants = $1, locations = $2, queue = $3, rev = $4, updated_at = now()
-       WHERE garden_id = $5`,
-      [JSON.stringify(plants), JSON.stringify(locations), JSON.stringify(queue), newRev, req.gardenId]
+      `UPDATE garden_data SET plants = $1, locations = $2, queue = $3, badges = $4, rev = $5, updated_at = now()
+       WHERE garden_id = $6`,
+      [JSON.stringify(plants), JSON.stringify(locations), JSON.stringify(queue), JSON.stringify(badges), newRev, req.gardenId]
     );
     await client.query('COMMIT');
     return { ok: true, rev: newRev };
@@ -568,22 +568,22 @@ app.get('/api/admin/gardens/:key', { preHandler: [rateLimit(120, 60000), require
   const { rows } = await pool.query('SELECT id FROM gardens WHERE key = $1', [req.params.key]);
   if (!rows.length) return reply.code(404).send({ error: 'not found' });
   const { rows: data } = await pool.query(
-    'SELECT plants, locations, queue, updated_at FROM garden_data WHERE garden_id = $1',
+    'SELECT plants, locations, queue, badges, updated_at FROM garden_data WHERE garden_id = $1',
     [rows[0].id]
   );
-  return data[0] || { plants: [], locations: [], queue: [] };
+  return data[0] || { plants: [], locations: [], queue: [], badges: [] };
 });
 
 app.put('/api/admin/gardens/:key', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { rows } = await pool.query('SELECT id FROM gardens WHERE key = $1', [req.params.key]);
   if (!rows.length) return reply.code(404).send({ error: 'not found' });
-  const { plants = [], locations = [], queue = [] } = req.body || {};
+  const { plants = [], locations = [], queue = [], badges = [] } = req.body || {};
   // admin override is intentionally unconditional (bypasses rev check), but
   // still bumps rev so a garden's own client doesn't spuriously 409 forever
   // against a rev it can no longer match.
   await pool.query(
-    `UPDATE garden_data SET plants = $1, locations = $2, queue = $3, rev = rev + 1, updated_at = now() WHERE garden_id = $4`,
-    [JSON.stringify(plants), JSON.stringify(locations), JSON.stringify(queue), rows[0].id]
+    `UPDATE garden_data SET plants = $1, locations = $2, queue = $3, badges = $4, rev = rev + 1, updated_at = now() WHERE garden_id = $5`,
+    [JSON.stringify(plants), JSON.stringify(locations), JSON.stringify(queue), JSON.stringify(badges), rows[0].id]
   );
   return { ok: true };
 });

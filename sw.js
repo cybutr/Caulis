@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v133';
+const CACHE = 'caulis-v135';
 const SHELL = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const SHELL = [
   './caulis-firebase.jsx',
   './caulis-screens.jsx',
   './caulis-detail.jsx',
+  './caulis-badges.jsx',
   './ios-frame.jsx',
   './app.jsx',
   './icon-192.png',

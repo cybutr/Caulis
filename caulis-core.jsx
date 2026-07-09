@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '133'; // keep in sync with sw.js CACHE
+const APP_VERSION = '135'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -254,6 +254,11 @@ function wateringStats(history) {
   const count30 = h.filter(s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d) >= cutoff; }).length;
   return { total: h.length, count30, last: h.length ? h[h.length-1] : null };
 }
+
+// plant-count thresholds worth a quiet celebration — shared between the
+// milestone toast (app.jsx) and the badge definitions (caulis-badges.jsx) so
+// the two "hit a nice round garden size" events never drift out of sync
+const MILESTONES = [5, 10, 25, 50, 100, 200];
 
 // live weekday + part-of-day, e.g. "Saturday morning"
 function todayGreeting() {
@@ -502,7 +507,7 @@ Object.assign(window, {
   ROOM_LIGHT_LEVELS, sunlightLevel, plantLightRange, roomLightMismatch,
   careCheckDue, adjustEveryForOutcome, HEALTH_TIERS, gardenHealthScore,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
-  NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor,
+  NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor, MILESTONES,
   PALETTES, PALETTE_ORDER,
   Leaf, LeafOutline, Sprig,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore,
