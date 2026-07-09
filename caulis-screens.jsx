@@ -546,6 +546,40 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, czechMode }) {
     </div>
   );
 }
+// "do I need to water anything before I leave for the weekend" — days/every
+// is trivially forward-projectable, so a 7-day forecast costs nothing new:
+// no schedule storage, just projecting each plant's next due day and
+// bucketing it. Only the *next* time a plant comes due is shown, not every
+// future recurrence — this answers the planning question, a full recurring
+// calendar would just be noise for a week-out glance.
+function WaterForecast({ plants }) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const buckets = Array.from({ length: 7 }, (_, i) => ({ date: new Date(today.getTime() + i * 86400000), count: 0 }));
+  plants.forEach(p => {
+    const daysUntil = Math.max(0, (p.every || 7) - (p.days || 0));
+    if (daysUntil <= 6) buckets[daysUntil].count++;
+  });
+  if (!plants.length) return null;
+  return (
+    <div style={{ display:'flex', gap:7, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+      {buckets.map((b, i) => {
+        const label = i === 0 ? 'Today' : b.date.toLocaleDateString('en-US', { weekday:'short' });
+        const busy = b.count > 0;
+        return (
+          <div key={i} style={{
+            flexShrink:0, minWidth:52, borderRadius:14, padding:'9px 6px', textAlign:'center',
+            background: i === 0 && busy ? C.forest : busy ? 'rgba(110,154,62,0.12)' : 'transparent',
+            border: busy ? 'none' : `0.5px solid ${C.line}`,
+          }}>
+            <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, letterSpacing:0.3, textTransform:'uppercase', color: i === 0 && busy ? 'rgba(255,255,255,0.75)' : C.brown, opacity: i === 0 && busy ? 1 : 0.65 }}>{label}</div>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, marginTop:3, color: i === 0 && busy ? '#fff' : busy ? C.forest : C.ink, opacity: busy ? 1 : 0.3 }}>{b.count || '·'}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, confirmDelete, isDesktop, czechMode }) {
   const order = { needs:0, soon:1 };
   const list = plants.filter(p=>statusOf(p.days,p.every)!=='ok')
@@ -581,7 +615,10 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, c
           </div>
         </div>
       )}
-      <div style={{ display:'flex', flexDirection:'column', gap:12, padding:`22px ${sp}px 0`, position:'relative', zIndex:2 }}>
+      <div style={{ padding:`18px ${sp}px 0`, position:'relative', zIndex:2 }}>
+        <WaterForecast plants={plants}/>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:12, padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
         {list.length === 0 && (
           <div style={{ textAlign:'center', padding:'60px 30px', position:'relative', zIndex:2 }}>
             <div onClick={tapEmpty} style={{ display:'inline-flex', width:64, height:64, borderRadius:999, background:'rgba(110,154,62,0.12)', alignItems:'center', justifyContent:'center', cursor:'pointer', userSelect:'none' }}>
