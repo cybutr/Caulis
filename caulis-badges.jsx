@@ -101,7 +101,7 @@ const BADGE_DEFS = [
     check: ({ plants }) => plants.length >= m.n })),
   { id: 'on-schedule', name: 'Steady Hand', text: 'Eight waterings, never once late.', Icon: BadgeIconSteady,
     check: ({ plants }) => plants.some(p => longestOnScheduleStreak(p) >= 8) },
-  { id: 'variety-species', name: "Collector's Eye", text: 'Eight distinct species and counting.', Icon: BadgeIconSpecies,
+  { id: 'variety-species', name: "Collector's Eye", text: 'Eight distinct species, no two alike.', Icon: BadgeIconSpecies,
     check: ({ plants }) => new Set(plants.map(p => (p.latin || '').trim().toLowerCase()).filter(v => v && v !== '—')).size >= 8 },
   { id: 'variety-rooms', name: 'Room to Room', text: 'Every room has something green.', Icon: BadgeIconRooms,
     check: ({ plants, locations }) => {
@@ -151,7 +151,7 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
         const dur = 6 + (h % 30) / 10;
         return (
           <div key={b.id} style={{ position:'absolute', left:`${left}%`, top, transform:`rotate(${rot}deg)` }}>
-            <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite` }}>
+            <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite`, opacity:0.16 }}>
               <def.Icon s={size} c={C.sage}/>
             </div>
           </div>
@@ -172,6 +172,11 @@ const BADGE_DRAG_LIMIT = 20;
 const BADGE_K_SPRING = 0.22;
 const BADGE_K_DAMP = 0.74;
 
+function _badgeReduceMotion() {
+  try { if (document.documentElement.getAttribute('data-rm') === '1') return true; } catch (e) {}
+  try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; }
+}
+
 function useBadgeDragPhysics() {
   const elRef = useRef(null);
   const pos = useRef({ x: 0, y: 0 });
@@ -185,6 +190,12 @@ function useBadgeDragPhysics() {
   const tick = () => {
     if (!dragging.current) {
       const p = pos.current, v = vel.current;
+      if (_badgeReduceMotion()) {
+        p.x = 0; p.y = 0; v.x = 0; v.y = 0;
+        paint();
+        rafId.current = null;
+        return;
+      }
       v.x = (v.x + (0 - p.x) * BADGE_K_SPRING) * BADGE_K_DAMP;
       v.y = (v.y + (0 - p.y) * BADGE_K_SPRING) * BADGE_K_DAMP;
       p.x += v.x; p.y += v.y;
@@ -198,6 +209,11 @@ function useBadgeDragPhysics() {
     rafId.current = requestAnimationFrame(tick);
   };
   const ensureLoop = () => { if (rafId.current == null) rafId.current = requestAnimationFrame(tick); };
+
+  useEffect(() => () => {
+    dragging.current = false;
+    if (rafId.current != null) { cancelAnimationFrame(rafId.current); rafId.current = null; }
+  }, []);
 
   const onPointerDown = (e) => {
     dragging.current = true;
@@ -245,10 +261,10 @@ function LockedMedallion({ def }) {
   return (
     <div title={def.name} style={{
       flexShrink:0, width:60, height:60, borderRadius:999, background:'transparent',
-      border:'1.5px dashed rgba(45,80,22,0.22)', opacity:0.45,
+      border:'1.5px dashed rgba(45,80,22,0.22)',
       display:'flex', alignItems:'center', justifyContent:'center',
     }}>
-      <def.Icon s={24} c={C.brown}/>
+      <div style={{ opacity:0.45, display:'flex' }}><def.Icon s={24} c={C.brown}/></div>
     </div>
   );
 }
@@ -266,7 +282,7 @@ function BadgeShelf({ badges, curatedIds, isDesktop }) {
     <div style={{ background:C.panel, borderRadius:20, border:C.hair, boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)', overflow:'hidden' }}>
       <div onClick={toggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
         <div>
-          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.72, letterSpacing:0.4, textTransform:'uppercase' }}>Badges</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.4, textTransform:'uppercase' }}>Badges</div>
           <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.forest, marginTop:1 }}>{badges.length} of {BADGE_DEFS.length} earned</div>
         </div>
         <svg width="13" height="13" viewBox="0 0 24 24" style={{ transform: open?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45, flexShrink:0 }}>

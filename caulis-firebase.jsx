@@ -84,16 +84,31 @@ function mergeArray(base, local, remote) {
   return out;
 }
 
-// badges are append-only records ({id, earnedAt}) that never contradict each
-// other — the same badge earned on two devices always has the same id, so a
-// plain union keyed by id (keeping the earliest earnedAt, in case two devices
-// raced to unlock the same one at slightly different moments) is the whole
-// merge, no 3-way diff needed the way plant edits require.
+// badges earned by the automatic unlock detector are append-only and never
+// contradict each other, but the admin panel can also manually revoke one —
+// so a plain union-by-id would resurrect an admin revoke the next time the
+// owning device's push conflicts and merges against that revoked remote copy.
+// Mirrors mergeArray's rule: an id present in base is dropped only if BOTH
+// sides still agree on dropping it being wrong — i.e. kept only if neither
+// side removed it; an id not in base (newly earned on one or both sides) is
+// always kept.
 function mergeBadges(base, local, remote) {
-  const m = new Map();
-  const add = (b) => { if (!b || b.id == null) return; const ex = m.get(b.id); if (!ex || (b.earnedAt < ex.earnedAt)) m.set(b.id, { id: b.id, earnedAt: b.earnedAt }); };
-  (base || []).forEach(add); (local || []).forEach(add); (remote || []).forEach(add);
-  return [...m.values()].sort((a, b) => a.earnedAt - b.earnedAt);
+  const B = new Map((base || []).filter(b => b && b.id != null).map(b => [b.id, b]));
+  const L = new Map((local || []).filter(b => b && b.id != null).map(b => [b.id, b]));
+  const R = new Map((remote || []).filter(b => b && b.id != null).map(b => [b.id, b]));
+  const ids = new Set([...B.keys(), ...L.keys(), ...R.keys()]);
+  const out = [];
+  ids.forEach(id => {
+    const b = B.get(id), l = L.get(id), r = R.get(id);
+    if (!b) { // newly earned, not in the common ancestor — always keep
+      if (l && r) out.push(l.earnedAt <= r.earnedAt ? l : r);
+      else out.push(l || r);
+      return;
+    }
+    if (l && r) out.push(l); // present in base and untouched/agreed on both sides
+    // else: one side dropped an id that was in base — an intentional revoke wins
+  });
+  return out.sort((a, b) => a.earnedAt - b.earnedAt);
 }
 
 function mergeGarden(base, local, remote) {

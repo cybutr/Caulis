@@ -407,7 +407,7 @@ function App() {
       return;
     }
     const hit = newlyEarned[0];
-    setBadges(prev => [...prev, { id: hit, earnedAt: Date.now() }]);
+    setBadges(prev => [...prev, ...newlyEarned.map(id => ({ id, earnedAt: Date.now() }))]);
     const def = BADGE_DEFS.find(d => d.id === hit);
     haptic('success');
     if (!reduceMotion && !prefersReducedMotion()) { setConfetti(true); setTimeout(() => setConfetti(false), 2600); }
