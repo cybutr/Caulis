@@ -389,6 +389,7 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
   const [loadingSpecies, setLoadingSpecies] = useState(false);
   const [candidates, setCandidates] = useState([]);
   const [rechecking, setRechecking] = useState(false);
+  const [refreshingSpecies, setRefreshingSpecies] = useState(false);
   const fileRef = useRef(null);
   const photoModeRef = useRef('photo');
 
@@ -442,6 +443,31 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
       console.error(e);
     } finally {
       setRechecking(false);
+    }
+  };
+
+  // pulls the latest bundled/Perenual data for this plant's already-linked
+  // species — for anyone without an Anthropic key, or whenever the species
+  // library improves after a plant was first added. Only touches
+  // species-derived fields; never overwrites the user's own photos.
+  const refreshFromSpecies = async () => {
+    if (refreshingSpecies || !editing || !editing.species_id) return;
+    setRefreshingSpecies(true);
+    try {
+      const sp = await getSpeciesDetails(editing.species_id, latin);
+      if (!sp) return;
+      const c = speciesCare(sp);
+      setSpecies(sp);
+      setEvery(c.every);
+      if (c.light) setLight(c.light);
+      if (c.care) setCare(c.care);
+      if (c.fact) setFact(c.fact);
+      if (c.toxicToPets != null) setToxicToPets(c.toxicToPets);
+      setSource((sp._source || source || 'Perenual') + ' · Refreshed');
+    } catch(e) {
+      console.error(e);
+    } finally {
+      setRefreshingSpecies(false);
     }
   };
 
@@ -736,6 +762,25 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
               <div onClick={()=>setLastWatered(d=>Math.min(365, d+1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>+</div>
             </div>
           </Field>
+
+          {editing && editing.species_id && (
+            <div onClick={refreshFromSpecies} style={{
+              marginTop: 10,
+              height: 48, borderRadius: 14, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+              background: 'rgba(45,80,22,0.05)', border: `1px solid rgba(45,80,22,0.2)`,
+              cursor: refreshingSpecies ? 'default' : 'pointer',
+              opacity: refreshingSpecies ? 0.7 : 1, transition:'all 200ms ease'
+            }}>
+              {refreshingSpecies ? (
+                <div style={{ width:16, height:16, borderRadius:999, border:'2px solid rgba(45,80,22,0.2)', borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/>
+              ) : (
+                <LeafOutline size={16} color={C.forest} sw={1.7}/>
+              )}
+              <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.forest }}>
+                {refreshingSpecies ? 'Refreshing…' : 'Refresh care from species library'}
+              </span>
+            </div>
+          )}
 
           {hasAnthropicKey() && (
             <div onClick={runAiRecheck} style={{
