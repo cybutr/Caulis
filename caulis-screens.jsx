@@ -2475,12 +2475,12 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                   <div style={{ height:1, background:C.line }}/>
 
                   <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                    <div style={grpLabel}>Watering log · per plant</div>
+                    <div style={grpLabel}>Watering log · per plant ({plants.length})</div>
                     {plants.length === 0 ? (
                       <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>This device isn't logged into a garden with any plants yet — these tools act on whatever garden you're currently in, not on a garden loaded elsewhere in Admin.</div>
                     ) : (
-                      <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:300, overflowY:'auto' }}>
-                        {plants.map(historyRow)}
+                      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                        {plants.map(p => historyRow(p))}
                       </div>
                     )}
                   </div>
