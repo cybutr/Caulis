@@ -524,9 +524,10 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
   const startX = useRef(0), startY = useRef(0);
   const swiping = useRef(false), openRef = useRef(false), dxRef = useRef(0), down = useRef(false);
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
-  const OPEN = -84;      // left-swipe (dx negative): reveal-and-tap snooze
+  const OPEN = -84;      // left-swipe (dx negative): swipe-through-to-snooze
   const WATER_MAX = 96;  // right-swipe (dx positive): swipe-through-to-water
   const WATER_THRESH = 72;
+  const SNOOZE_THRESH = -60;
   const setX = (v) => { dxRef.current = v; setDx(v); };
 
   const start = (e) => {
@@ -541,32 +542,35 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
     if (!swiping.current && Math.abs(mx) > 8 && Math.abs(mx) > Math.abs(my)) {
       swiping.current = true; if (timer.current) clearTimeout(timer.current); setPress(false);
     }
-    if (swiping.current) setX(Math.max(OPEN, Math.min(WATER_MAX, (openRef.current ? OPEN : 0) + mx)));
+    if (swiping.current) setX(Math.max(OPEN, Math.min(WATER_MAX, mx)));
   };
   const end = () => {
     down.current = false; setPress(false); if (timer.current) clearTimeout(timer.current);
     if (swiping.current) {
       swiping.current = false;
-      if (dxRef.current >= WATER_THRESH) { onWater && onWater(plant.id); openRef.current = false; setX(0); return; }
-      const open = dxRef.current < OPEN/2; openRef.current = open; setX(open ? OPEN : 0);
+      if (dxRef.current >= WATER_THRESH) { onWater && onWater(plant.id); setX(0); return; }
+      if (dxRef.current <= SNOOZE_THRESH) { onSnooze && onSnooze(plant.id, 2); setX(0); return; }
+      setX(0);
     }
   };
   const click = () => {
     if (longed.current) { longed.current = false; return; }
-    if (openRef.current || dxRef.current !== 0) { openRef.current = false; setX(0); return; }
+    if (dxRef.current !== 0) { setX(0); return; }
     onOpen(plant.id);
   };
-  const doSnooze = (e) => { e.stopPropagation(); onSnooze && onSnooze(plant.id, 2); openRef.current = false; setX(0); };
   const waterPull = Math.max(0, Math.min(1, dx / WATER_THRESH));
+  const snoozePull = Math.max(0, Math.min(1, -dx / -SNOOZE_THRESH));
 
   return (
     <div data-noswipe="1" style={{ position:'relative', borderRadius:18, overflow:'hidden' }}>
-      <div onClick={doSnooze} role="button" aria-label={`Snooze ${plant.name} 2 days`} style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:22, background:STATUS.soon.soft, cursor:'pointer' }}>
-        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.soon.dot }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke={STATUS.soon.dot} strokeWidth="1.7"/><path d="M12 9.5V13l2.5 1.5M9 3.5h6" stroke={STATUS.soon.dot} strokeWidth="1.7" strokeLinecap="round"/></svg>
-          <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700 }}>+2d</span>
+      {dx < 0 && (
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:22, background:`rgba(201,138,43,${0.14 + snoozePull*0.22})`, transition:'background 120ms linear' }}>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.soon.dot, transform:`scale(${0.85 + snoozePull*0.25})`, transition:'transform 120ms linear' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke={STATUS.soon.dot} strokeWidth="1.7"/><path d="M12 9.5V13l2.5 1.5M9 3.5h6" stroke={STATUS.soon.dot} strokeWidth="1.7" strokeLinecap="round"/></svg>
+            <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700 }}>{snoozePull >= 1 ? 'Release' : '+2d'}</span>
+          </div>
         </div>
-      </div>
+      )}
       {dx > 0 && (
         <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-start', paddingLeft:22, background:`rgba(110,154,62,${0.14 + waterPull*0.22})`, transition:'background 120ms linear' }}>
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.ok.dot, transform:`scale(${0.85 + waterPull*0.25})`, transition:'transform 120ms linear' }}>
@@ -1345,6 +1349,16 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
   const adminShiftAll = (n) => setAdminLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = (typeof p.wateredAt === 'number' ? p.wateredAt : todayMidnight()) - n * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: daysSinceMidnight(wa) }; }) }));
   const adminWaterAll = () => setAdminLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { const wa = todayMidnight(); return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), fmtLocalDate(new Date())].slice(-60) }; }) }));
   const adminSetDays = (id, d) => setAdminLoaded(nl => nl && ({ ...nl, plants: nl.plants.map(p => { if (p.id !== id) return p; const dd = Math.max(0, d | 0); const wa = todayMidnight() - dd * 86400000; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: dd }; }) }));
+  // grant/revoke for testing — same "stays local until Push to garden" model
+  // as the day-shift tools above, so an admin can preview a change before
+  // committing it through the real sync path
+  const toggleAdminBadge = (id) => setAdminLoaded(nl => {
+    if (!nl) return nl;
+    const cur = Array.isArray(nl.data.badges) ? nl.data.badges : [];
+    const has = cur.some(b => b.id === id);
+    const nextBadges = has ? cur.filter(b => b.id !== id) : [...cur, { id, earnedAt: Date.now() }];
+    return { ...nl, data: { ...nl.data, badges: nextBadges } };
+  });
   const pushAdminGarden = async () => {
     if (!adminLoaded) return;
     setAdminStatus('pushing');
@@ -1702,6 +1716,56 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 })()}
               </div>
             </div>
+          </div>
+        </SettingsSection>
+        <SettingsSection title="Badges" open={isOpen('badges')} onToggle={()=>toggleSec('badges')} id={'sec-'+'badges'} matched={settingsMatches[settingsMatchIdx] === 'badges'} query={settingsMatches.includes('badges') ? settingsQuery : ''} bodyRef={registerSection('badges')}>
+          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+            <Row label="Earned" value={`${(badges||[]).length} of ${BADGE_DEFS.length}`}/>
+            <div onClick={onToggleAmbientBadges} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Ambient decorations</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Faint earned-badge icons in the Garden background</div>
+              </div>
+              <Toggle on={ambientBadges}/>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Decoration density</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How many ambient badges show at once</div>
+              </div>
+              <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
+                {[['few','Few'],['normal','Normal'],['many','Many']].map(([val,label]) => {
+                  const on = (badgeDensity||'normal') === val;
+                  return (
+                    <div key={val} onClick={()=>onSetBadgeDensity(val)} style={{ cursor:'pointer', padding:'5px 11px', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, opacity:on?1:0.5, transition:'all 140ms ease' }}>{label}</div>
+                  );
+                })}
+              </div>
+            </div>
+            {badges && badges.length > 0 && (
+              <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Shelf badges</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:9 }}>Curate which earned badges appear in the Garden shelf</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:12, overflow:'hidden', border:C.hair }}>
+                  {[...badges].sort((a,b)=>a.earnedAt-b.earnedAt).map(b => {
+                    const def = BADGE_BY_ID[b.id]; if (!def) return null;
+                    const on = !Array.isArray(badgeShelfCurated) || badgeShelfCurated.includes(b.id);
+                    const toggle = () => {
+                      const all = badges.map(x=>x.id);
+                      const base = Array.isArray(badgeShelfCurated) ? badgeShelfCurated : all;
+                      onSetBadgeShelfCurated(on ? base.filter(id=>id!==b.id) : [...new Set([...base, b.id])]);
+                    };
+                    return (
+                      <div key={b.id} onClick={toggle} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
+                        <def.Icon s={18} c={C.forest}/>
+                        <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{def.name}</span>
+                        <Toggle on={on}/>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </SettingsSection>
         <SettingsSection title="Behavior" open={isOpen('behavior')} onToggle={()=>toggleSec('behavior')} id={'sec-'+'behavior'} matched={settingsMatches[settingsMatchIdx] === 'behavior'} query={settingsMatches.includes('behavior') ? settingsQuery : ''} bodyRef={registerSection('behavior')}>
@@ -2551,6 +2615,28 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                                 <div onClick={pushAdminGarden} style={{ ...dBtn(true), marginTop:2 }}>{adminStatus==='pushed' ? 'Pushed ✓' : adminStatus==='pushing' ? 'Pushing…' : 'Push to garden'}</div>
                               </>}
                               <div onClick={deleteAdminGarden} style={{ ...dBtn(false), color:STATUS.needs.dot, borderColor:'rgba(180,71,46,0.3)' }}>Delete this garden</div>
+                            </div>
+                          )}
+                        </AdminSub>
+
+                        <AdminSub id="badges" title="Badges">
+                          {!adminLoaded && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.65 }}>Load a garden above (Gardens section) to grant or revoke its badges.</span>}
+                          {adminLoaded && (
+                            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{adminLoaded.key} · {(Array.isArray(adminLoaded.data.badges) ? adminLoaded.data.badges.length : 0)} of {BADGE_DEFS.length} earned · edits stay local until pushed</div>
+                              <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair }}>
+                                {BADGE_DEFS.map(def => {
+                                  const earned = Array.isArray(adminLoaded.data.badges) && adminLoaded.data.badges.some(b => b.id === def.id);
+                                  return (
+                                    <div key={def.id} onClick={()=>toggleAdminBadge(def.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
+                                      <def.Icon s={17} c={earned?C.forest:C.brown}/>
+                                      <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:earned?1:0.55 }}>{def.name}</span>
+                                      <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color: earned?C.forest:C.brown, opacity:earned?1:0.5 }}>{earned?'Earned · tap to revoke':'Tap to grant'}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div onClick={pushAdminGarden} style={dBtn(true)}>{adminStatus==='pushed' ? 'Pushed ✓' : adminStatus==='pushing' ? 'Pushing…' : 'Push to garden'}</div>
                             </div>
                           )}
                         </AdminSub>

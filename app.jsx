@@ -396,7 +396,7 @@ function App() {
     if (!baselineReady) return;
     const state = { plants, locations, roomLight };
     const earnedIds = new Set(badges.map(b => b.id));
-    const satisfied = BADGE_DEFS.filter(d => { try { return d.check(state); } catch(e) { return false; } }).map(d => d.id);
+    const satisfied = computeSatisfiedBadgeIds(state);
     const newlyEarned = satisfied.filter(id => !earnedIds.has(id));
     if (!newlyEarned.length) return;
     if (!badgePrimedRef.current) {

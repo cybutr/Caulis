@@ -254,8 +254,8 @@ function LockedMedallion({ def }) {
 }
 
 function BadgeShelf({ badges, curatedIds, isDesktop }) {
-  const [open, setOpen] = useState(() => { try { return localStorage.getItem('caulis_badge_shelf_open') !== '0'; } catch (e) { return true; } });
-  const toggle = () => setOpen(o => { try { localStorage.setItem('caulis_badge_shelf_open', o ? '0' : '1'); } catch (e) {} return !o; });
+  const [open, setOpen] = useState(() => GS.get('caulis_badge_shelf_open', true));
+  const toggle = () => setOpen(o => { GS.set('caulis_badge_shelf_open', !o); return !o; });
   if (!badges) return null;
   const earnedIds = new Set(badges.map(b => b.id));
   const shownIds = Array.isArray(curatedIds) && curatedIds.length ? curatedIds.filter(id => earnedIds.has(id)) : [...earnedIds];
