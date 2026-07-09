@@ -685,26 +685,36 @@ function ScannerScreen({ plants, onScan, isDesktop, paused }) {
 
   useEffect(() => {
     if (isDesktop) return;
-    if (typeof Html5Qrcode === 'undefined') {
-      setCamError('QR scanner script was blocked by the browser. Please check ad/tracker blockers.');
-      return;
-    }
-    scannedRef.current = false;
-    const scanner = new Html5Qrcode('caulis-qr-reader');
-    scannerRef.current = scanner;
-    scanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 220, height: 220 } },
-      (text) => {
-        if (scannedRef.current) return;
-        const m = text.match(/[?&]plant=(\d+)/);
-        const gm = text.match(/[?&]g=([^&\s]+)/);
-        if (m) { scannedRef.current = true; onScan(parseInt(m[1], 10), gm ? decodeURIComponent(gm[1]) : null); }
-      },
-      () => {}
-    ).then(() => setScanning(true)).catch(() => setCamError('Camera access denied'));
+    let cancelled = false;
+    let scanner = null;
 
-    return () => { scannerRef.current = null; scanner.stop().then(() => scanner.clear()).catch(() => {}); };
+    loadHtml5Qrcode().then(() => {
+      if (cancelled) return;
+      if (typeof Html5Qrcode === 'undefined') {
+        setCamError('QR scanner script was blocked by the browser. Please check ad/tracker blockers.');
+        return;
+      }
+      scannedRef.current = false;
+      scanner = new Html5Qrcode('caulis-qr-reader');
+      scannerRef.current = scanner;
+      scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (text) => {
+          if (scannedRef.current) return;
+          const m = text.match(/[?&]plant=(\d+)/);
+          const gm = text.match(/[?&]g=([^&\s]+)/);
+          if (m) { scannedRef.current = true; onScan(parseInt(m[1], 10), gm ? decodeURIComponent(gm[1]) : null); }
+        },
+        () => {}
+      ).then(() => { if (!cancelled) setScanning(true); }).catch(() => setCamError('Camera access denied'));
+    }).catch(() => setCamError('QR scanner script was blocked by the browser. Please check ad/tracker blockers.'));
+
+    return () => {
+      cancelled = true;
+      scannerRef.current = null;
+      if (scanner) scanner.stop().then(() => scanner.clear()).catch(() => {});
+    };
   }, [isDesktop]);
 
   return (

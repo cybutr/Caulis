@@ -13,7 +13,21 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '115'; // keep in sync with sw.js CACHE
+const APP_VERSION = '116'; // keep in sync with sw.js CACHE
+
+let _html5QrcodeLoad = null;
+function loadHtml5Qrcode() {
+  if (typeof Html5Qrcode !== 'undefined') return Promise.resolve();
+  if (_html5QrcodeLoad) return _html5QrcodeLoad;
+  _html5QrcodeLoad = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+    s.onload = () => resolve();
+    s.onerror = () => { _html5QrcodeLoad = null; reject(new Error('load failed')); };
+    document.head.appendChild(s);
+  });
+  return _html5QrcodeLoad;
+}
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {
