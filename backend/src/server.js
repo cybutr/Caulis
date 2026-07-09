@@ -387,7 +387,7 @@ async function getGardenKeys(gardenId) {
   return rows[0] || {};
 }
 
-app.post('/api/ai/messages', { preHandler: requireAuth }, async (req, reply) => {
+app.post('/api/ai/messages', { preHandler: [rateLimit(60, 60000), requireAuth] }, async (req, reply) => {
   const { anthropic_key } = await getGardenKeys(req.gardenId);
   if (!anthropic_key) return reply.code(400).send({ error: 'no anthropic key set for this garden' });
 
@@ -404,7 +404,7 @@ app.post('/api/ai/messages', { preHandler: requireAuth }, async (req, reply) => 
   return reply.code(r.status).send(data);
 });
 
-app.get('/api/perenual/search', { preHandler: requireAuth }, async (req, reply) => {
+app.get('/api/perenual/search', { preHandler: [rateLimit(120, 60000), requireAuth] }, async (req, reply) => {
   const { perenual_key } = await getGardenKeys(req.gardenId);
   if (!perenual_key) return reply.code(400).send({ error: 'no perenual key set for this garden' });
 
@@ -414,7 +414,7 @@ app.get('/api/perenual/search', { preHandler: requireAuth }, async (req, reply) 
   return reply.code(r.status).send(data);
 });
 
-app.get('/api/perenual/species/:id', { preHandler: requireAuth }, async (req, reply) => {
+app.get('/api/perenual/species/:id', { preHandler: [rateLimit(120, 60000), requireAuth] }, async (req, reply) => {
   const { perenual_key } = await getGardenKeys(req.gardenId);
   if (!perenual_key) return reply.code(400).send({ error: 'no perenual key set for this garden' });
 
@@ -552,7 +552,7 @@ app.post('/api/push/action', async (req, reply) => {
   }
 });
 
-app.get('/api/admin/gardens', { preHandler: requireAdmin }, async (req, reply) => {
+app.get('/api/admin/gardens', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { rows } = await pool.query(`
     SELECT g.id, g.key, g.unclaimed, g.created_at,
            coalesce(jsonb_array_length(gd.plants), 0) AS plant_count,
@@ -564,7 +564,7 @@ app.get('/api/admin/gardens', { preHandler: requireAdmin }, async (req, reply) =
   return { gardens: rows };
 });
 
-app.get('/api/admin/gardens/:key', { preHandler: requireAdmin }, async (req, reply) => {
+app.get('/api/admin/gardens/:key', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { rows } = await pool.query('SELECT id FROM gardens WHERE key = $1', [req.params.key]);
   if (!rows.length) return reply.code(404).send({ error: 'not found' });
   const { rows: data } = await pool.query(
@@ -574,7 +574,7 @@ app.get('/api/admin/gardens/:key', { preHandler: requireAdmin }, async (req, rep
   return data[0] || { plants: [], locations: [], queue: [] };
 });
 
-app.put('/api/admin/gardens/:key', { preHandler: requireAdmin }, async (req, reply) => {
+app.put('/api/admin/gardens/:key', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { rows } = await pool.query('SELECT id FROM gardens WHERE key = $1', [req.params.key]);
   if (!rows.length) return reply.code(404).send({ error: 'not found' });
   const { plants = [], locations = [], queue = [] } = req.body || {};
@@ -588,12 +588,12 @@ app.put('/api/admin/gardens/:key', { preHandler: requireAdmin }, async (req, rep
   return { ok: true };
 });
 
-app.delete('/api/admin/gardens/:key', { preHandler: requireAdmin }, async (req, reply) => {
+app.delete('/api/admin/gardens/:key', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   await pool.query('DELETE FROM gardens WHERE key = $1', [req.params.key]);
   return { ok: true };
 });
 
-app.post('/api/admin/gardens/bulk-delete', { preHandler: requireAdmin }, async (req, reply) => {
+app.post('/api/admin/gardens/bulk-delete', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { filter } = req.body || {};
   let result;
   if (filter === 'unclaimed') {
@@ -610,7 +610,7 @@ app.post('/api/admin/gardens/bulk-delete', { preHandler: requireAdmin }, async (
   return { ok: true, deleted: result.rows.length };
 });
 
-app.get('/api/admin/stats', { preHandler: requireAdmin }, async (req, reply) => {
+app.get('/api/admin/stats', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const [totals, gardensPerDay, topSpecies, mostActive] = await Promise.all([
     pool.query(`
       SELECT
@@ -648,7 +648,7 @@ app.get('/api/admin/stats', { preHandler: requireAdmin }, async (req, reply) => 
   };
 });
 
-app.get('/api/admin/system', { preHandler: requireAdmin }, async (req, reply) => {
+app.get('/api/admin/system', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const mem = process.memoryUsage();
   let dbSizeBytes = null;
   try {
@@ -677,21 +677,21 @@ app.get('/api/admin/system', { preHandler: requireAdmin }, async (req, reply) =>
   };
 });
 
-app.get('/api/admin/settings', { preHandler: requireAdmin }, async (req, reply) => {
+app.get('/api/admin/settings', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   return {
     backupIntervalHours: Number(await getSetting('backup_interval_hours')) || 24,
     backupKeepCount: Number(await getSetting('backup_keep_count')) || 14,
   };
 });
 
-app.put('/api/admin/settings', { preHandler: requireAdmin }, async (req, reply) => {
+app.put('/api/admin/settings', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { backupIntervalHours, backupKeepCount } = req.body || {};
   if (backupIntervalHours != null) await setSetting('backup_interval_hours', Math.max(1, backupIntervalHours | 0));
   if (backupKeepCount != null) await setSetting('backup_keep_count', Math.max(1, backupKeepCount | 0));
   return { ok: true };
 });
 
-app.post('/api/admin/backup/run', { preHandler: requireAdmin }, async (req, reply) => {
+app.post('/api/admin/backup/run', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   try {
     const outPath = await runBackupNow();
     return { ok: true, file: path.basename(outPath) };
@@ -700,7 +700,7 @@ app.post('/api/admin/backup/run', { preHandler: requireAdmin }, async (req, repl
   }
 });
 
-app.get('/api/admin/backup/list', { preHandler: requireAdmin }, async (req, reply) => {
+app.get('/api/admin/backup/list', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const files = fs.readdirSync(BACKUP_DIR)
     .filter(f => f.endsWith('.sql.gz'))
     .map(f => {
@@ -711,7 +711,7 @@ app.get('/api/admin/backup/list', { preHandler: requireAdmin }, async (req, repl
   return { files };
 });
 
-app.get('/api/admin/backup/download/:name', { preHandler: requireAdmin }, async (req, reply) => {
+app.get('/api/admin/backup/download/:name', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const name = path.basename(req.params.name);
   const filePath = path.join(BACKUP_DIR, name);
   if (!name.endsWith('.sql.gz') || !fs.existsSync(filePath)) return reply.code(404).send({ error: 'not found' });
@@ -732,7 +732,7 @@ app.post('/api/migrate', { preHandler: rateLimit(20, 60000) }, async (req, reply
   return { token };
 });
 
-app.get('/api/migrate/:token', async (req, reply) => {
+app.get('/api/migrate/:token', { preHandler: rateLimit(20, 60000) }, async (req, reply) => {
   const { rows } = await pool.query('DELETE FROM migration_tokens WHERE token = $1 RETURNING payload', [req.params.token]);
   if (!rows.length) return reply.code(404).send({ error: 'not found or already used' });
   return { payload: rows[0].payload };
@@ -790,7 +790,7 @@ app.get('/api/tools/shorten/:code/stats', async (req, reply) => {
 
 // ── Public API key management (admin-only) ──
 
-app.post('/api/admin/api-keys', { preHandler: requireAdmin }, async (req, reply) => {
+app.post('/api/admin/api-keys', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { label, rateLimitPerDay = 200 } = req.body || {};
   if (!label) return reply.code(400).send({ error: 'label required' });
   const rawKey = `ck_${crypto.randomBytes(24).toString('hex')}`;
@@ -802,21 +802,21 @@ app.post('/api/admin/api-keys', { preHandler: requireAdmin }, async (req, reply)
   return { ...rows[0], key: rawKey };
 });
 
-app.get('/api/admin/api-keys', { preHandler: requireAdmin }, async (req, reply) => {
+app.get('/api/admin/api-keys', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { rows } = await pool.query(
     'SELECT id, label, rate_limit_per_day, request_count, count_day, active, created_at, last_used_at FROM api_keys ORDER BY created_at DESC'
   );
   return { keys: rows };
 });
 
-app.patch('/api/admin/api-keys/:id', { preHandler: requireAdmin }, async (req, reply) => {
+app.patch('/api/admin/api-keys/:id', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   const { active, rateLimitPerDay } = req.body || {};
   if (active != null) await pool.query('UPDATE api_keys SET active = $1 WHERE id = $2', [!!active, req.params.id]);
   if (rateLimitPerDay != null) await pool.query('UPDATE api_keys SET rate_limit_per_day = $1 WHERE id = $2', [Math.max(1, rateLimitPerDay | 0), req.params.id]);
   return { ok: true };
 });
 
-app.delete('/api/admin/api-keys/:id', { preHandler: requireAdmin }, async (req, reply) => {
+app.delete('/api/admin/api-keys/:id', { preHandler: [rateLimit(120, 60000), requireAdmin] }, async (req, reply) => {
   await pool.query('DELETE FROM api_keys WHERE id = $1', [req.params.id]);
   return { ok: true };
 });

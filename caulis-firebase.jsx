@@ -64,13 +64,23 @@ function mergePlants(base, local, remote) {
 }
 
 // locations/queue are plain arrays (room names / plant ids) — no per-item
-// identity worth a 3-way diff, so: unchanged side defers to the other,
-// otherwise union (local order first) rather than picking one wholesale.
+// identity worth a full 3-way diff, but a plain union is wrong once *both*
+// sides changed: an item present in base and still sitting in one side's
+// stale copy would "come back" even though the other side deliberately
+// removed it (e.g. someone dequeues a printed tag on one device while the
+// other device, mid-edit on something unrelated, still holds that id in its
+// in-memory queue — a naive union resurrects it). So: a brand-new item
+// (not in base) from either side is always kept; an item that *was* in base
+// is kept only if neither side dropped it.
 function mergeArray(base, local, remote) {
   if (sameJSON(local, base)) return remote || [];
   if (sameJSON(remote, base)) return local || [];
-  const out = [...(local || [])];
-  (remote || []).forEach(v => { if (!out.includes(v)) out.push(v); });
+  const B = new Set(base || []), L = new Set(local || []), R = new Set(remote || []);
+  const out = [];
+  const seen = new Set();
+  const add = v => { if (!seen.has(v)) { seen.add(v); out.push(v); } };
+  (local || []).forEach(v => { if (!B.has(v) || R.has(v)) add(v); });
+  (remote || []).forEach(v => { if (!B.has(v) || L.has(v)) add(v); });
   return out;
 }
 
