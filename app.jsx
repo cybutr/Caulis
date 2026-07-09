@@ -648,6 +648,15 @@ function App() {
     const newNode = await gardenNodeId(newKey, gardenPassword);
     const cleanPlants = plants.map(({ photos, ...rest }) => rest);
     const data = { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null};
+    // renameGarden deletes the old garden node (cascades its photo storage too),
+    // so every plant's photos have to land on the new node *before* that delete
+    // fires — otherwise a rename silently wipes every saved photo.
+    if (gardenNode) {
+      await Promise.all(plants.map(async p => {
+        const photos = (p.photos && p.photos.length) ? p.photos : await fetchPhotos(gardenNode, p.id);
+        if (photos && photos.length) await pushPhoto(newNode, p.id, photos);
+      }));
+    }
     const ok = gardenNode ? await renameGarden(gardenNode, newNode, data) : true;
     if (ok) {
       try {

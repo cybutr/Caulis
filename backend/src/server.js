@@ -54,10 +54,12 @@ async function sendPush(sub, payload) {
 
 async function checkAndSendPushes() {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
-  // fires within one hour window per day (checked every 15 min, gated below
-  // by last_*_sent_on so it only actually sends once) — 8am UTC is a
-  // reasonable "morning" slot without per-garden timezone data
-  if (new Date().getUTCHours() !== 8) return;
+  // fires any time from 8am UTC onward (checked every 15 min, gated below by
+  // last_*_sent_on so it only actually sends once per day) — 8am is a
+  // reasonable "morning" slot without per-garden timezone data. Using >= 8
+  // rather than === 8 means a process restart/crash that skips the 8am tick
+  // still catches up later the same day instead of silently skipping it.
+  if (new Date().getUTCHours() < 8) return;
   const todayStr = new Date().toISOString().slice(0, 10);
   const isMonday = new Date().getUTCDay() === 1;
 

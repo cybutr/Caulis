@@ -27,11 +27,18 @@ export async function requireAuth(req, reply) {
   }
 }
 
+function timingSafeStringEqual(a, b) {
+  const bufA = Buffer.from(String(a));
+  const bufB = Buffer.from(String(b));
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 export async function requireAdmin(req, reply) {
   // query param fallback exists only so a plain <a href=download> link works —
   // it can't set a custom header. Every other admin call uses the header.
   const secret = req.headers['x-admin-secret'] || req.query?.secret;
-  if (!secret || secret !== process.env.ADMIN_SECRET) {
+  if (!secret || !process.env.ADMIN_SECRET || !timingSafeStringEqual(secret, process.env.ADMIN_SECRET)) {
     return reply.code(401).send({ error: 'invalid admin secret' });
   }
 }
