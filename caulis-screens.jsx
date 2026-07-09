@@ -288,7 +288,9 @@ function EmptyGarden({ onAdd }) {
   );
 }
 
-function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne }) {
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne }) {
+  const [healthOpen, setHealthOpen] = useState(false);
+  const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
   const [q, setQ] = useState('');
   const [fStatus, setFStatus] = useState(() => GS.get('caulis_g_status', 'all'));
@@ -375,6 +377,24 @@ function GardenScreen({ plants, onOpen, onAdd, onLongPress, onReorder, isDesktop
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:500, fontSize: isDesktop ? 32 : 27, color:C.ink, marginTop:2, lineHeight:1.2 }}>
               {empty ? <>Welcome to Caulis.</> : needs > 0 ? <>{needs} plants would love a drink.</> : <>Everything looks happy today.</>}
             </div>
+            {health && (
+              <div onClick={()=>setHealthOpen(o=>!o)} style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:7, cursor:'pointer' }}>
+                <span style={{ width:8, height:8, borderRadius:999, background:HEALTH_TIERS[health.tier].dot, flexShrink:0 }}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink, opacity:0.75 }}>
+                  Garden health {health.score} · {HEALTH_TIERS[health.tier].label}
+                </span>
+              </div>
+            )}
+            {health && healthOpen && (
+              <div style={{ marginTop:8, padding:'10px 14px', borderRadius:14, background:'rgba(45,80,22,0.05)', display:'flex', flexDirection:'column', gap:4, maxWidth:280 }}>
+                {health.needs > 0 && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>{health.needs} need{health.needs===1?'s':''} water now</span>}
+                {health.soon > 0 && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>{health.soon} will soon</span>}
+                {health.mismatch > 0 && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>{health.mismatch} in a mismatched-light room</span>}
+                {health.dropping > 0 && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>{health.dropping} recently reported dropping leaves</span>}
+                {health.struggling > 0 && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>{health.struggling} recently reported stressed</span>}
+                {!health.needs && !health.soon && !health.mismatch && !health.dropping && !health.struggling && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>Nothing pulling the score down.</span>}
+              </div>
+            )}
           </div>
           <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8 }}>
             {!empty && (

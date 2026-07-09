@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '130'; // keep in sync with sw.js CACHE
+const APP_VERSION = '131'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -218,6 +218,33 @@ function careCheckDue(plant) {
 function adjustEveryForOutcome(every, outcome) {
   const factor = outcome === 'thriving' ? 1.15 : outcome === 'struggling' ? 0.85 : outcome === 'dropping' ? 0.7 : 1;
   return Math.min(365, Math.max(1, Math.round(every * factor)));
+}
+
+// a single rolled-up "garden health" score — not a new signal, purely a
+// weighted read of state that already exists (status, room-light mismatch,
+// recent care check-in outcomes), so nothing new needs to sync for it
+const HEALTH_TIERS = {
+  thriving:   { label: 'Thriving',        dot: '#6E9A3E' },
+  good:       { label: 'Doing well',      dot: '#7A9E4E' },
+  attention:  { label: 'Needs attention', dot: '#C98A2B' },
+  struggling: { label: 'Struggling',      dot: '#B4472E' },
+};
+function gardenHealthScore(plants, roomLight) {
+  if (!plants || !plants.length) return null;
+  const n = plants.length;
+  const cutoff = todayMidnight() - CARE_CHECK_COOLDOWN_MS;
+  let needs = 0, soon = 0, mismatch = 0, dropping = 0, struggling = 0;
+  plants.forEach(p => {
+    const st = statusOf(p.days, p.every, p.snoozedUntil);
+    if (st === 'needs') needs++; else if (st === 'soon') soon++;
+    if (roomLight && roomLight[p.location] && roomLightMismatch(p, roomLight[p.location])) mismatch++;
+    if (p.lastCareOutcome === 'dropping' && p.lastCareCheck >= cutoff) dropping++;
+    else if (p.lastCareOutcome === 'struggling' && p.lastCareCheck >= cutoff) struggling++;
+  });
+  let score = 100 - (needs/n)*45 - (soon/n)*15 - (mismatch/n)*15 - (dropping/n)*20 - (struggling/n)*10;
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  const tier = score >= 90 ? 'thriving' : score >= 75 ? 'good' : score >= 50 ? 'attention' : 'struggling';
+  return { score, tier, needs, soon, mismatch, dropping, struggling };
 }
 
 // watering log summary from an array of 'YYYY-MM-DD' strings (newest last)
@@ -473,7 +500,7 @@ function navTabOrder(cfg) {
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
   ROOM_LIGHT_LEVELS, sunlightLevel, plantLightRange, roomLightMismatch,
-  careCheckDue, adjustEveryForOutcome,
+  careCheckDue, adjustEveryForOutcome, HEALTH_TIERS, gardenHealthScore,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor,
   PALETTES, PALETTE_ORDER,
