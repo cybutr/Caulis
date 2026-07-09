@@ -939,7 +939,12 @@ function App() {
     }
   };
   const undoWater = (id, prevDays) => setPlants(ps => ps.map(p => p.id === id ? { ...p, wateredAt: todayMidnight() - prevDays * 86400000, wv: WATER_SCHEMA, days: prevDays, history: (p.history||[]).slice(0, -1) } : p));
-  const snooze = (id, n = 2) => { haptic('light'); setPlants(ps => ps.map(p => { if (p.id !== id) return p; const wa = Math.min(todayMidnight(), (p.wateredAt ?? todayMidnight()) + n * 86400000); return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: daysSinceMidnight(wa) }; })); };
+  // snooze suppresses the "needs water"/"water soon" status for n days without
+  // touching wateredAt/history — it isn't a watering, so agoLabel and the
+  // watering log must stay truthful. statusOf() treats a future snoozedUntil
+  // as 'ok' regardless of the real days/every ratio; it lapses on its own once
+  // today catches up, no cleanup needed.
+  const snooze = (id, n = 2) => { haptic('light'); setPlants(ps => ps.map(p => p.id === id ? { ...p, snoozedUntil: todayMidnight() + n * 86400000 } : p)); };
 
   const toggleQueue = (id) => { setQueue(q => q.includes(id) ? q.filter(x => x !== id) : [...q, id]); setPrinted(false); };
   const removeQueue = (id) => {
@@ -1039,15 +1044,35 @@ window.onload=()=>{
   }, [undoDelete]);
   const movePlant   = (id, room) => setPlants(ps => ps.map(p => p.id === id ? { ...p, location: room } : p));
   const bulkWater  = (ids) => ids.forEach(id => water(id, 0));
-  const waterAll = () => {
+  // shared bulk-water primitive: waters exactly the given ids (never "every
+  // plant regardless of status" — callers decide scope), snapshots the prior
+  // state for undo, and drives both the scope-picked "Water all" flow and a
+  // single-plant swipe-to-water.
+  const waterMany = (ids, label) => {
+    if (!ids || !ids.length) return;
     haptic('medium');
+    const idSet = new Set(ids);
     const stamp = fmtLocalDate(new Date());
     const wa = todayMidnight();
-    let count = 0;
     setPlants(ps => {
-      setUndoWaterAll({ snapshot: ps });
-      return ps.map(p => { if (p.days > 0) count++; return { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), stamp].slice(-60) }; });
+      setUndoWaterAll({ snapshot: ps, label });
+      return ps.map(p => idSet.has(p.id) ? { ...p, wateredAt: wa, wv: WATER_SCHEMA, days: 0, history: [...(p.history||[]), stamp].slice(-60) } : p);
     });
+  };
+  const waterAll = (scope = 'all') => {
+    const ids = plants.filter(p => {
+      if (scope === 'all') return true;
+      const st = statusOf(p.days, p.every, p.snoozedUntil);
+      if (scope === 'needs') return st === 'needs';
+      if (scope === 'soon')  return st === 'needs' || st === 'soon';
+      return true;
+    }).map(p => p.id);
+    const label = ids.length === 1 ? '1 plant watered' : `${ids.length} plants watered`;
+    waterMany(ids, label);
+  };
+  const waterOne = (id) => {
+    const p = plants.find(x => x.id === id);
+    waterMany([id], p ? `${p.name} watered` : '1 plant watered');
   };
   const undoWaterAllNow = () => {
     if (!undoWaterAll) return;
@@ -1320,7 +1345,7 @@ window.onload=()=>{
   const undoWaterAllEl = !undoDelete && undoWaterAll && (
     <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
       <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, background:C.toast, borderRadius:999, padding:'10px 12px 10px 18px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
-        <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:500, color:'#fff' }}>Watered all plants</span>
+        <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:500, color:'#fff' }}>{undoWaterAll.label || 'Watered all plants'}</span>
         <div onClick={undoWaterAllNow} style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, background:'rgba(255,255,255,0.16)', borderRadius:999, padding:'6px 13px' }}>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M5 3 2 6l3 3M2 6h6.5a3.5 3.5 0 010 7H6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:'#fff' }}>Undo</span>
@@ -1420,8 +1445,8 @@ window.onload=()=>{
   // ── active screen ──
   const screenProps = { isDesktop };
   let screen = null;
-  if (tab === 'garden')   screen = <GardenScreen plants={plants} onOpen={id=>openDetail(id)} onAdd={()=>setForm({mode:'add'})} onLongPress={p=>setMenuPlant(p)} onReorder={reorderPlants} density={cardDensity} gridCols={gridCols} hideHealthy={hideHealthy} onBulkWater={bulkWater} onBulkQueue={bulkQueue} onBulkMove={setBulkMove} onBulkRemove={setBulkRemoveIds} onHaptic={()=>haptic('light')} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} onWaterAll={waterAll} confirmDelete={confirmDelete} czechMode={identifyLang === 'cs'} {...screenProps}/>;
+  if (tab === 'garden')   screen = <GardenScreen plants={plants} onOpen={id=>openDetail(id)} onAdd={()=>setForm({mode:'add'})} onLongPress={p=>setMenuPlant(p)} onReorder={reorderPlants} density={cardDensity} gridCols={gridCols} hideHealthy={hideHealthy} onBulkWater={bulkWater} onBulkQueue={bulkQueue} onBulkMove={setBulkMove} onBulkRemove={setBulkRemoveIds} onHaptic={()=>haptic('light')} onWaterOne={waterOne} czechMode={identifyLang === 'cs'} {...screenProps}/>;
+  if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} onWaterAll={waterAll} onWaterOne={waterOne} confirmDelete={confirmDelete} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'settings') screen = <SettingsScreen plants={plants} locations={locations} onAddLocationSetting={addLocation} onRenameLocation={renameLocation} onRemoveLocation={removeLocation} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} pushSupported={pushSupported} pushWatering={pushWatering} pushDigest={pushDigest} pushBusy={pushBusy} pushError={pushError} onTogglePushWatering={onTogglePushWatering} onTogglePushDigest={onTogglePushDigest} {...screenProps}/>;

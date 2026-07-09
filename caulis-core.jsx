@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '118'; // keep in sync with sw.js CACHE
+const APP_VERSION = '119'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -112,7 +112,8 @@ function applyTheme(dark, palette) {
 }
 
 // ── status from days-since vs interval ────────────────────
-function statusOf(days, every) {
+function statusOf(days, every, snoozedUntil) {
+  if (typeof snoozedUntil === 'number' && todayMidnight() < snoozedUntil) return 'ok';
   const r = days / every;
   if (r >= 1)   return 'needs';
   if (r >= 0.7) return 'soon';

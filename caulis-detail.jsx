@@ -84,7 +84,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
   const [justWatered, setJustWatered] = useState(false);
   const [waterOffset, setWaterOffset] = useState(0); // days ago
   const prevRef = useRef(null);
-  const status = statusOf(plant.days, plant.every);
+  const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
   const gallery = plantGallery(plant);
 
   const water = () => {
@@ -944,7 +944,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
       const target = (plants || []).find(p => String(p.id) === String(input.plant_id)) || activePlant;
       if (!target) return 'No matching plant found in the garden.';
       const ratio = target.every ? target.days / target.every : 0;
-      const status = statusOf(target.days, target.every);
+      const status = statusOf(target.days, target.every, target.snoozedUntil);
       return JSON.stringify({
         name: target.name, days: target.days, every: target.every, light: target.light || 'unknown',
         status, ratio: +ratio.toFixed(2),
@@ -961,7 +961,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
     }
     if (name === 'garden_risk_report') {
       const risky = (plants || [])
-        .map(p => ({ id: p.id, name: p.name, days: p.days, every: p.every, status: statusOf(p.days, p.every) }))
+        .map(p => ({ id: p.id, name: p.name, days: p.days, every: p.every, status: statusOf(p.days, p.every, p.snoozedUntil) }))
         .filter(p => p.status !== 'ok')
         .sort((a, b) => (b.days / b.every) - (a.days / a.every));
       if (!risky.length) return 'No plants currently need water — the whole garden is on schedule.';

@@ -34,6 +34,7 @@ function deriveWateredAt(p) {
   return todayMidnightUTC() - (p.days || 0) * DAY_MS;
 }
 function plantNeedsWater(p) {
+  if (typeof p.snoozedUntil === 'number' && todayMidnightUTC() < p.snoozedUntil) return false;
   const days = Math.max(0, Math.round((todayMidnightUTC() - deriveWateredAt(p)) / DAY_MS));
   const every = p.every || p.benchmark || 7;
   return days / every >= 1;
