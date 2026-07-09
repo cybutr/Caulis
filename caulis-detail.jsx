@@ -80,7 +80,7 @@ function PhotoCarousel({ images, tint, height = 196, radius = 22 }) {
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
-function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, isDesktop, readonly = false, czechMode = false }) {
+function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, roomLight, isDesktop, readonly = false, czechMode = false }) {
   const [justWatered, setJustWatered] = useState(false);
   const [waterOffset, setWaterOffset] = useState(0); // days ago
   const prevRef = useRef(null);
@@ -186,6 +186,21 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 <span style={{ opacity:0.6 }}> · every {plant.benchmark || plant.every + ' days'}</span>
               </InfoTile>
             </div>
+            {(() => {
+              const mismatch = roomLight ? roomLightMismatch(plant, roomLight) : null;
+              if (!mismatch) return null;
+              const msg = mismatch === 'dim'
+                ? `${plant.location || 'This room'} may be too dim for this plant's light needs.`
+                : `${plant.location || 'This room'} may get more direct sun than this plant likes.`;
+              return (
+                <InfoTile
+                  icon={<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="none" stroke={STATUS.soon.dot} strokeWidth="1.7"/><path d="M12 2.5v2.5M12 19v2.5M4.5 12H2M22 12h-2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" stroke={STATUS.soon.dot} strokeWidth="1.7" strokeLinecap="round"/></svg>}
+                  label="Room light"
+                >
+                  <span style={{ color:STATUS.soon.dot, fontWeight:600 }}>{msg}</span>
+                </InfoTile>
+              );
+            })()}
             {typeof plant.toxicToPets === 'boolean' && (
               <InfoTile
                 icon={plant.toxicToPets

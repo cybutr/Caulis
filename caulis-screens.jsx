@@ -969,13 +969,19 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // lives there in one move, and removed once it's empty again. Previously
 // onAddLocation was wired to a no-op everywhere, so a "room" only ever
 // existed for as long as some plant happened to sit in it.
-function LocationsManager({ plants, locations, onAdd, onRename, onRemove }) {
+function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLight, onSetRoomLight }) {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [editing, setEditing] = useState(null);
   const [editVal, setEditVal] = useState('');
+  const [lightRoom, setLightRoom] = useState(null);
   const counts = {};
   plants.forEach(p => { counts[p.location] = (counts[p.location] || 0) + 1; });
+  const mismatches = {};
+  plants.forEach(p => {
+    const level = roomLight[p.location];
+    if (level && roomLightMismatch(p, level)) mismatches[p.location] = (mismatches[p.location] || 0) + 1;
+  });
   const submitNew = () => { const v = newName.trim(); if (v) onAdd(v); setNewName(''); setAdding(false); };
   const submitRename = (old) => { const v = editVal.trim(); if (v && v !== old) onRename(old, v); setEditing(null); };
   const rowInput = { flex:1, boxSizing:'border-box', height:34, borderRadius:9, border:`1px solid ${C.forest}`, background:C.bg, padding:'0 10px', fontFamily:FONT_SANS, fontSize:13, color:C.ink, outline:'none' };
@@ -984,26 +990,50 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove }) {
       <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, marginBottom:9 }}>Rooms</div>
       <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
         {locations.map(l => (
-          <div key={l} style={{ display:'flex', alignItems:'center', gap:8, padding:'7px 10px', borderRadius:10, background:'rgba(45,80,22,0.05)' }}>
-            {editing === l ? (
-              <>
-                <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') submitRename(l); if(e.key==='Escape') setEditing(null); }} style={rowInput}/>
-                <span onClick={()=>submitRename(l)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.forest }}>Save</span>
-                <span onClick={()=>setEditing(null)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>Cancel</span>
-              </>
-            ) : (
-              <>
-                <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>{l}</span>
-                <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.55 }}>{counts[l] || 0} plant{counts[l] === 1 ? '' : 's'}</span>
-                <span onClick={()=>{ setEditing(l); setEditVal(l); }} style={{ cursor:'pointer', padding:4 }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" fill="none" stroke={C.brown} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </span>
-                {!counts[l] && (
-                  <span onClick={()=>onRemove(l)} style={{ cursor:'pointer', padding:4 }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke={STATUS.needs.dot} strokeWidth="1.8" strokeLinecap="round"/></svg>
+          <div key={l} style={{ padding:'7px 10px', borderRadius:10, background:'rgba(45,80,22,0.05)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              {editing === l ? (
+                <>
+                  <input autoFocus value={editVal} onChange={e=>setEditVal(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter') submitRename(l); if(e.key==='Escape') setEditing(null); }} style={rowInput}/>
+                  <span onClick={()=>submitRename(l)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.forest }}>Save</span>
+                  <span onClick={()=>setEditing(null)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>Cancel</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>{l}</span>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.55 }}>{counts[l] || 0} plant{counts[l] === 1 ? '' : 's'}</span>
+                  <span onClick={()=>setLightRoom(lightRoom === l ? null : l)} style={{ cursor:'pointer', padding:4 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="none" stroke={mismatches[l] ? STATUS.soon.dot : C.brown} strokeWidth="1.7"/><path d="M12 2.5v2.5M12 19v2.5M4.5 12H2M22 12h-2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" stroke={mismatches[l] ? STATUS.soon.dot : C.brown} strokeWidth="1.7" strokeLinecap="round"/></svg>
                   </span>
+                  <span onClick={()=>{ setEditing(l); setEditVal(l); }} style={{ cursor:'pointer', padding:4 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" fill="none" stroke={C.brown} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </span>
+                  {!counts[l] && (
+                    <span onClick={()=>onRemove(l)} style={{ cursor:'pointer', padding:4 }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke={STATUS.needs.dot} strokeWidth="1.8" strokeLinecap="round"/></svg>
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+            {lightRoom === l && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8, paddingTop:8, borderTop:C.hair }}>
+                {ROOM_LIGHT_LEVELS.map(lv => {
+                  const active = roomLight[l] === lv.id;
+                  return (
+                    <span key={lv.id} onClick={()=>onSetRoomLight(l, active ? null : lv.id)}
+                      style={{ cursor:'pointer', padding:'5px 10px', borderRadius:999, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600,
+                        background: active ? C.forest : C.panel, color: active ? '#fff' : C.ink, border: active ? 'none' : C.hair }}>
+                      {lv.label}
+                    </span>
+                  );
+                })}
+                {roomLight[l] && mismatches[l] > 0 && (
+                  <div style={{ width:'100%', fontFamily:FONT_SANS, fontSize:11.5, color:STATUS.soon.dot, marginTop:2 }}>
+                    {mismatches[l]} plant{mismatches[l]===1?'':'s'} here may not suit this light level
+                  </div>
                 )}
-              </>
+              </div>
             )}
           </div>
         ))}
@@ -1026,7 +1056,7 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1582,7 +1612,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
             <Row label="Plants tracked" value={String(plants.length)}/>
             <Row label="Locations" value={String(locations.length)}/>
-            <LocationsManager plants={plants} locations={locations} onAdd={onAddLocationSetting} onRename={onRenameLocation} onRemove={onRemoveLocation}/>
+            <LocationsManager plants={plants} locations={locations} onAdd={onAddLocationSetting} onRename={onRenameLocation} onRemove={onRemoveLocation} roomLight={roomLight} onSetRoomLight={onSetRoomLight}/>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Default watering</div>

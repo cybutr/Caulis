@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '126'; // keep in sync with sw.js CACHE
+const APP_VERSION = '127'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -134,6 +134,46 @@ const STATUS = {
   soon:  { ...STATUS_LIGHT.soon },
   needs: { ...STATUS_LIGHT.needs },
 };
+
+// ── room light levels vs a plant's sunlight needs ─────────
+const ROOM_LIGHT_LEVELS = [
+  { id: 'low',    label: 'Low light' },
+  { id: 'medium', label: 'Medium light' },
+  { id: 'bright', label: 'Bright, indirect' },
+  { id: 'direct', label: 'Direct sun' },
+];
+function sunlightLevel(tag) {
+  const t = String(tag || '').toLowerCase();
+  if (t.includes('full sun') || t.includes('direct')) return 'direct';
+  if (t.includes('part') || t.includes('filtered')) return 'medium';
+  if (t.includes('full shade') || t.includes('shade')) return 'low';
+  if (t.includes('bright') || t.includes('indirect')) return 'bright';
+  return null;
+}
+// returns the widest and narrowest light levels a plant tolerates, from its
+// sunlight[] tags (or a light label string fallback), or null if unknown
+function plantLightRange(plant) {
+  const order = ['low', 'medium', 'bright', 'direct'];
+  const tags = Array.isArray(plant.sunlight) && plant.sunlight.length ? plant.sunlight : [plant.light];
+  const levels = tags.map(sunlightLevel).filter(Boolean);
+  if (!levels.length) return null;
+  const idxs = levels.map(l => order.indexOf(l));
+  return { min: order[Math.min(...idxs)], max: order[Math.max(...idxs)] };
+}
+// compares a plant's tolerated light range against its room's configured
+// light level; null = no warning (unknown range, or no room level set)
+function roomLightMismatch(plant, roomLevel) {
+  if (!roomLevel) return null;
+  const range = plantLightRange(plant);
+  if (!range) return null;
+  const order = ['low', 'medium', 'bright', 'direct'];
+  const roomIdx = order.indexOf(roomLevel);
+  const minIdx = order.indexOf(range.min);
+  const maxIdx = order.indexOf(range.max);
+  if (roomIdx < minIdx) return 'dim';   // room is darker than the plant tolerates
+  if (roomIdx > maxIdx) return 'harsh'; // room is brighter than the plant tolerates
+  return null;
+}
 
 function agoLabel(days) {
   if (days <= 0) return 'Watered today';
@@ -415,6 +455,7 @@ function navTabOrder(cfg) {
 // export to window for other babel scripts -------------------
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
+  ROOM_LIGHT_LEVELS, sunlightLevel, plantLightRange, roomLightMismatch,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor,
   PALETTES, PALETTE_ORDER,
