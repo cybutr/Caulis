@@ -743,6 +743,31 @@ function App() {
     window.location.reload();
   };
 
+  // stale-shell detector: the CACHE version in the deployed sw.js is the one
+  // source of truth for "is a newer build live" — a bare fetch (no-store,
+  // bypassing both the SW's own cache-first handling and the HTTP cache)
+  // reads it directly off the server instead of whatever's already loaded.
+  // Closes the class of bug behind cc992fe/4990135/399ba41 (stale shell
+  // silently serving broken sync code after a deploy) without depending on
+  // anyone remembering to hard-refresh.
+  const [updateReady, setUpdateReady] = useState(false);
+  useEffect(() => {
+    let stopped = false;
+    const check = async () => {
+      try {
+        const r = await fetch('./sw.js', { cache: 'no-store' });
+        const text = await r.text();
+        const m = text.match(/caulis-v(\d+)/);
+        if (m && !stopped && Number(m[1]) > Number(APP_VERSION)) setUpdateReady(true);
+      } catch (e) {}
+    };
+    check();
+    const iv = setInterval(check, 5 * 60 * 1000);
+    const onVis = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { stopped = true; clearInterval(iv); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
+
   const tintFor = (id) => TINTS[(id - 1) % TINTS.length];
 
   // unified mobile gesture: horizontal swipe = change tab (if enabled),
@@ -1284,6 +1309,15 @@ window.onload=()=>{
     </div>
   );
 
+  const updateReadyEl = updateReady && (
+    <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', padding:'0 16px' }}>
+      <div onClick={updateApp} style={{ cursor:'pointer', background:C.toast, color:'#fff', borderRadius:999, padding:'11px 12px 11px 20px', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, boxShadow:'0 10px 26px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:10 }}>
+        A new version is ready
+        <span style={{ background:'rgba(255,255,255,0.16)', borderRadius:999, padding:'7px 13px', fontWeight:700 }}>Reload</span>
+      </div>
+    </div>
+  );
+
   const confirmRemoveEl = confirmRemove != null && (() => {
     const p = plants.find(x => x.id === confirmRemove);
     if (!p) return null;
@@ -1367,6 +1401,7 @@ window.onload=()=>{
         {confettiEl}
         {milestoneToastEl}
         {holidayToastEl}
+        {updateReadyEl}
         {launchActionToastEl}
         {confirmRemoveEl}
         {bulkRemoveEl}
@@ -1422,6 +1457,8 @@ window.onload=()=>{
       {storageFullEl}
       {confettiEl}
       {milestoneToastEl}
+      {holidayToastEl}
+      {updateReadyEl}
       {launchActionToastEl}
       {confirmRemoveEl}
       {bulkRemoveEl}
