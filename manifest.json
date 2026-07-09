@@ -20,5 +20,28 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Water due plants",
+      "short_name": "Water",
+      "description": "Jump straight to plants that need water today",
+      "url": "./?shortcut=needs",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Scan a plant tag",
+      "short_name": "Scan",
+      "description": "Open the QR scanner",
+      "url": "./?shortcut=scanner",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Ask the doctor",
+      "short_name": "Doctor",
+      "description": "Start an AI plant-care chat",
+      "url": "./?shortcut=doctor",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
   ]
 }

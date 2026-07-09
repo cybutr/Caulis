@@ -174,6 +174,18 @@ function App() {
   useEffect(() => {
     if (firedLaunchActionRef.current) return;
     firedLaunchActionRef.current = true;
+    // a home-screen shortcut is an explicit choice made outside the app right
+    // this instant — it outranks both a deep link and the saved launch
+    // preference. Tab shortcuts (Water/Scan/...) just switch tab directly, no
+    // toast needed since that's an instant, unsurprising landing; only a
+    // non-tab shortcut (Doctor) gets the same toast-then-fire treatment below.
+    if (pendingShortcut) {
+      const sMeta = NAV_ACTIONS[pendingShortcut];
+      if (sMeta.tab) { setTab(pendingShortcut); return; }
+      setLaunchActionToast(sMeta.label);
+      setTimeout(() => { onNavAction(pendingShortcut); setLaunchActionToast(null); }, 420);
+      return;
+    }
     const meta = NAV_ACTIONS[defaultTab];
     if (!meta || meta.tab) return;
     // a QR/share-link deep link (a specific plant, or a guest view into someone
@@ -539,6 +551,19 @@ function App() {
     return null;
   });
   const pendingPlantId = pendingLink && !pendingLink.node ? pendingLink.id : null;
+
+  // PWA home-screen shortcuts (manifest.json "shortcuts") land here as
+  // ?shortcut=<action> on the install's start_url — same NAV_ACTIONS an
+  // in-app nav slot would fire, just entered via a long-press on the icon
+  // instead of a tap inside the app
+  const [pendingShortcut] = useState(() => {
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const s = sp.get('shortcut');
+      if (s && NAV_ACTIONS[s]) { window.history.replaceState({}, '', window.location.pathname); return s; }
+    } catch(e) {}
+    return null;
+  });
 
   // open a shared garden's plant as a read-only guest (capability = node in ?g=)
   useEffect(() => {
