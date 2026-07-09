@@ -80,7 +80,7 @@ function PhotoCarousel({ images, tint, height = 196, radius = 22 }) {
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
-function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, onOpenPlant, plants, roomLight, isDesktop, readonly = false, czechMode = false }) {
+function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, onOpenPlant, onCareCheck, plants, roomLight, isDesktop, readonly = false, czechMode = false }) {
   const [justWatered, setJustWatered] = useState(false);
   const [waterOffset, setWaterOffset] = useState(0); // days ago
   const prevRef = useRef(null);
@@ -194,6 +194,26 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
             <div onClick={()=>onAskDoctor(plant)} style={{ marginTop:10, display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:46, borderRadius:16, border:`1px solid ${C.forest}`, cursor:'pointer' }}>
               <IconDoctor s={17} c={C.forest}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.forest }}>Ask the doctor</span>
+            </div>
+          )}
+
+          {!readonly && onCareCheck && careCheckDue(plant) && (
+            <div style={{ marginTop:14, padding:14, borderRadius:16, background:'rgba(122,158,78,0.1)', border:'1px solid rgba(122,158,78,0.3)' }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.forest, marginBottom:10 }}>How's {czechMode && plant.czech ? plant.czech : plant.name} doing lately?</div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {[
+                  { id:'thriving', label:'Thriving' },
+                  { id:'struggling', label:'A bit stressed' },
+                  { id:'dropping', label:'Dropping leaves' },
+                ].map(o => (
+                  <span key={o.id} onClick={()=>onCareCheck(plant.id, o.id)} style={{ cursor:'pointer', padding:'7px 12px', borderRadius:999, background:C.panel, border:`1px solid ${C.forest}`, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest }}>
+                    {o.label}
+                  </span>
+                ))}
+                <span onClick={()=>onCareCheck(plant.id, 'dismiss')} style={{ cursor:'pointer', padding:'7px 12px', fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.5 }}>
+                  Not sure
+                </span>
+              </div>
             </div>
           )}
 

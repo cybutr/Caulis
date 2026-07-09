@@ -1039,6 +1039,21 @@ function App() {
   // as 'ok' regardless of the real days/every ratio; it lapses on its own once
   // today catches up, no cleanup needed.
   const snooze = (id, n = 2) => { haptic('light'); setPlants(ps => ps.map(p => p.id === id ? { ...p, snoozedUntil: todayMidnight() + n * 86400000 } : p)); };
+  // care check-in: an occasional "how's it doing?" nudge that adjusts the
+  // watering interval from real outcomes instead of a number guessed once at
+  // add-time. 'dismiss' just resets the cooldown without touching every.
+  const recordCareCheck = (id, outcome) => {
+    haptic('light');
+    setPlants(ps => ps.map(p => {
+      if (p.id !== id) return p;
+      const next = { ...p, lastCareCheck: todayMidnight() };
+      if (outcome !== 'dismiss') {
+        next.every = adjustEveryForOutcome(p.every, outcome);
+        next.benchmark = `${next.every} days`;
+      }
+      return next;
+    }));
+  };
 
   const toggleQueue = (id) => { setQueue(q => q.includes(id) ? q.filter(x => x !== id) : [...q, id]); setPrinted(false); };
   const removeQueue = (id) => {
@@ -1438,6 +1453,7 @@ window.onload=()=>{
       onEdit={p=>{ closeDetail(); setForm({mode:'edit', plant:p}); }}
       onAskDoctor={p=>{ closeDetail(); setDoctor({ plant:p }); }}
       onOpenPlant={id=>openDetail(id)}
+      onCareCheck={recordCareCheck}
       plants={plants}
       isDesktop={isDesktop}
       czechMode={identifyLang === 'cs'}

@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '128'; // keep in sync with sw.js CACHE
+const APP_VERSION = '129'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -201,6 +201,23 @@ function deriveWateredAt(p) {
   const h = Array.isArray(p.history) ? p.history : [];
   if (h.length) return midnightFromStamp(h[h.length - 1]);
   return todayMidnight() - (p.days || 0) * DAY_MS;
+}
+
+// a plant is due a care check-in once it has enough watering history to be
+// meaningful (4+ waterings) and it's been at least 21 days since the last
+// check-in (or it's never had one) — deliberately infrequent, this is a
+// nudge to correct the interval, not a nag
+const CARE_CHECK_COOLDOWN_MS = 21 * DAY_MS;
+function careCheckDue(plant) {
+  const history = Array.isArray(plant.history) ? plant.history : [];
+  if (history.length < 4) return false;
+  if (!plant.lastCareCheck) return true;
+  return todayMidnight() - plant.lastCareCheck >= CARE_CHECK_COOLDOWN_MS;
+}
+// nudges a watering interval from a care check-in outcome, bounded 1..365
+function adjustEveryForOutcome(every, outcome) {
+  const factor = outcome === 'thriving' ? 1.15 : outcome === 'struggling' ? 0.85 : outcome === 'dropping' ? 0.7 : 1;
+  return Math.min(365, Math.max(1, Math.round(every * factor)));
 }
 
 // watering log summary from an array of 'YYYY-MM-DD' strings (newest last)
@@ -456,6 +473,7 @@ function navTabOrder(cfg) {
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
   ROOM_LIGHT_LEVELS, sunlightLevel, plantLightRange, roomLightMismatch,
+  careCheckDue, adjustEveryForOutcome,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor,
   PALETTES, PALETTE_ORDER,
