@@ -236,6 +236,12 @@ x-upstream-key: your_perenual_key_here
 → 429 (over daily limit)
 { "error": "rate limit exceeded", "limit": 200 }</code></pre>
 
+  <h3>Agent discovery</h3>
+  <p>For LLM/agent tooling (ChatGPT, Claude, or any agent framework) that auto-discovers APIs rather than reading this page: <code>api.caulis.czeddaru.dev</code> serves a plain-text description, a plugin manifest, and a full OpenAPI spec, all scoped to the routes on this page and all CORS-open for browser-based agents.</p>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/llms.txt</span><div class="desc">Plain-text summary of this API for LLMs, per the <a href="https://llmstxt.org" target="_blank" rel="noopener">llms.txt convention</a>.</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/.well-known/ai-plugin.json</span><div class="desc">Plugin manifest describing auth and pointing at the OpenAPI spec.</div></div>
+  <div class="endpoint"><span class="method get">GET</span><span class="ep">/openapi.json</span><div class="desc">Full OpenAPI 3.1 spec for every route above, with request/response schemas.</div></div>
+
   <h2 id="ai-review">AI care review</h2>
   <p>Plant data sources (Perenual, House&nbsp;Plants, Wikipedia, PlantNet) are inconsistent — they often omit the fun fact or care notes, sometimes the watering interval, and occasionally return values that are botanically wrong (a cactus tagged "Frequent"). When an <strong>Anthropic API key</strong> is set in Settings → API keys, Caulis runs each resolved species record through <code>claude-haiku-4-5</code> before it reaches the form, via the <code>/api/ai/messages</code> proxy above.</p>
   <p>The model is told to <strong>keep plausible values and only fill blanks or fix clearly-wrong ones</strong> — succulents/cacti get a long watering interval, ferns and carnivorous plants a short one. It returns a watering interval (days), watering label, light, care notes, a fun fact, and the Czech common name when none was found from the other sources. Results are cached per species in <code>localStorage</code> (<code>caulis_ai_care</code>), so each species costs one call.</p>

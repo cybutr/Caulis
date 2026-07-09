@@ -561,5 +561,152 @@ app.post('/api/v1/public/chat', { preHandler: requireApiKey }, async (req, reply
 
 app.get('/health', async () => ({ ok: true }));
 
+// ── Agent discoverability — llms.txt, ai-plugin.json, openapi.json ──
+// Scoped strictly to the standalone Public API above (/api/v1/public/*):
+// the garden endpoints carry a real user's personal plant data behind JWT
+// auth and were never meant to be advertised for arbitrary agents to poke
+// at. Kept hand-written and next to the routes they describe so a future
+// route change is a one-file diff, not a stale doc somewhere else.
+const PUBLIC_API_BASE = 'https://api.caulis.czeddaru.dev';
+
+const OPENAPI_SPEC = {
+  openapi: '3.1.0',
+  info: {
+    title: 'Caulis Public API',
+    version: '1.0.0',
+    description: 'Standalone plant-care API: species lookup and an AI plant-care chat proxy. Independent of the Caulis app\'s own garden/JWT auth — authenticate with an x-api-key issued by the Caulis admin.',
+    contact: { url: 'https://caulis.czeddaru.dev' },
+  },
+  servers: [{ url: PUBLIC_API_BASE }],
+  components: {
+    securitySchemes: {
+      ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+    },
+    schemas: {
+      Error: { type: 'object', properties: { error: { type: 'string' } } },
+    },
+  },
+  security: [{ ApiKeyAuth: [] }],
+  paths: {
+    '/api/v1/public/plant-lookup': {
+      get: {
+        summary: 'Search plant species by name',
+        description: "Wraps Perenual's species-list search. Requires the caller's own Perenual API key in x-upstream-key.",
+        parameters: [
+          { name: 'q', in: 'query', required: true, schema: { type: 'string' }, description: 'Species name or partial name to search' },
+          { name: 'x-upstream-key', in: 'header', required: true, schema: { type: 'string' }, description: "Caller's own Perenual API key" },
+        ],
+        responses: {
+          200: { description: 'Perenual species-list response, passed through unmodified' },
+          400: { description: 'Missing q or x-upstream-key', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          401: { description: 'Missing/invalid/inactive x-api-key' },
+          429: { description: 'Daily rate limit exceeded for this key' },
+        },
+      },
+    },
+    '/api/v1/public/plant-lookup/{id}': {
+      get: {
+        summary: 'Get full species detail by id',
+        description: "Wraps Perenual's species detail endpoint. Requires the caller's own Perenual API key in x-upstream-key.",
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer' }, description: 'Perenual species id (from plant-lookup results)' },
+          { name: 'x-upstream-key', in: 'header', required: true, schema: { type: 'string' }, description: "Caller's own Perenual API key" },
+        ],
+        responses: {
+          200: { description: 'Perenual species-detail response, passed through unmodified' },
+          400: { description: 'Missing x-upstream-key', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          401: { description: 'Missing/invalid/inactive x-api-key' },
+          429: { description: 'Daily rate limit exceeded for this key' },
+        },
+      },
+    },
+    '/api/v1/public/chat': {
+      post: {
+        summary: 'AI plant-care chat proxy',
+        description: "Proxies to Anthropic's Messages API. Requires the caller's own Anthropic API key in the JSON body. Every other body field is forwarded to Anthropic as-is (model, messages, max_tokens, system, etc — see the Anthropic Messages API reference).",
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['anthropicKey', 'model', 'messages', 'max_tokens'],
+                properties: {
+                  anthropicKey: { type: 'string', description: "Caller's own Anthropic API key" },
+                  model: { type: 'string', example: 'claude-haiku-4-5' },
+                  max_tokens: { type: 'integer', example: 1024 },
+                  messages: { type: 'array', items: { type: 'object' } },
+                  system: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Anthropic Messages API response, passed through unmodified' },
+          400: { description: 'Missing anthropicKey', content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } } },
+          401: { description: 'Missing/invalid/inactive x-api-key' },
+          429: { description: 'Daily rate limit exceeded for this key' },
+        },
+      },
+    },
+    '/health': {
+      get: { summary: 'Liveness check', security: [], responses: { 200: { description: 'Service is up' } } },
+    },
+  },
+};
+
+app.get('/openapi.json', async (req, reply) => {
+  reply.header('access-control-allow-origin', '*');
+  return OPENAPI_SPEC;
+});
+
+app.get('/.well-known/ai-plugin.json', async (req, reply) => {
+  reply.header('access-control-allow-origin', '*');
+  return {
+    schema_version: 'v1',
+    name_for_human: 'Caulis Public API',
+    name_for_model: 'caulis_plant_api',
+    description_for_human: 'Look up houseplant species care info and ask an AI plant-care assistant, via the API behind the Caulis plant tracker.',
+    description_for_model: 'Use this API to search/retrieve houseplant species care data (light, watering frequency, images) and to ask a plant-care question through an AI chat proxy. Every call requires an x-api-key header (obtained from the Caulis admin). Species lookup calls additionally require the caller\'s own Perenual API key in x-upstream-key; the chat endpoint requires the caller\'s own Anthropic API key in the request body. Full schema at /openapi.json.',
+    auth: { type: 'user_http', authorization_type: 'custom' },
+    api: { type: 'openapi', url: `${PUBLIC_API_BASE}/openapi.json`, is_user_authenticated: false },
+    logo_url: 'https://caulis.czeddaru.dev/icon-512.png',
+    contact_email: 'hello@caulis.czeddaru.dev',
+    legal_info_url: 'https://caulis.czeddaru.dev/docs.html',
+  };
+});
+
+app.get('/llms.txt', async (req, reply) => {
+  reply.header('access-control-allow-origin', '*');
+  reply.type('text/plain; charset=utf-8');
+  return `# Caulis
+
+> Caulis is a personal houseplant care tracker (watering schedules, species care data, photo log). This is its backend API — a separate, standalone Public API is available for third-party agents and apps.
+
+## Public API
+
+Base URL: ${PUBLIC_API_BASE}
+Auth: send \`x-api-key: ck_...\` on every request (issued by the Caulis admin). Each key has its own daily rate limit; over-limit calls get 429.
+
+- GET /api/v1/public/plant-lookup?q={name} — search plant species by name (wraps Perenual). Also requires an \`x-upstream-key\` header with your own Perenual API key.
+- GET /api/v1/public/plant-lookup/{id} — full species detail by id. Same x-upstream-key requirement.
+- POST /api/v1/public/chat — AI plant-care chat proxy (wraps Anthropic's Messages API). Requires your own Anthropic API key as \`anthropicKey\` in the JSON body; every other field is forwarded to Anthropic as-is.
+- GET /health — liveness check, no auth.
+
+## Machine-readable docs
+
+- OpenAPI spec: ${PUBLIC_API_BASE}/openapi.json
+- Plugin manifest: ${PUBLIC_API_BASE}/.well-known/ai-plugin.json
+- Human docs: https://caulis.czeddaru.dev/docs.html#public-api
+
+## Notes for agents
+
+- This API is BYO-key for upstream providers (Perenual, Anthropic) — Caulis does not supply those keys for you, only proxies the request and applies its own rate limit.
+- The rest of the Caulis app (garden data, plant photos, watering history) sits behind separate per-garden JWT auth and is not part of this public surface — don't attempt to guess or brute-force garden credentials.
+- CORS is open (Access-Control-Allow-Origin: *) on every route documented here, so browser-based agents can call it directly.
+`;
+});
+
 const port = process.env.PORT || 3001;
 app.listen({ port, host: '127.0.0.1' });
