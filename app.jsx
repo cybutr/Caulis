@@ -225,6 +225,28 @@ function App() {
     const hit = unseen[0];
     lsSet('caulis_milestones_seen', [...seen, hit]); setMilestoneToast(hit); haptic('success'); setTimeout(() => setMilestoneToast(null), 4000);
   }, [plants.length, gardenNode, remoteSynced]);
+  // a quiet one-off toast on plant-adjacent calendar dates — checked once per
+  // mount against a per-year seen-flag so it can never repeat in the same year
+  // and never blocks anything if the check throws
+  const HOLIDAYS = [
+    { key: 'houseplant-day', month: 1, day: 10, text: 'Happy Houseplant Appreciation Day.' },
+    { key: 'spring', month: 3, day: 20, text: 'First day of spring — your garden knows.' },
+    { key: 'earth-day', month: 4, day: 22, text: 'Happy Earth Day, from the whole garden.' },
+    { key: 'fall', month: 9, day: 22, text: 'First day of autumn. Watering slows from here.' },
+  ];
+  const [holidayToast, setHolidayToast] = useState(null);
+  useEffect(() => {
+    try {
+      const now = new Date();
+      const hit = HOLIDAYS.find(h => h.month === now.getMonth() + 1 && h.day === now.getDate());
+      if (!hit) return;
+      const flag = `caulis_holiday_${hit.key}_${now.getFullYear()}`;
+      if (localStorage.getItem(flag)) return;
+      localStorage.setItem(flag, '1');
+      setHolidayToast(hit.text);
+      setTimeout(() => setHolidayToast(null), 5000);
+    } catch (e) {}
+  }, []);
 
   const [monochromePrint, setMonochromePrintRaw] = useState(() => lsGet('caulis_print_mono', false));
   const [gardenPassword, setGardenPassword] = useState(() => { try { return localStorage.getItem('caulis_garden_pw') || ''; } catch(e) { return ''; } });
@@ -946,6 +968,7 @@ window.onload=()=>{
   const adminBulkRemove = (secret, filter) => adminBulkDelete(secret, filter);
   const adminStats = (secret) => adminGetStats(secret);
   const adminSettings = (secret) => adminGetSettings(secret);
+  const adminSystem = (secret) => adminGetSystem(secret);
   const adminSaveSettingsFn = (secret, settings) => adminSaveSettings(secret, settings);
   const adminRunBackupFn = (secret) => adminRunBackup(secret);
   const adminListBackupsFn = (secret) => adminListBackups(secret);
@@ -1228,6 +1251,13 @@ window.onload=()=>{
       </div>
     </div>
   );
+  const holidayToastEl = holidayToast != null && (
+    <div style={{ position:'fixed', top:'calc(18px + env(safe-area-inset-top))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+      <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'11px 20px', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, boxShadow:'0 10px 26px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:8 }}>
+        <Leaf size={15} color="#fff"/> {holidayToast}
+      </div>
+    </div>
+  );
 
   const confirmRemoveEl = confirmRemove != null && (() => {
     const p = plants.find(x => x.id === confirmRemove);
@@ -1266,7 +1296,7 @@ window.onload=()=>{
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} onWaterAll={waterAll} confirmDelete={confirmDelete} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
@@ -1311,6 +1341,7 @@ window.onload=()=>{
         {storageFullEl}
         {confettiEl}
         {milestoneToastEl}
+        {holidayToastEl}
         {launchActionToastEl}
         {confirmRemoveEl}
         {bulkRemoveEl}

@@ -1,7 +1,7 @@
 // ════════════════════════════════════════════════════════════
 //  Caulis — core: palette, icons, data, shared primitives
 // ════════════════════════════════════════════════════════════
-const { useState, useEffect, useRef } = React;
+const { useState, useEffect, useRef, useMemo } = React;
 
 function useWindowWidth() {
   const [w, setW] = useState(() => window.innerWidth);
@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '112'; // keep in sync with sw.js CACHE
+const APP_VERSION = '114'; // keep in sync with sw.js CACHE
 
 // motion tokens — one scale for every transition so the app feels consistent
 const MOTION = {

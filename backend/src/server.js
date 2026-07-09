@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import zlib from 'zlib';
 import crypto from 'crypto';
@@ -59,6 +60,12 @@ async function checkAndRunBackup() {
 
 const app = Fastify({ logger: true });
 await app.register(cors, { origin: true });
+
+// simple in-memory request counter — process-lifetime totals, no persistence,
+// good enough for a "requests since boot / per minute" tile without a metrics stack
+const bootTime = Date.now();
+let requestCount = 0;
+app.addHook('onRequest', async () => { requestCount++; });
 
 await initSchema();
 
@@ -337,6 +344,35 @@ app.get('/api/admin/stats', { preHandler: requireAdmin }, async (req, reply) => 
     gardensPerDay: gardensPerDay.rows,
     topSpecies: topSpecies.rows,
     mostActive: mostActive.rows,
+  };
+});
+
+app.get('/api/admin/system', { preHandler: requireAdmin }, async (req, reply) => {
+  const mem = process.memoryUsage();
+  let dbSizeBytes = null;
+  try {
+    const { rows } = await pool.query('SELECT pg_database_size(current_database()) AS size');
+    dbSizeBytes = Number(rows[0].size);
+  } catch (e) {}
+  let backupDirBytes = 0;
+  try {
+    backupDirBytes = fs.readdirSync(BACKUP_DIR)
+      .filter(f => f.endsWith('.sql.gz'))
+      .reduce((sum, f) => sum + fs.statSync(path.join(BACKUP_DIR, f)).size, 0);
+  } catch (e) {}
+  const uptimeSec = process.uptime();
+  return {
+    uptimeSec,
+    bootedAt: new Date(bootTime).toISOString(),
+    nodeVersion: process.version,
+    memory: { rss: mem.rss, heapUsed: mem.heapUsed, heapTotal: mem.heapTotal, external: mem.external },
+    loadavg: os.loadavg(),
+    cpuCount: os.cpus().length,
+    pool: { total: pool.totalCount, idle: pool.idleCount, waiting: pool.waitingCount },
+    dbSizeBytes,
+    backupDirBytes,
+    requestCount,
+    requestsPerMin: uptimeSec > 0 ? +(requestCount / (uptimeSec / 60)).toFixed(2) : 0,
   };
 });
 

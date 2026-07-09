@@ -837,6 +837,20 @@ const TOOL_NOTES = {
   garden_risk_report: 'scanning your garden…',
 };
 
+// easter egg: a few exact, low-stakes phrases get a scripted reply instead of
+// hitting the API — free, instant, and doesn't risk the model breaking
+// character. Only fires on a bare text message (no photo), matched after
+// trimming punctuation, so it never intercepts a real plant question.
+const DOCTOR_EASTER_EGGS = {
+  'are you a robot': "Only in the sense that I run on electricity and never sleep. Otherwise, all plant.",
+  'are you real': "As real as photosynthesis. Ask me something leafy.",
+  'tell me a joke': "Why did the fern and the cactus break up? Too many mixed signals about watering.",
+  'who made you': "A gardener with too many houseplants and a very patient editor.",
+  'do you like plants': "I'm contractually obligated to. Also, genuinely, yes.",
+  'i love you': "Sweet — but I think your plants would appreciate hearing that more.",
+  'what is the meaning of life': "Photosynthesis, mostly. Water, light, patience — the rest is decoration.",
+};
+
 function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, onBack, isDesktop }) {
   const [chats, setChats] = useState(() => loadDoctorChats());
   const initial = useRef(null);
@@ -947,6 +961,10 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
     const userMsg = { role: 'user', text: input.trim() || 'What’s going on with this plant?', image: pendingImage };
     const next = [...thread, userMsg];
     setThread(next); setInput(''); setPendingImage(null); setError(''); setBusy(true);
+    if (!hasPhoto) {
+      const egg = DOCTOR_EASTER_EGGS[userMsg.text.trim().toLowerCase().replace(/[.!?]+$/, '')];
+      if (egg) { setTimeout(() => { setThread(t => [...t, { role: 'assistant', text: egg }]); setBusy(false); }, 480); return; }
+    }
     // resend only the last 3 exchanges of text/image — tool plumbing is never persisted
     const recent = next.filter(m => m.role === 'user' || (m.role === 'assistant' && m.text)).slice(-6);
     let messages = recent.map(m => {

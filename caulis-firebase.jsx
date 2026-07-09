@@ -183,6 +183,11 @@ async function adminGetSettings(secret) {
   return ok ? data : null;
 }
 
+async function adminGetSystem(secret) {
+  const { ok, data } = await _api('/api/admin/system', { headers: { 'x-admin-secret': secret } });
+  return ok ? data : null;
+}
+
 async function adminSaveSettings(secret, settings) {
   const { ok } = await _api('/api/admin/settings', { method: 'PUT', headers: { 'x-admin-secret': secret }, body: JSON.stringify(settings) });
   return ok;
@@ -206,5 +211,5 @@ Object.assign(window, {
   listenGarden, pushGarden, gardenExists, renameGarden, fetchGardenOnce, gardenNodeId, changeGardenPassword, verifyGardenPassword,
   SYNC_READY, pushPhoto, fetchPhotos, deletePhotos, setActiveGarden, getActiveToken, BACKEND_URL,
   adminListGardens, adminGetGarden, adminPushGarden, adminDeleteGarden, adminBulkDelete, adminGetStats,
-  adminGetSettings, adminSaveSettings, adminRunBackup, adminListBackups, adminBackupDownloadUrl,
+  adminGetSettings, adminSaveSettings, adminRunBackup, adminListBackups, adminBackupDownloadUrl, adminGetSystem,
 });
