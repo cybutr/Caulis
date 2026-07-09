@@ -147,6 +147,32 @@ const bootTime = Date.now();
 let requestCount = 0;
 app.addHook('onRequest', async () => { requestCount++; });
 
+// lightweight in-memory per-IP sliding-window limiter for the unauthenticated
+// garden-key endpoints (login/register/exists) — bcrypt already slows brute
+// force per attempt, but nothing previously stopped a scripted loop of
+// attempts, and /exists lets a key be probed for free before ever touching
+// a password. No new dependency (fastify has no rate-limit plugin installed
+// here); process-lifetime only, resets on restart — good enough for a
+// single-instance personal box.
+const rateBuckets = new Map();
+function rateLimit(max, windowMs) {
+  return async (req, reply) => {
+    const ip = req.ip || 'unknown';
+    const now = Date.now();
+    const bucket = rateBuckets.get(ip);
+    if (!bucket || now > bucket.resetAt) {
+      rateBuckets.set(ip, { count: 1, resetAt: now + windowMs });
+      return;
+    }
+    bucket.count++;
+    if (bucket.count > max) return reply.code(429).send({ error: 'too many requests, slow down' });
+  };
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, b] of rateBuckets) if (now > b.resetAt) rateBuckets.delete(ip);
+}, 5 * 60 * 1000);
+
 await initSchema();
 
 const BACKUP_CHECK_MS = 15 * 60 * 1000;
@@ -156,7 +182,7 @@ checkAndRunBackup();
 const PUSH_CHECK_MS = 15 * 60 * 1000;
 setInterval(() => checkAndSendPushes().catch(e => app.log.error({ err: e }, 'push check failed')), PUSH_CHECK_MS);
 
-app.post('/api/gardens/register', async (req, reply) => {
+app.post('/api/gardens/register', { preHandler: rateLimit(20, 60000) }, async (req, reply) => {
   const { key, password = '' } = req.body || {};
   if (!key) return reply.code(400).send({ error: 'key required' });
 
@@ -173,7 +199,7 @@ app.post('/api/gardens/register', async (req, reply) => {
   return { token: signToken(gardenId) };
 });
 
-app.post('/api/gardens/login', async (req, reply) => {
+app.post('/api/gardens/login', { preHandler: rateLimit(20, 60000) }, async (req, reply) => {
   const { key, password = '' } = req.body || {};
   if (!key) return reply.code(400).send({ error: 'key required' });
 
@@ -186,7 +212,7 @@ app.post('/api/gardens/login', async (req, reply) => {
   return { token: signToken(rows[0].id) };
 });
 
-app.get('/api/gardens/exists', async (req, reply) => {
+app.get('/api/gardens/exists', { preHandler: rateLimit(60, 60000) }, async (req, reply) => {
   const key = req.query.key || '';
   if (!key) return reply.code(400).send({ error: 'key required' });
   const { rows } = await pool.query('SELECT id FROM gardens WHERE key = $1', [key]);

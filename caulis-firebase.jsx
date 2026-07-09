@@ -81,11 +81,20 @@ function listenGarden(key, onData) {
   return () => { stopped = true; clearInterval(id); };
 }
 
+// returns false on any failure (offline, expired token, server error) so
+// callers can surface it — a save that silently never reaches the server is
+// worse than one that visibly fails, especially for something people treat
+// as a cloud backup of their plant collection.
 async function pushGarden(key, data) {
   const session = _sessions[key];
-  if (!session?.token) return;
+  if (!session?.token) return false;
   const clean = JSON.parse(JSON.stringify(data, (_, v) => v === undefined ? null : v));
-  await _api('/api/garden', { method: 'PUT', body: JSON.stringify(clean) }, session.token);
+  try {
+    const { ok } = await _api('/api/garden', { method: 'PUT', body: JSON.stringify(clean) }, session.token);
+    return ok;
+  } catch (e) {
+    return false;
+  }
 }
 
 async function fetchGardenOnce(key) {

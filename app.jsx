@@ -88,6 +88,7 @@ function App() {
   const lsGet = (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch(e) { return fallback; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch(e) { if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014)) setStorageFull(true); return false; } };
   const [storageFull, setStorageFull] = useState(false);
+  const [syncError, setSyncError] = useState(false);
 
   const [plants, setPlants]       = useState(() => lsGet('caulis_plants', []).map(p => {
     const photos = lsGet('caulis_imgs_' + p.id, null);
@@ -802,10 +803,16 @@ function App() {
     if (switchingGardenRef.current) { switchingGardenRef.current = false; return; }
     const timer = setTimeout(() => {
       const cleanPlants = plants.map(({ photos, ...rest }) => rest);
-      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null});
+      pushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null})
+        .then(ok => setSyncError(!ok));
     }, 800);
     return () => clearTimeout(timer);
   }, [plants, locations, queue, gardenNode, perenualKey, plantIdKey, housePlantsKey, anthropicKey]);
+  useEffect(() => {
+    if (!syncError) return;
+    const t = setTimeout(() => setSyncError(false), 6000);
+    return () => clearTimeout(t);
+  }, [syncError]);
 
   const updateApp = async () => {
     // Force a sync of any pending changes before wiping caches and reloading
@@ -1381,6 +1388,17 @@ window.onload=()=>{
     </div>
   );
 
+  const syncErrorEl = syncError && (
+    <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:70, padding:'0 18px', animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#B4472E', borderRadius:18, padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+        <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:500, color:'#fff', lineHeight:1.4 }}>Couldn't sync — changes are saved on this device only until you're back online.</span>
+        <div onClick={()=>setSyncError(false)} style={{ cursor:'pointer', flexShrink:0, width:26, height:26, borderRadius:999, background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+  );
+
   const confettiEl = confetti && (
     <div style={{ position:'fixed', inset:0, zIndex:90, pointerEvents:'none', overflow:'hidden' }}>
       {Array.from({ length: 28 }).map((_, i) => {
@@ -1508,6 +1526,7 @@ window.onload=()=>{
         {undoDeleteEl}
         {undoWaterAllEl}
         {storageFullEl}
+        {syncErrorEl}
         {confettiEl}
         {milestoneToastEl}
         {holidayToastEl}
@@ -1565,6 +1584,7 @@ window.onload=()=>{
       {undoDeleteEl}
       {undoWaterAllEl}
       {storageFullEl}
+      {syncErrorEl}
       {confettiEl}
       {milestoneToastEl}
       {holidayToastEl}
