@@ -20,56 +20,56 @@ const PERENUAL = [
     sunlight:['part shade','filtered shade'], care_level:'Medium', indoor:true,
     default_image:{ regular_url: img('Monstera_deliciosa3.jpg') },
     _care:'Water when the top 5cm of soil is dry. Wipe leaves monthly.',
-    _fact:'Its leaf holes are called fenestrations — they let light reach lower leaves.' },
+    _fact:'Its leaf holes are called fenestrations — they let light reach lower leaves.', _toxic:true },
 
   { id:832, common_name:'Fiddle Leaf', scientific_name:['Ficus lyrata'], czech_names:['Fíkovník lourovitý','Fíkus lyrata'], cycle:'Perennial',
     watering:'Average', watering_general_benchmark:{value:'7', unit:'days'},
     sunlight:['full sun','part shade'], care_level:'Medium-High', indoor:true,
     default_image:{ regular_url: img('Ficus_lyrata.jpg') },
     _care:'Keep soil evenly moist, never soggy. Hates being moved.',
-    _fact:'A single fiddle leaf can grow up to 45cm long indoors.' },
+    _fact:'A single fiddle leaf can grow up to 45cm long indoors.', _toxic:true },
 
   { id:2056, common_name:'Snake Plant', scientific_name:['Sansevieria trifasciata'], czech_names:['Tchynin jazyk','Sanseviérie'], cycle:'Perennial',
     watering:'Minimum', watering_general_benchmark:{value:'14', unit:'days'},
     sunlight:['full shade','part shade','full sun'], care_level:'Low', indoor:true,
     default_image:{ regular_url: img('Sansevieria_trifasciata_1.jpg') },
     _care:'Let dry fully between drinks. Tolerates neglect well.',
-    _fact:'NASA lists it among the best plants for filtering indoor air.' },
+    _fact:'NASA lists it among the best plants for filtering indoor air.', _toxic:true },
 
   { id:700, common_name:'Golden Pothos', scientific_name:['Epipremnum aureum'], czech_names:['Pothos zlatý','Epipremnum zlaté'], cycle:'Perennial',
     watering:'Average', watering_general_benchmark:{value:'6', unit:'days'},
     sunlight:['part shade','full shade'], care_level:'Low', indoor:true,
     default_image:{ regular_url: img('Epipremnum_aureum_31082012.jpg') },
     _care:'Water weekly; trailing vines love a humid spot.',
-    _fact:'Nicknamed "Devil\u2019s Ivy" because it\u2019s nearly impossible to kill.' },
+    _fact:'Nicknamed "Devil\u2019s Ivy" because it\u2019s nearly impossible to kill.', _toxic:true },
 
   { id:2110, common_name:'Peace Lily', scientific_name:['Spathiphyllum wallisii'], czech_names:['Lopatkovec','Spatifylum'], cycle:'Perennial',
     watering:'Frequent', watering_general_benchmark:{value:'4-5', unit:'days'},
     sunlight:['part shade','full shade'], care_level:'Medium', indoor:true,
     default_image:{ regular_url: img('Spathiphyllum_cochlearispathum_RTBG.jpg') },
     _care:'Keep consistently moist. Droops dramatically when thirsty.',
-    _fact:'Its drooping leaves are an honest thirst signal — it perks back up fast.' },
+    _fact:'Its drooping leaves are an honest thirst signal — it perks back up fast.', _toxic:true },
 
   { id:2003, common_name:'String of Pearls', scientific_name:['Senecio rowleyanus'], czech_names:['Provázkovník','Senecio perlový'], cycle:'Perennial',
     watering:'Average', watering_general_benchmark:{value:'5', unit:'days'},
     sunlight:['full sun','part shade'], care_level:'Medium', indoor:true,
     default_image:{ regular_url: img('Senecio_rowleyanus.jpg') },
     _care:'Soak then dry out completely. Beads store water.',
-    _fact:'Each "pearl" has a translucent window that lets in extra light.' },
+    _fact:'Each "pearl" has a translucent window that lets in extra light.', _toxic:true },
 
   { id:1056, common_name:'Calathea', scientific_name:['Calathea orbifolia'], czech_names:['Kalatéa','Kalateja'], cycle:'Perennial',
     watering:'Frequent', watering_general_benchmark:{value:'6', unit:'days'},
     sunlight:['part shade'], care_level:'High', indoor:true,
     default_image:{ regular_url: img('Calathea_orbifolia.jpg') },
     _care:'Loves humidity and filtered water. Sensitive to tap minerals.',
-    _fact:'It folds its leaves up at night — a movement called nyctinasty.' },
+    _fact:'It folds its leaves up at night — a movement called nyctinasty.', _toxic:false },
 
   { id:831, common_name:'Rubber Plant', scientific_name:['Ficus elastica'], czech_names:['Pryžovník','Fíkovník pryžový'], cycle:'Perennial',
     watering:'Average', watering_general_benchmark:{value:'7', unit:'days'},
     sunlight:['part shade','full sun'], care_level:'Low-Medium', indoor:true,
     default_image:{ regular_url: img('Ficus_elastica2.jpg') },
     _care:'Water when top soil dries. Dust the broad leaves often.',
-    _fact:'Its sap was once used to make natural rubber.' },
+    _fact:'Its sap was once used to make natural rubber.', _toxic:true },
 
   // — extra species the identifier / search can return —
   { id:2071, common_name:'ZZ Plant', scientific_name:['Zamioculcas zamiifolia'], czech_names:['Zamiokulkas'], cycle:'Perennial',
@@ -77,40 +77,51 @@ const PERENUAL = [
     sunlight:['full shade','part shade'], care_level:'Low', indoor:true,
     default_image:{ regular_url: img('Zamioculcas_zamiifolia_1.jpg') },
     _care:'Water sparingly once the soil is fully dry. Thrives on neglect.',
-    _fact:'Its rhizomes store water, so it shrugs off a missed watering.' },
+    _fact:'Its rhizomes store water, so it shrugs off a missed watering.', _toxic:true },
 
   { id:1109, common_name:'Spider Plant', scientific_name:['Chlorophytum comosum'], czech_names:['Zelenec chocholatý','Pavoučí rostlina'], cycle:'Perennial',
     watering:'Average', watering_general_benchmark:{value:'7', unit:'days'},
     sunlight:['part shade','full sun'], care_level:'Low', indoor:true,
     default_image:{ regular_url: img('Chlorophytum_comosum.jpg') },
     _care:'Keep lightly moist. Pups can be potted into new plants.',
-    _fact:'It sends out baby "spiderettes" on long arching stems.' },
+    _fact:'It sends out baby "spiderettes" on long arching stems.', _toxic:false },
 
   { id:2475, common_name:'Bird of Paradise', scientific_name:['Strelitzia reginae'], czech_names:['Strelície královská','Rajský pták'], cycle:'Perennial',
     watering:'Average', watering_general_benchmark:{value:'7', unit:'days'},
     sunlight:['full sun','part shade'], care_level:'Medium', indoor:true,
     default_image:{ regular_url: img('Strelitzia_reginae0.jpg') },
     _care:'Water when the top 5cm dries. Loves warmth and bright light.',
-    _fact:'Its flower looks like a tropical bird mid-flight.' },
+    _fact:'Its flower looks like a tropical bird mid-flight.', _toxic:true },
 
   { id:1789, common_name:'Philodendron', scientific_name:['Philodendron hederaceum'], czech_names:['Filodendrón','Filodendron'], cycle:'Perennial',
     watering:'Average', watering_general_benchmark:{value:'7', unit:'days'},
     sunlight:['part shade','full shade'], care_level:'Low', indoor:true,
     default_image:{ regular_url: img('Philodendron_hederaceum_kz01.jpg') },
     _care:'Let the top of the soil dry between waterings.',
-    _fact:'Heartleaf philodendron is one of the easiest vines to grow.' },
+    _fact:'Heartleaf philodendron is one of the easiest vines to grow.', _toxic:true },
 
   { id:120, common_name:'Aloe Vera', scientific_name:['Aloe barbadensis miller'], czech_names:['Aloe pravé','Aloe vera'], cycle:'Perennial',
     watering:'Minimum', watering_general_benchmark:{value:'14', unit:'days'},
     sunlight:['full sun','part shade'], care_level:'Low', indoor:true,
     default_image:{ regular_url: img('Aloe_vera_flower_inset.png') },
     _care:'Soak thoroughly, then let dry out completely.',
-    _fact:'Its leaf gel has been used to soothe skin for millennia.' },
+    _fact:'Its leaf gel has been used to soothe skin for millennia.', _toxic:true },
 ];
 
 // ── field mapping: Perenual record → Caulis plant care fields ──
 const WATER_DAYS = { Frequent: 4, Average: 7, Minimum: 14, None: 21 };
 const titleCase = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// pet-toxicity: prefer a hand-authored _toxic flag (bundled library), else
+// the live Perenual API's poisonous_to_pets boolean, else unknown (null) —
+// never guess when neither source says anything, a wrong "safe" is worse
+// than no answer at all.
+function toxicToPetsOf(sp) {
+  if (typeof sp._toxic === 'boolean') return sp._toxic;
+  if (typeof sp.poisonous_to_pets === 'boolean') return sp.poisonous_to_pets;
+  if (typeof sp.poisonous_to_pets === 'number') return sp.poisonous_to_pets > 0;
+  return null;
+}
 
 function speciesCare(sp) {
   const sunlight = sp.sunlight || [];
@@ -125,6 +136,7 @@ function speciesCare(sp) {
     image:     sp.default_image ? (sp.default_image.regular_url || sp.default_image.medium_url || null) : null,
     species_id: sp.id,
     czech:     (sp.czech_names && sp.czech_names[0]) || sp.czech || '',
+    toxicToPets: toxicToPetsOf(sp),
   };
 }
 

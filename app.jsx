@@ -995,12 +995,13 @@ window.onload=()=>{
         const next = { ...p, name: data.name, czech: data.czech || '', latin: data.latin, location: data.location };
         if (data.species) {
           const care = speciesCare(data.species);
-          Object.assign(next, { every:care.every, light:care.light, care:care.care, fact:care.fact, watering:care.watering, benchmark:care.benchmark, sunlight:care.sunlight, species_id:care.species_id });
+          Object.assign(next, { every:care.every, light:care.light, care:care.care, fact:care.fact, watering:care.watering, benchmark:care.benchmark, sunlight:care.sunlight, species_id:care.species_id, toxicToPets:care.toxicToPets });
         }
         if (data.every) { next.every = data.every; next.benchmark = `${data.every} days`; }
         if (data.light) next.light = data.light;
         if (data.care) next.care = data.care;
         if (data.fact) next.fact = data.fact;
+        if (typeof data.toxicToPets === 'boolean') next.toxicToPets = data.toxicToPets;
         if (data.days != null) { next.days = data.days; next.wateredAt = todayMidnight() - data.days * 86400000; next.wv = WATER_SCHEMA; }
         next.photos = data.photos || [];
         next.image = data.presetImage != null ? data.presetImage : p.image;
@@ -1011,13 +1012,14 @@ window.onload=()=>{
     } else {
       const id = Math.max(0, ...plants.map(p => p.id)) + 1;
       const sp = data.species;
-      const care = sp ? speciesCare(sp) : { every:defaultEvery, light:'Bright, indirect', care:'Water when the top of the soil feels dry.', fact:'Freshly added — identify it to enrich its care notes.', watering:'Average', benchmark:`${defaultEvery} days`, sunlight:[], image:null, species_id:null };
+      const care = sp ? speciesCare(sp) : { every:defaultEvery, light:'Bright, indirect', care:'Water when the top of the soil feels dry.', fact:'Freshly added — identify it to enrich its care notes.', watering:'Average', benchmark:`${defaultEvery} days`, sunlight:[], image:null, species_id:null, toxicToPets:null };
       if (gardenNode) pushPhoto(gardenNode, id, data.photos || []);
       setPlants(ps => [...ps, {
         id, name: data.name, czech: data.czech || '', latin: data.latin, location: data.location, days: data.days || 0, wateredAt: todayMidnight() - (data.days || 0) * 86400000, wv: WATER_SCHEMA,
         every: data.every || care.every, light: data.light || care.light, care: data.care || care.care, fact: data.fact || care.fact,
         watering:care.watering, benchmark: data.every ? `${data.every} days` : care.benchmark, sunlight:care.sunlight,
         species_id:care.species_id,
+        toxicToPets: typeof data.toxicToPets === 'boolean' ? data.toxicToPets : care.toxicToPets,
         image: data.presetImage != null ? data.presetImage : care.image,
         photos: data.photos || [],
         aiV: APP_VERSION,

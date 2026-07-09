@@ -186,6 +186,17 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 <span style={{ opacity:0.6 }}> · every {plant.benchmark || plant.every + ' days'}</span>
               </InfoTile>
             </div>
+            {typeof plant.toxicToPets === 'boolean' && (
+              <InfoTile
+                icon={plant.toxicToPets
+                  ? <svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 2 2 21h20L12 2Z" fill="none" stroke={STATUS.needs.dot} strokeWidth="1.8" strokeLinejoin="round"/><path d="M12 9v5M12 17.2v.1" stroke={STATUS.needs.dot} strokeWidth="1.8" strokeLinecap="round"/></svg>
+                  : <IconCheck s={14} c={C.sage}/>}
+                label="Pet safety"
+              >
+                <span style={{ fontWeight:600, color: plant.toxicToPets ? STATUS.needs.dot : C.sage }}>{plant.toxicToPets ? 'Toxic to pets' : 'Safe for pets'}</span>
+                <span style={{ opacity:0.6 }}> — {plant.toxicToPets ? 'keep away from cats & dogs' : 'no known toxicity to cats & dogs'}</span>
+              </InfoTile>
+            )}
             {plant.care && <InfoTile icon={<LeafOutline size={14} color={C.sage} sw={1.7}/>} label="Care">{plant.care}</InfoTile>}
             {plant.fact && <InfoTile icon={<span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:14, color:C.sage }}>i</span>} label="Fun fact">{plant.fact}</InfoTile>}
             {(() => {
@@ -299,6 +310,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
   const [presetImage, setPresetImage] = useState(editing ? editing.image : null);
   const [photos, setPhotos] = useState(editing ? (editing.photos || (editing.userImage ? [editing.userImage] : [])) : []);
   const [every, setEvery] = useState(editing ? editing.every : 7);
+  const [toxicToPets, setToxicToPets] = useState(editing && typeof editing.toxicToPets === 'boolean' ? editing.toxicToPets : null);
   const [light, setLight] = useState(editing ? editing.light || '' : '');
   const [care, setCare] = useState(editing ? editing.care || '' : '');
   const [fact, setFact] = useState(editing ? editing.fact || '' : '');
@@ -322,6 +334,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
     setLight(c.light || '');
     setCare(c.care || '');
     setFact(c.fact || '');
+    setToxicToPets(c.toxicToPets);
     setSource((sp._source || 'PlantNet') + (sp._score ? ` · ${Math.round(sp._score * 100)}%` : ''));
     setIdentified(true);
   };
@@ -352,6 +365,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
       if (c.care) setCare(c.care);
       if (c.fact) setFact(c.fact);
       if (c.czech && !czech) setCzech(c.czech);
+      if (toxicToPets == null && c.toxicToPets != null) setToxicToPets(c.toxicToPets);
       setSource((source || 'Manual') + ' · AI Reviewed');
       if (aiRecord.common_name && !name) setName(aiRecord.common_name);
     } catch(e) {
@@ -385,6 +399,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
         setLight(care.light || '');
         setCare(care.care || '');
         setFact(care.fact || '');
+        setToxicToPets(care.toxicToPets);
         if (care.czech) setCzech(care.czech);
         setSource(sp._source || 'Perenual');
         setIdentified(true);
@@ -669,7 +684,7 @@ function AddPlant({ locations, editing, onBack, onSave, onAddLocation, isDesktop
 
       {/* save bar */}
       <div style={{ flexShrink:0, padding:'12px 18px 26px', borderTop:'0.5px solid rgba(45,80,22,0.1)', background:C.bg+'F2', backdropFilter:'blur(14px)' }}>
-        <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, photos, every, light:light.trim(), care:care.trim(), fact:fact.trim(), days:lastWatered }) : undefined}
+        <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, photos, every, light:light.trim(), care:care.trim(), fact:fact.trim(), days:lastWatered, toxicToPets }) : undefined}
           style={{
             height:52, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
             background: canSave ? C.forest : 'rgba(45,80,22,0.18)', color:'#fff',
