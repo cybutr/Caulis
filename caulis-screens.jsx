@@ -86,7 +86,7 @@ function SettingsSection({ title, open, onToggle, children, id, matched, query, 
 const SETTINGS_SECTION_ORDER = ['appearance', 'garden', 'behavior', 'notif', 'printing', 'data', 'app', 'google', 'cloud', 'backup', 'nav', 'dev', 'about'];
 const SETTINGS_SECTION_TITLES = {
   appearance: 'Appearance', garden: 'Garden', behavior: 'Behavior', notif: 'Notifications',
-  printing: 'Printing', data: 'Plant data', app: 'App', google: 'Google sync', cloud: 'Cloud sync',
+  printing: 'Printing', data: 'Plant data', app: 'Install', google: 'Google sync', cloud: 'Cloud sync',
   backup: 'Backup', nav: 'Navigation bar', dev: 'Developer', about: 'About',
 };
 
@@ -1681,7 +1681,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           </div>
         </SettingsSection>
         {(installPrompt || /iphone|ipad|ipod/i.test(navigator.userAgent)) && (
-          <SettingsSection title="App" open={isOpen('app')} onToggle={()=>toggleSec('app')} id={'sec-'+'app'} matched={settingsMatches[settingsMatchIdx] === 'app'} query={settingsMatches.includes('app') ? settingsQuery : ''} bodyRef={registerSection('app')}>
+          <SettingsSection title="Install" open={isOpen('app')} onToggle={()=>toggleSec('app')} id={'sec-'+'app'} matched={settingsMatches[settingsMatchIdx] === 'app'} query={settingsMatches.includes('app') ? settingsQuery : ''} bodyRef={registerSection('app')}>
             <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px' }}>
               {installPrompt ? (
                 <div onClick={onInstall} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
