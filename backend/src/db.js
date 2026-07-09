@@ -99,6 +99,11 @@ export async function initSchema() {
   // subscription — mirrors the client's own Czech-mode toggle, sent along at
   // subscribe time and whenever the toggle changes.
   await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS lang TEXT NOT NULL DEFAULT 'en'`);
+
+  // bumped on password change so every previously issued bearer token (90-day
+  // expiry) is invalidated in one step — without this, a leaked/stolen token
+  // keeps working for months after the owner reacts and changes the password.
+  await pool.query(`ALTER TABLE gardens ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0`);
 }
 
 export async function getSetting(key) {

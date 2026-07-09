@@ -133,7 +133,7 @@ async function gardenNodeId(key, password) {
 function setActiveGarden(key) { _activeKey = key; }
 function getActiveToken() { return _activeKey ? _sessions[_activeKey]?.token : null; }
 
-function listenGarden(key, onData) {
+function listenGarden(key, onData, isPushPending) {
   const session = _sessions[key];
   if (!session?.token) return () => {};
   let lastStamp = null;
@@ -141,8 +141,18 @@ function listenGarden(key, onData) {
   const poll = async () => {
     const { ok, data } = await _api('/api/garden', {}, session.token);
     if (!ok || !data) return;
-    // always keep rev/base current, even when updated_at hasn't moved and we
-    // skip calling onData below — pushGarden needs the freshest ancestor.
+    // a local edit is debounced or its push is in flight, based on the
+    // *previous* session.rev/base — overwriting them here with whatever a
+    // concurrent device just wrote would make pushGarden's next PUT carry a
+    // rev that happens to match the server's current row (since we just
+    // adopted it), so the conditional-write check on the server silently
+    // passes instead of 409ing, and the 3-way merge (which relies on
+    // session.base being the *true* common ancestor) never runs — the
+    // in-flight local edit would clobber the concurrent remote write with no
+    // conflict detection at all. Skip the refresh entirely while pending; the
+    // poll right after this device's push resolves (rev advanced for real,
+    // or via a genuine 409+merge) will pick up the authoritative state.
+    if (isPushPending && isPushPending()) return;
     session.rev = data.rev;
     session.base = { plants: data.plants, locations: data.locations, queue: data.queue };
     if (data.updated_at !== lastStamp) {
@@ -233,8 +243,12 @@ async function verifyGardenPassword(key, password) {
 async function changeGardenPassword(key, newPassword) {
   const session = _sessions[key];
   if (!session?.token) return false;
-  const { ok } = await _api('/api/gardens/password', { method: 'PATCH', body: JSON.stringify({ newPassword }) }, session.token);
-  if (ok) session.password = newPassword;
+  const { ok, data } = await _api('/api/gardens/password', { method: 'PATCH', body: JSON.stringify({ newPassword }) }, session.token);
+  // the server bumps token_version on every password change (so any other
+  // token issued before now stops working) and hands back a freshly signed
+  // token for this same request's caller — without swapping it in, this
+  // device would immediately log itself out on its own next call.
+  if (ok) { session.password = newPassword; if (data?.token) session.token = data.token; }
   return ok;
 }
 

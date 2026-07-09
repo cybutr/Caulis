@@ -839,7 +839,7 @@ function App() {
       if (data.plantIdKey) { setPlantIdKey(data.plantIdKey); setPlantIdKeyState(data.plantIdKey); }
       if (data.housePlantsKey) { setHousePlantsKey(data.housePlantsKey); setHousePlantsKeyState(data.housePlantsKey); }
       if (data.anthropicKey) { setAnthropicKey(data.anthropicKey); setAnthropicKeyState(data.anthropicKey); }
-    });
+    }, () => pushPendingRef.current);
     return unsubscribe;
   }, [gardenNode]);
 

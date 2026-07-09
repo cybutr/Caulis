@@ -248,13 +248,13 @@ app.post('/api/gardens/login', { preHandler: rateLimit(20, 60000) }, async (req,
   const { key, password = '' } = req.body || {};
   if (!key) return reply.code(400).send({ error: 'key required' });
 
-  const { rows } = await pool.query('SELECT id, password_hash FROM gardens WHERE key = $1', [key]);
+  const { rows } = await pool.query('SELECT id, password_hash, token_version FROM gardens WHERE key = $1', [key]);
   if (!rows.length) return reply.code(404).send({ error: 'garden not found' });
 
   const ok = await bcrypt.compare(password, rows[0].password_hash);
   if (!ok) return reply.code(401).send({ error: 'wrong password' });
 
-  return { token: signToken(rows[0].id) };
+  return { token: signToken(rows[0].id, rows[0].token_version) };
 });
 
 app.get('/api/gardens/exists', { preHandler: rateLimit(60, 60000) }, async (req, reply) => {
@@ -269,11 +269,11 @@ app.get('/api/gardens/exists', { preHandler: rateLimit(60, 60000) }, async (req,
 // column already holds a readable placeholder, unrelated to the hash). A
 // returning device's real key+password hashes to that same legacy value, so
 // this lets it silently adopt the row under its real key + chosen password.
-app.post('/api/gardens/claim', async (req, reply) => {
+app.post('/api/gardens/claim', { preHandler: rateLimit(20, 60000) }, async (req, reply) => {
   const { oldKey, newKey, newPassword = '' } = req.body || {};
   if (!oldKey || !newKey) return reply.code(400).send({ error: 'oldKey and newKey required' });
 
-  const { rows } = await pool.query('SELECT id, unclaimed FROM gardens WHERE legacy_node_hash = $1', [oldKey]);
+  const { rows } = await pool.query('SELECT id, unclaimed, token_version FROM gardens WHERE legacy_node_hash = $1', [oldKey]);
   if (!rows.length || !rows[0].unclaimed) return reply.code(404).send({ error: 'nothing to claim' });
 
   const conflict = await pool.query('SELECT id FROM gardens WHERE key = $1', [newKey]);
@@ -281,14 +281,21 @@ app.post('/api/gardens/claim', async (req, reply) => {
 
   const hash = await bcrypt.hash(newPassword, 12);
   await pool.query('UPDATE gardens SET key = $1, password_hash = $2, unclaimed = false WHERE id = $3', [newKey, hash, rows[0].id]);
-  return { token: signToken(rows[0].id) };
+  return { token: signToken(rows[0].id, rows[0].token_version) };
 });
 
 app.patch('/api/gardens/password', { preHandler: requireAuth }, async (req, reply) => {
   const { newPassword = '' } = req.body || {};
   const hash = await bcrypt.hash(newPassword, 12);
-  await pool.query('UPDATE gardens SET password_hash = $1 WHERE id = $2', [hash, req.gardenId]);
-  return { ok: true };
+  // bump token_version so every bearer token issued before this change stops
+  // working immediately (requireAuth checks it) rather than staying valid
+  // for the rest of its 90-day life — this request's own caller re-signs
+  // below so it isn't logged out by its own password change.
+  const { rows } = await pool.query(
+    'UPDATE gardens SET password_hash = $1, token_version = token_version + 1 WHERE id = $2 RETURNING token_version',
+    [hash, req.gardenId]
+  );
+  return { ok: true, token: signToken(req.gardenId, rows[0].token_version) };
 });
 
 app.delete('/api/gardens/me', { preHandler: requireAuth }, async (req, reply) => {
@@ -716,8 +723,9 @@ app.get('/api/admin/backup/download/:name', { preHandler: requireAdmin }, async 
 // payload — avoids embedding the whole thing in a URL, which got mangled or
 // rejected ("address invalid") when copy-pasted through messaging apps or
 // hit iOS URL-length quirks.
-app.post('/api/migrate', async (req, reply) => {
+app.post('/api/migrate', { preHandler: rateLimit(20, 60000) }, async (req, reply) => {
   const payload = req.body || {};
+  if (JSON.stringify(payload).length > 2_000_000) return reply.code(413).send({ error: 'payload too large' });
   const token = crypto.randomUUID().replace(/-/g, '').slice(0, 12);
   await pool.query('INSERT INTO migration_tokens (token, payload) VALUES ($1, $2)', [token, JSON.stringify(payload)]);
   pool.query("DELETE FROM migration_tokens WHERE created_at < now() - interval '24 hours'").catch(() => {});

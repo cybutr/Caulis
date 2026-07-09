@@ -8,8 +8,8 @@ export function hashApiKey(key) {
   return crypto.createHash('sha256').update(key).digest('hex');
 }
 
-export function signToken(gardenId) {
-  return jwt.sign({ gardenId }, JWT_SECRET, { expiresIn: '90d' });
+export function signToken(gardenId, tokenVersion = 0) {
+  return jwt.sign({ gardenId, tv: tokenVersion }, JWT_SECRET, { expiresIn: '90d' });
 }
 
 export function verifyToken(token) {
@@ -33,11 +33,21 @@ export async function requireAuth(req, reply) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return reply.code(401).send({ error: 'missing token' });
+  let claims;
   try {
-    req.gardenId = verifyToken(token).gardenId;
+    claims = verifyToken(token);
   } catch (e) {
     return reply.code(401).send({ error: 'invalid token' });
   }
+  // a token's tv claim must still match the garden's current token_version —
+  // password changes bump that counter, so this is what actually revokes
+  // every token issued before the change instead of trusting the 90-day JWT
+  // expiry alone.
+  const { rows } = await pool.query('SELECT token_version FROM gardens WHERE id = $1', [claims.gardenId]);
+  if (!rows.length || (claims.tv || 0) !== rows[0].token_version) {
+    return reply.code(401).send({ error: 'token revoked' });
+  }
+  req.gardenId = claims.gardenId;
 }
 
 function timingSafeStringEqual(a, b) {
