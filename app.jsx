@@ -545,9 +545,17 @@ function App() {
     return (await res.json()).id;
   };
 
+  // returns whether the remote item is actually gone (a 404 counts as gone —
+  // already deleted, nothing left to orphan) so the caller only forgets its
+  // locally-tracked id when it's safe to: a swallowed network error used to
+  // let the caller drop the id unconditionally, orphaning the real event on
+  // Google's side with no local reference left to ever clean it up.
   const deleteTask = async (existingId, token, listId) => {
-    if (!listId || !existingId) return;
-    try { await fetch(`${TASKS_API}/lists/${listId}/tasks/${existingId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch(e) {}
+    if (!listId || !existingId) return true;
+    try {
+      const r = await fetch(`${TASKS_API}/lists/${listId}/tasks/${existingId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      return r.ok || r.status === 404;
+    } catch(e) { return false; }
   };
 
   // ── Calendar backend (dedicated, togglable "Caulis Plants" calendar) ──
@@ -614,8 +622,11 @@ function App() {
   };
 
   const deleteCalendarEvent = async (existingId, token, calId) => {
-    if (!calId || !existingId) return;
-    try { await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${existingId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch(e) {}
+    if (!calId || !existingId) return true;
+    try {
+      const r = await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${existingId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      return r.ok || r.status === 404 || r.status === 410; // 410 Gone is Calendar's own "already deleted"
+    } catch(e) { return false; }
   };
 
   // ── mode dispatch ── (groupPlants: every plant due on the same dateStr)
@@ -676,8 +687,12 @@ function App() {
     // reminder for plants that already got watered.
     const staleDates = Object.keys(googleEventIds).filter(ds => !byDate[ds]);
     for (const ds of staleDates) {
-      await deleteItem(googleEventIds[ds], googleToken, targetId);
-      delete ids[ds];
+      const gone = await deleteItem(googleEventIds[ds], googleToken, targetId);
+      // only forget the id once the remote item is actually confirmed gone
+      // (deleted or already-404/410) — a swallowed network error used to
+      // drop the id unconditionally, orphaning the real event/task on
+      // Google's side with no local reference left to ever retry deleting.
+      if (gone) delete ids[ds];
       if (!googleTokenRef.current) { setGoogleEventIds(ids); return; }
     }
 
@@ -1434,6 +1449,7 @@ window.onload=()=>{
     setPlants(normalized);
     setLocations(data.locations || []);
     setQueue(data.queue || []);
+    setBadges(data.badges || []);
     setSyncMsg('Pulled the server’s copy — this device now matches it.');
     setTimeout(()=>setSyncMsg(null), 3500);
   };
@@ -1441,7 +1457,7 @@ window.onload=()=>{
     if (!gardenNode) return;
     setSyncBusy('push');
     const cleanPlants = plants.map(({ photos, ...rest }) => rest);
-    const ok = await forcePushGarden(gardenNode, { plants: cleanPlants, locations, queue, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null });
+    const ok = await forcePushGarden(gardenNode, { plants: cleanPlants, locations, queue, badges, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null });
     setSyncBusy(null);
     setSyncMsg(ok ? 'Pushed — the server now matches this device.' : 'Push failed — check the connection.');
     setTimeout(()=>setSyncMsg(null), 3500);

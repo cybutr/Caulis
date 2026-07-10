@@ -464,8 +464,8 @@ async function forcePullGarden(key) {
   const { ok, data } = await _api('/api/garden', {}, session.token);
   if (!ok) return null;
   session.rev = data.rev;
-  session.base = { plants: data.plants, locations: data.locations, queue: data.queue };
-  return { plants: data.plants, locations: data.locations, queue: data.queue };
+  session.base = { plants: data.plants, locations: data.locations, queue: data.queue, badges: data.badges };
+  return { plants: data.plants, locations: data.locations, queue: data.queue, badges: data.badges };
 }
 
 // unconditional overwrite: sends rev:null, which the server's conflict check
@@ -479,7 +479,7 @@ async function forcePushGarden(key, data) {
   const { ok, data: resp } = await _api('/api/garden', { method: 'PUT', body: JSON.stringify({ ...clean, rev: null }) }, session.token);
   if (!ok) return false;
   session.rev = resp?.rev ?? session.rev;
-  session.base = { plants: clean.plants, locations: clean.locations, queue: clean.queue };
+  session.base = { plants: clean.plants, locations: clean.locations, queue: clean.queue, badges: clean.badges };
   return true;
 }
 

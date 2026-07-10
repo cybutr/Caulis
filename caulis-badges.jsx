@@ -235,9 +235,10 @@ function _hash(str) {
 //  scroll away with the first screenful and leave nothing behind it.
 // ════════════════════════════════════════════════════════════
 function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
-  if (!enabled || !badges || !badges.length) return null;
+  const held = badges ? badges.filter(b => !b.revoked) : [];
+  if (!enabled || !held.length) return null;
   const cap = { few: 3, normal: 6, many: 10 }[density] || 6;
-  const shown = [...badges].sort((a, b) => b.earnedAt - a.earnedAt).slice(0, cap);
+  const shown = [...held].sort((a, b) => b.earnedAt - a.earnedAt).slice(0, cap);
   const bandH = (typeof window !== 'undefined' && window.innerHeight) || (isDesktop ? 900 : 700);
   return (
     <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:0 }} aria-hidden="true">
@@ -378,17 +379,24 @@ function BadgeShelf({ badges, curatedIds, isDesktop }) {
   const [open, setOpen] = useState(() => GS.get('caulis_badge_shelf_open', true));
   const toggle = () => setOpen(o => { GS.set('caulis_badge_shelf_open', !o); return !o; });
   if (!badges) return null;
-  const earnedIds = new Set(badges.map(b => b.id));
-  const shownIds = Array.isArray(curatedIds) && curatedIds.length ? curatedIds.filter(id => earnedIds.has(id)) : [...earnedIds];
-  const shownEarned = shownIds.map(id => badges.find(b => b.id === id)).filter(Boolean).sort((a, b) => a.earnedAt - b.earnedAt);
-  const locked = BADGE_DEFS.filter(d => !earnedIds.has(d.id) && !d.adminOnly);
-  if (!badges.length) return null;
+  // "held" = has an un-revoked entry — what actually counts as earned for
+  // display. A revoked entry stays in `badges` on purpose (see
+  // toggleAdminBadge in caulis-screens.jsx) so the auto-unlock effect's
+  // plain id-presence check doesn't silently re-grant it the next time its
+  // check() re-evaluates true, which for almost every non-secret badge is
+  // a permanent predicate that's already still true.
+  const held = badges.filter(b => !b.revoked);
+  const heldIds = new Set(held.map(b => b.id));
+  const shownIds = Array.isArray(curatedIds) && curatedIds.length ? curatedIds.filter(id => heldIds.has(id)) : [...heldIds];
+  const shownEarned = shownIds.map(id => held.find(b => b.id === id)).filter(Boolean).sort((a, b) => a.earnedAt - b.earnedAt);
+  const locked = BADGE_DEFS.filter(d => !heldIds.has(d.id) && !d.adminOnly);
+  if (!held.length) return null;
   return (
     <div style={{ background:C.panel, borderRadius:20, border:C.hair, boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)', overflow:'hidden' }}>
       <div onClick={toggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
         <div>
           <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.4, textTransform:'uppercase' }}>Badges</div>
-          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.forest, marginTop:1 }}>{badges.length} of {BADGE_DEFS.length} earned</div>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.forest, marginTop:1 }}>{held.length} of {BADGE_DEFS.length} earned</div>
         </div>
         <svg width="13" height="13" viewBox="0 0 24 24" style={{ transform: open?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45, flexShrink:0 }}>
           <path d="M6 9l6 6 6-6" stroke={C.brown} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
@@ -419,7 +427,10 @@ function computeSatisfiedBadgeIds(state) {
 //  than a card living permanently in the Garden screen.
 // ════════════════════════════════════════════════════════════
 function BadgesView({ badges, onBack, isDesktop }) {
-  const earned = badges || [];
+  // "held" = has an un-revoked entry — see toggleAdminBadge in
+  // caulis-screens.jsx for why a revoked badge stays in the array (flagged)
+  // instead of being removed outright.
+  const earned = (badges || []).filter(b => !b.revoked);
   const earnedIds = new Set(earned.map(b => b.id));
   const earnedByDef = BADGE_DEFS.filter(d => earnedIds.has(d.id))
     .map(d => ({ def: d, at: earned.find(b => b.id === d.id).earnedAt }))

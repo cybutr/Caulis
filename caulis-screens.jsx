@@ -415,10 +415,10 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
             )}
           </div>
           <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8 }}>
-            {!empty && badges && badges.length > 0 && (
+            {!empty && badges && badges.filter(b=>!b.revoked).length > 0 && (
               <div onClick={onOpenBadges} title="Badges" style={{ height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', gap:6, padding:'0 10px 0 12px', cursor:'pointer' }}>
                 <BadgeIconSprout s={16} c={C.forest}/>
-                <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink }}>{badges.length}/{BADGE_DEFS.length}</span>
+                <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink }}>{badges.filter(b=>!b.revoked).length}/{BADGE_DEFS.length}</span>
                 <svg width="8" height="8" viewBox="0 0 24 24" style={{ opacity:0.4, flexShrink:0 }}><path d="M9 6l6 6-6 6" stroke={C.brown} strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </div>
             )}
@@ -1414,8 +1414,25 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
   const toggleAdminBadge = (id) => setAdminLoaded(nl => {
     if (!nl) return nl;
     const cur = Array.isArray(nl.data.badges) ? nl.data.badges : [];
-    const has = cur.some(b => b.id === id);
-    const nextBadges = has ? cur.filter(b => b.id !== id) : [...cur, { id, earnedAt: Date.now() }];
+    const existing = cur.find(b => b.id === id);
+    const held = existing && !existing.revoked;
+    let nextBadges;
+    if (held) {
+      // revoke: keep the entry (flagged, not removed) instead of deleting
+      // it outright — a plain removal is indistinguishable from "never
+      // earned" to the auto-unlock effect, which re-derives earned status
+      // from live garden data on every plants/locations change. Almost
+      // every non-secret badge's check() is a permanent state predicate
+      // (e.g. "has 10+ plants"), so a removed-not-flagged revoke got
+      // silently re-granted — often within minutes — the moment that
+      // predicate re-evaluated true again, which it already was.
+      nextBadges = cur.map(b => b.id === id ? { ...b, revoked: true } : b);
+    } else if (existing) {
+      // re-grant after a prior revoke — un-flag rather than duplicate
+      nextBadges = cur.map(b => b.id === id ? { ...b, revoked: false, earnedAt: Date.now() } : b);
+    } else {
+      nextBadges = [...cur, { id, earnedAt: Date.now() }];
+    }
     return { ...nl, data: { ...nl.data, badges: nextBadges } };
   });
   const pushAdminGarden = async () => {
@@ -1795,7 +1812,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
         </SettingsSection>
         <SettingsSection title="Badges" open={isOpen('badges')} onToggle={()=>toggleSec('badges')} id={'sec-'+'badges'} matched={settingsMatches[settingsMatchIdx] === 'badges'} query={settingsMatches.includes('badges') ? settingsQuery : ''} bodyRef={registerSection('badges')}>
           <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
-            <Row label="Earned" value={`${(badges||[]).length} of ${BADGE_DEFS.length}`}/>
+            <Row label="Earned" value={`${(badges||[]).filter(b=>!b.revoked).length} of ${BADGE_DEFS.length}`}/>
             <div onClick={onToggleAmbientBadges} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Ambient decorations</div>
@@ -2678,10 +2695,10 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                           {!adminLoaded && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.65 }}>Load a garden above (Gardens section) to grant or revoke its badges.</span>}
                           {adminLoaded && (
                             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{adminLoaded.key} · {(Array.isArray(adminLoaded.data.badges) ? adminLoaded.data.badges.length : 0)} of {BADGE_DEFS.length} earned · edits stay local until pushed</div>
+                              <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{adminLoaded.key} · {(Array.isArray(adminLoaded.data.badges) ? adminLoaded.data.badges.filter(b=>!b.revoked).length : 0)} of {BADGE_DEFS.length} earned · edits stay local until pushed</div>
                               <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair }}>
                                 {BADGE_DEFS.map(def => {
-                                  const earned = Array.isArray(adminLoaded.data.badges) && adminLoaded.data.badges.some(b => b.id === def.id);
+                                  const earned = Array.isArray(adminLoaded.data.badges) && adminLoaded.data.badges.some(b => b.id === def.id && !b.revoked);
                                   return (
                                     <div key={def.id} onClick={()=>toggleAdminBadge(def.id)} style={{ display:'flex', alignItems:'center', gap:10, padding:'10px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
                                       <def.Icon s={17} c={earned?C.forest:C.brown}/>
