@@ -519,6 +519,25 @@ function IconPin({ s = 13, c = C.brown }) {
     <circle cx="7" cy="5.7" r="1.5" stroke={c} strokeWidth="1.2"/>
   </svg>);
 }
+function IconEye({ s = 16, c = C.ink, a = 0.55 }) {
+  return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none" opacity={a}>
+    <path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>
+    <circle cx="10" cy="10" r="2.4" stroke={c} strokeWidth="1.5"/>
+  </svg>);
+}
+function IconEyeOff({ s = 16, c = C.ink, a = 0.55 }) {
+  return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none" opacity={a}>
+    <path d="M2.5 2.5l15 15" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M8.3 4.4C8.85 4.14 9.42 4 10 4c5.5 0 8.5 6 8.5 6a15 15 0 0 1-2.3 3.1M5.7 5.7A15 15 0 0 0 1.5 10s3 6 8.5 6c1 0 1.9-.18 2.7-.5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M8.2 8.2a2.4 2.4 0 0 0 3.3 3.3" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>);
+}
+function IconCopy({ s = 16, c = C.ink, a = 0.55 }) {
+  return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none" opacity={a}>
+    <rect x="7" y="7" width="10.5" height="10.5" rx="2" stroke={c} strokeWidth="1.5"/>
+    <path d="M13 7V4.5A1.5 1.5 0 0 0 11.5 3H4a1.5 1.5 0 0 0-1.5 1.5V12a1.5 1.5 0 0 0 1.5 1.5H7" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>);
+}
 
 // ════════════════════════════════════════════════════════════
 //  Small shared components
@@ -663,7 +682,7 @@ Object.assign(window, {
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,
   BG_TEXTURES, BG_TEXTURE_ORDER, applyBgTexture, bgTextureStyle,
   Leaf, LeafOutline, Sprig, gardenGrowthStage, trackSeenValue,
-  IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore,
+  IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
   useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION, MOTION,

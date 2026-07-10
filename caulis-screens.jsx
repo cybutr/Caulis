@@ -1184,6 +1184,60 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLi
   );
 }
 
+function maskKey(k) {
+  if (!k) return '';
+  const tail = k.slice(-4);
+  const dots = '•'.repeat(Math.min(20, Math.max(6, k.length - 4)));
+  return dots + tail;
+}
+
+// self-contained API key input: shows a masked "•••1234" view of an already-
+// saved key (with eye-reveal + copy) instead of a permanently blank field,
+// so the owner can retrieve their own key later (e.g. to hand it to someone
+// else joining the same garden). Typing a fresh value still works exactly
+// like before — click/focus drops into edit mode.
+function ApiKeyField({ value, savedValue, onChange, placeholder }) {
+  const [editing, setEditing] = useState(!savedValue);
+  const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const prevSavedRef = useRef(savedValue);
+  useEffect(() => {
+    if (!savedValue) setEditing(true);
+    else if (savedValue !== prevSavedRef.current) { setEditing(false); setRevealed(false); onChange(''); }
+    prevSavedRef.current = savedValue;
+  }, [savedValue]);
+  const displayValue = editing ? value : (revealed ? savedValue : maskKey(savedValue));
+  const copy = () => {
+    try { navigator.clipboard.writeText(savedValue); setCopied(true); setTimeout(()=>setCopied(false), 1600); } catch(e) {}
+  };
+  return (
+    <div style={{ display:'flex', gap:8, alignItems:'center', flex:1, minWidth:0 }}>
+      <div style={{ flex:1, minWidth:0, position:'relative' }}>
+        <input
+          value={displayValue}
+          readOnly={!editing}
+          onFocus={()=>{ if (!editing) { setEditing(true); onChange(''); } }}
+          onChange={e=>onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{ width:'100%', boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding: editing ? '0 13px' : '0 62px 0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+        {!editing && savedValue && (
+          <div style={{ position:'absolute', right:6, top:0, bottom:0, display:'flex', alignItems:'center', gap:2 }}>
+            <div onClick={()=>setRevealed(r=>!r)} title={revealed?'Hide':'Reveal'} style={{ width:26, height:26, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              {revealed ? <IconEyeOff s={15}/> : <IconEye s={15}/>}
+            </div>
+            <div onClick={copy} title="Copy" style={{ width:26, height:26, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              {copied ? <IconCheck s={14} c={C.sage}/> : <IconCopy s={15}/>}
+            </div>
+          </div>
+        )}
+      </div>
+      {editing && savedValue && (
+        <span onClick={()=>{ setEditing(false); onChange(''); }} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.brown, opacity:0.65, flexShrink:0 }}>Cancel</span>
+      )}
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
@@ -2022,8 +2076,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Perenual — species photos &amp; care data</div>
               <div style={{ display:'flex', gap:8 }}>
-                <input value={key} onChange={e=>setKey(e.target.value)} placeholder="API key"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <ApiKeyField value={key} savedValue={perenualKey} onChange={setKey} placeholder="API key"/>
                 <div onClick={()=>{ onSavePerenualKey(key.trim()); setSaved(true); setTimeout(()=>setSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: saved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {saved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{saved?'Saved':'Save'}</span>
@@ -2039,8 +2092,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:4 }}>House Plants API — fallback data</div>
               <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5, marginBottom:8 }}>RapidAPI key for FreeWebApi House Plants. Used when Perenual hits rate limits.</div>
               <div style={{ display:'flex', gap:8 }}>
-                <input value={housePlantsInput} onChange={e=>setHousePlantsInput(e.target.value)} placeholder="RapidAPI key"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <ApiKeyField value={housePlantsInput} savedValue={housePlantsKey} onChange={setHousePlantsInput} placeholder="RapidAPI key"/>
                 <div onClick={()=>{ onSaveHousePlantsKey(housePlantsInput.trim()); setHousePlantsSaved(true); setTimeout(()=>setHousePlantsSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: housePlantsSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {housePlantsSaved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{housePlantsSaved?'Saved':'Save'}</span>
@@ -2055,8 +2107,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>PlantNet — photo identification</div>
               <div style={{ display:'flex', gap:8 }}>
-                <input value={plantIdInput} onChange={e=>setPlantIdInput(e.target.value)} placeholder="API key"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <ApiKeyField value={plantIdInput} savedValue={plantIdKey} onChange={setPlantIdInput} placeholder="API key"/>
                 <div onClick={()=>{ onSavePlantIdKey(plantIdInput.trim()); setPlantIdSaved(true); setTimeout(()=>setPlantIdSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: plantIdSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {plantIdSaved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{plantIdSaved?'Saved':'Save'}</span>
@@ -2072,8 +2123,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:4 }}>Claude — AI care review</div>
               <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5, marginBottom:8 }}>Anthropic API key. Claude reviews &amp; corrects species care data on identify — filling gaps and fixing wrong watering intervals. Key is stored server-side against your garden and used only to call Anthropic on your behalf, never sent to the browser directly.</div>
               <div style={{ display:'flex', gap:8 }}>
-                <input value={anthropicInput} onChange={e=>setAnthropicInput(e.target.value)} placeholder="sk-ant-…"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <ApiKeyField value={anthropicInput} savedValue={anthropicKey} onChange={setAnthropicInput} placeholder="sk-ant-…"/>
                 <div onClick={()=>{ onSaveAnthropicKey(anthropicInput.trim()); setAnthropicSaved(true); setTimeout(()=>setAnthropicSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: anthropicSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {anthropicSaved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{anthropicSaved?'Saved':'Save'}</span>

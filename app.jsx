@@ -903,6 +903,17 @@ function App() {
       setGardenNode(node);
       setActiveGarden(node);
       try { localStorage.setItem('caulis_garden_node', node); } catch(e) {}
+      // adopt any garden-level keys this device doesn't already have its own
+      // value for (e.g. a second person joining the same garden) — never
+      // clobbers a key this device already typed in itself.
+      pullGardenKeys(node).then(keys => {
+        if (cancelled || !keys) return;
+        const has = (k) => { try { return !!localStorage.getItem(k); } catch(e) { return false; } };
+        if (keys.perenualKey && !has('caulis_perenual_key')) { setApiKey(keys.perenualKey); setPerenualKeyState(keys.perenualKey); }
+        if (keys.plantIdKey && !has('caulis_plantid_key')) { setPlantIdKey(keys.plantIdKey); setPlantIdKeyState(keys.plantIdKey); }
+        if (keys.housePlantsKey && !has('caulis_houseplants_key')) { setHousePlantsKey(keys.housePlantsKey); setHousePlantsKeyState(keys.housePlantsKey); }
+        if (keys.anthropicKey && !has('caulis_anthropic_key')) { setAnthropicKey(keys.anthropicKey); setAnthropicKeyState(keys.anthropicKey); }
+      });
     });
     return () => { cancelled = true; };
   }, [gardenKey, gardenPassword]);
@@ -1031,10 +1042,6 @@ function App() {
       }
       if (data.queue)     setQueue(toArr(data.queue).filter(Boolean));
       if (data.badges)    setBadges(toArr(data.badges).filter(Boolean));
-      if (data.perenualKey) { setApiKey(data.perenualKey); setPerenualKeyState(data.perenualKey); }
-      if (data.plantIdKey) { setPlantIdKey(data.plantIdKey); setPlantIdKeyState(data.plantIdKey); }
-      if (data.housePlantsKey) { setHousePlantsKey(data.housePlantsKey); setHousePlantsKeyState(data.housePlantsKey); }
-      if (data.anthropicKey) { setAnthropicKey(data.anthropicKey); setAnthropicKeyState(data.anthropicKey); }
     }, isPushPending);
     return unsubscribe;
   }, [gardenNode]);

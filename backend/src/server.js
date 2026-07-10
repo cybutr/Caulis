@@ -363,6 +363,16 @@ app.put('/api/garden/keys', { preHandler: requireAuth }, async (req, reply) => {
   return { ok: true };
 });
 
+app.get('/api/garden/keys', { preHandler: requireAuth }, async (req, reply) => {
+  const { rows } = await pool.query(
+    'SELECT perenual_key, anthropic_key, plant_id_key, house_plants_key FROM gardens WHERE id = $1',
+    [req.gardenId]
+  );
+  if (!rows.length) return reply.code(404).send({ error: 'not found' });
+  const r = rows[0];
+  return { perenualKey: r.perenual_key || null, anthropicKey: r.anthropic_key || null, plantIdKey: r.plant_id_key || null, housePlantsKey: r.house_plants_key || null };
+});
+
 app.get('/api/garden/keys/status', { preHandler: requireAuth }, async (req, reply) => {
   const { rows } = await pool.query(
     `SELECT perenual_key IS NOT NULL AS "hasPerenual",
