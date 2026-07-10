@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '151'; // keep in sync with sw.js CACHE
+const APP_VERSION = '152'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -109,6 +109,60 @@ const ACCENTS = {
 };
 const ACCENT_ORDER = ['match','forest','teal','plum','clay','ocean','amber','rose'];
 let activeAccent = 'match';
+
+// corner-radius density — one multiplier over the whole radius scale (11-22px
+// tiles/inputs, 16 buttons, 18 rows, 20-22 cards/sheets) so a single setting
+// visibly retunes cards, buttons and sheets together instead of just one spot.
+// pills (999) are excluded on purpose — they're already maximally round.
+const RADIUS_DENSITY = {
+  sharp: { label:'Sharp', mult:0.45 },
+  soft:  { label:'Soft',  mult:1 },
+  round: { label:'Round', mult:1.4 },
+};
+const RADIUS_ORDER = ['sharp','soft','round'];
+let radiusMult = 1;
+function applyRadiusDensity(level) { radiusMult = (RADIUS_DENSITY[level] || RADIUS_DENSITY.soft).mult; }
+function rad(px) { return Math.max(2, Math.round(px * radiusMult)); }
+
+// card image treatment — CSS filter presets applied inside Specimen, the one
+// component every plant photo already renders through (Garden, Needs Water,
+// Plant Detail, Print Queue, Digest), so one setting reaches all of them.
+const IMAGE_TREATMENTS = {
+  natural:  { label:'Natural',  filter:'none' },
+  vivid:    { label:'Vivid',    filter:'saturate(1.4) contrast(1.1) brightness(1.03)' },
+  vignette: { label:'Vignette', filter:'saturate(1.05) contrast(1.05) brightness(0.97)', vignette:true },
+};
+const IMAGE_TREATMENT_ORDER = ['natural','vivid','vignette'];
+let activeImageTreatment = 'natural';
+function applyImageTreatment(v) { if (IMAGE_TREATMENTS[v]) activeImageTreatment = v; }
+
+// UI density — a single spacing multiplier for grid gaps / row padding,
+// independent of "Card density" (which only picks the grid column count)
+const UI_DENSITY = {
+  compact:     { label:'Compact',     mult:0.7 },
+  comfortable: { label:'Comfortable', mult:1 },
+  spacious:    { label:'Spacious',    mult:1.35 },
+};
+const UI_DENSITY_ORDER = ['compact','comfortable','spacious'];
+let uiDensityMult = 1;
+function applyUiDensity(level) { uiDensityMult = (UI_DENSITY[level] || UI_DENSITY.comfortable).mult; }
+function ds(px) { return Math.max(2, Math.round(px * uiDensityMult)); }
+
+// background texture — a very subtle, optional wash behind every screen,
+// in the same restrained spirit as the Sprig watermark. Off by default.
+const BG_TEXTURES = {
+  none:  { label:'None' },
+  dot:   { label:'Dot grid' },
+  paper: { label:'Paper grain' },
+};
+const BG_TEXTURE_ORDER = ['none','dot','paper'];
+let activeBgTexture = 'none';
+function applyBgTexture(v) { if (BG_TEXTURES[v]) activeBgTexture = v; }
+function bgTextureStyle() {
+  if (activeBgTexture === 'dot') return { backgroundImage:`radial-gradient(${C.line} 1px, transparent 1px)`, backgroundSize:'22px 22px' };
+  if (activeBgTexture === 'paper') return { backgroundImage:`repeating-linear-gradient(135deg, ${C.line} 0 1px, transparent 1px 8px)` };
+  return {};
+}
 
 function applyTheme(dark, palette, accent) {
   if (palette && PALETTES[palette]) activePalette = palette;
@@ -444,9 +498,11 @@ function Specimen({ tint, height, radius = 15, leafSize = 46, caption, image }) 
     if (el && el.complete && el.naturalWidth > 0) setLoaded(true);
   }, [image]);
   const showImg = image && !failed;
+  const r = rad(radius);
+  const treatment = IMAGE_TREATMENTS[activeImageTreatment] || IMAGE_TREATMENTS.natural;
   return (
     <div style={{
-      position:'relative', height, borderRadius:radius, background:tint,
+      position:'relative', height, borderRadius:r, background:tint,
       display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden',
     }}>
       <div style={{
@@ -459,12 +515,14 @@ function Specimen({ tint, height, radius = 15, leafSize = 46, caption, image }) 
           key={image} ref={imgRef} src={image} alt="" draggable={false}
           onError={()=>setFailed(true)} onLoad={()=>setLoaded(true)}
           style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', display:'block',
-            opacity: loaded?1:0, transform: loaded?'none':'scale(1.06)', filter: loaded?'none':'blur(14px)',
+            opacity: loaded?1:0, transform: loaded?'none':'scale(1.06)', filter: loaded?treatment.filter:'blur(14px)',
             transition:`opacity ${MOTION.base}ms ${MOTION.out}, transform ${MOTION.slow}ms ${MOTION.out}, filter ${MOTION.slow}ms ${MOTION.out}` }}/>
       )}
       {showImg && (
-        <div style={{ position:'absolute', inset:0, boxShadow:'inset 0 0 0 0.5px rgba(45,80,22,0.10)', borderRadius:radius, pointerEvents:'none',
-          background:'linear-gradient(to top, rgba(28,38,18,0.18), transparent 38%)' }}/>
+        <div style={{ position:'absolute', inset:0, boxShadow:'inset 0 0 0 0.5px rgba(45,80,22,0.10)', borderRadius:r, pointerEvents:'none',
+          background: treatment.vignette
+            ? 'radial-gradient(ellipse at center, transparent 45%, rgba(20,26,14,0.28) 100%), linear-gradient(to top, rgba(28,38,18,0.2), transparent 38%)'
+            : 'linear-gradient(to top, rgba(28,38,18,0.18), transparent 38%)' }}/>
       )}
       {caption && !showImg && (
         <span style={{
@@ -532,6 +590,10 @@ Object.assign(window, {
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor, MILESTONES,
   PALETTES, PALETTE_ORDER, ACCENTS, ACCENT_ORDER,
+  RADIUS_DENSITY, RADIUS_ORDER, applyRadiusDensity, rad,
+  IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
+  UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,
+  BG_TEXTURES, BG_TEXTURE_ORDER, applyBgTexture, bgTextureStyle,
   Leaf, LeafOutline, Sprig,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore,
   StatusDot, LocationPill, StatusTag, Specimen,

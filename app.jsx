@@ -93,14 +93,14 @@ function App() {
   };
   const migrationConfirmEl = pendingMigration && (
     <div style={{ position:'fixed', inset:0, zIndex:200, background:'rgba(42,42,38,0.55)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
-      <div style={{ background:C.bg, borderRadius:22, padding:26, maxWidth:340, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+      <div style={{ background:C.bg, borderRadius:rad(22), padding:26, maxWidth:340, boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest, marginBottom:10 }}>Switch to a shared garden?</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, opacity:0.8, lineHeight:1.5, marginBottom:20 }}>
           A migration link wants to connect this device to garden <b>{pendingMigration.caulis_garden_key || 'unknown'}</b>. Only continue if you generated this link yourself, on another device.
         </div>
         <div style={{ display:'flex', gap:10 }}>
-          <div onClick={dismissMigration} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, border:`1px solid ${C.forest}`, color:C.forest, fontFamily:FONT_SANS, fontWeight:600, fontSize:14, cursor:'pointer' }}>Not me — ignore</div>
-          <div onClick={confirmMigration} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:C.forest, color:'#fff', fontFamily:FONT_SANS, fontWeight:600, fontSize:14, cursor:'pointer' }}>Yes, continue</div>
+          <div onClick={dismissMigration} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:rad(14), border:`1px solid ${C.forest}`, color:C.forest, fontFamily:FONT_SANS, fontWeight:600, fontSize:14, cursor:'pointer' }}>Not me — ignore</div>
+          <div onClick={confirmMigration} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:rad(14), background:C.forest, color:'#fff', fontFamily:FONT_SANS, fontWeight:600, fontSize:14, cursor:'pointer' }}>Yes, continue</div>
         </div>
       </div>
     </div>
@@ -751,7 +751,19 @@ function App() {
   const setPalette = (v) => { setPaletteRaw(v); lsSet('caulis_palette', v); };
   const [accent, setAccentRaw] = useState(() => lsGet('caulis_accent', 'match'));
   const setAccent = (v) => { setAccentRaw(v); lsSet('caulis_accent', v); };
+  const [radiusDensity, setRadiusDensityRaw] = useState(() => lsGet('caulis_radius_density', 'soft'));
+  const setRadiusDensity = (v) => { setRadiusDensityRaw(v); lsSet('caulis_radius_density', v); };
+  const [imageTreatment, setImageTreatmentRaw] = useState(() => lsGet('caulis_image_treatment', 'natural'));
+  const setImageTreatment = (v) => { setImageTreatmentRaw(v); lsSet('caulis_image_treatment', v); };
+  const [uiDensity, setUiDensityRaw] = useState(() => lsGet('caulis_ui_density', 'comfortable'));
+  const setUiDensity = (v) => { setUiDensityRaw(v); lsSet('caulis_ui_density', v); };
+  const [bgTexture, setBgTextureRaw] = useState(() => lsGet('caulis_bg_texture', 'none'));
+  const setBgTexture = (v) => { setBgTextureRaw(v); lsSet('caulis_bg_texture', v); };
   applyTheme(darkMode, palette, accent);
+  applyRadiusDensity(radiusDensity);
+  applyImageTreatment(imageTreatment);
+  applyUiDensity(uiDensity);
+  applyBgTexture(bgTexture);
   useEffect(() => {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = C.bg === '#111610' ? '#111610' : C.forest;
@@ -1696,14 +1708,14 @@ window.onload=()=>{
 
   const moreEl = moreOpen && (
     <div onClick={()=>setMoreOpen(false)} style={{ position:'fixed', inset:0, zIndex:44, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:26, borderTopRightRadius:26, padding:'10px 18px calc(30px + env(safe-area-inset-bottom))', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'72%', overflowY:'auto' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:rad(26), borderTopRightRadius:rad(26), padding:'10px 18px calc(30px + env(safe-area-inset-bottom))', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'72%', overflowY:'auto' }}>
         <div style={{ width:38, height:4, borderRadius:999, background:'rgba(45,80,22,0.16)', margin:'0 auto 14px' }}/>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, color:C.forest, textAlign:'center', marginBottom:14 }}>All sections</div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(92px, 1fr))', gap:12 }}>
           {NAV_ORDER.filter(a => a !== 'more').map(a => {
             const meta = NAV_ACTIONS[a]; const active = meta.tab && tab === a;
             return (
-              <div key={a} onClick={()=>navTo(a)} style={{ cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'16px 8px', borderRadius:18, background: active ? 'rgba(110,154,62,0.1)' : C.panel, border: active ? '1px solid rgba(110,154,62,0.4)' : C.hair }}>
+              <div key={a} onClick={()=>navTo(a)} style={{ cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'16px 8px', borderRadius:rad(18), background: active ? 'rgba(110,154,62,0.1)' : C.panel, border: active ? '1px solid rgba(110,154,62,0.4)' : C.hair }}>
                 <meta.Icon s={24} c={active ? C.forest : C.brown} a={active ? 1 : 0.7}/>
                 <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color: active ? C.forest : C.ink }}>{meta.label}</span>
               </div>
@@ -1748,7 +1760,7 @@ window.onload=()=>{
 
   const storageFullEl = storageFull && (
     <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:70, padding:'0 18px', animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
-      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#B4472E', borderRadius:18, padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#B4472E', borderRadius:rad(18), padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
         <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:500, color:'#fff', lineHeight:1.4 }}>Device storage full — recent photos may not be saved. Remove some photos or back up your garden.</span>
         <div onClick={()=>setStorageFull(false)} style={{ cursor:'pointer', flexShrink:0, width:26, height:26, borderRadius:999, background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
@@ -1759,7 +1771,7 @@ window.onload=()=>{
 
   const syncErrorEl = syncError && (
     <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:70, padding:'0 18px', animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
-      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#B4472E', borderRadius:18, padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#B4472E', borderRadius:rad(18), padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
         <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:500, color:'#fff', lineHeight:1.4 }}>Couldn't sync — changes are saved on this device only until you're back online.</span>
         <div onClick={()=>setSyncError(false)} style={{ cursor:'pointer', flexShrink:0, width:26, height:26, borderRadius:999, background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
@@ -1770,7 +1782,7 @@ window.onload=()=>{
 
   const syncMergedEl = syncMerged && (
     <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:70, padding:'0 18px', animation:'popUp 280ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
-      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#C98A2B', borderRadius:18, padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:'#C98A2B', borderRadius:rad(18), padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
         <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:500, color:'#fff', lineHeight:1.4 }}>This garden changed elsewhere — changes were merged automatically.</span>
         <div onClick={()=>setSyncMerged(false)} style={{ cursor:'pointer', flexShrink:0, width:26, height:26, borderRadius:999, background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
           <svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
@@ -1841,12 +1853,12 @@ window.onload=()=>{
     if (!p) return null;
     return (
       <div onClick={()=>setConfirmRemove(null)} style={{ position:'fixed', inset:0, zIndex:80, background:'rgba(20,30,12,0.42)', display:'flex', alignItems:'center', justifyContent:'center', padding:24, animation:'fade 160ms ease' }}>
-        <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:320, background:C.panel, borderRadius:22, padding:'22px 22px 16px', boxShadow:'0 18px 48px rgba(0,0,0,0.3)', animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)' }}>
+        <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:320, background:C.panel, borderRadius:rad(22), padding:'22px 22px 16px', boxShadow:'0 18px 48px rgba(0,0,0,0.3)', animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)' }}>
           <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.ink }}>Delete {p.name}?</div>
           <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.6, marginTop:6, lineHeight:1.5 }}>This removes the plant from your garden. You can undo right after.</div>
           <div style={{ display:'flex', gap:10, marginTop:20 }}>
-            <div onClick={()=>setConfirmRemove(null)} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:'rgba(45,80,22,0.07)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, cursor:'pointer' }}>Cancel</div>
-            <div onClick={()=>{ removePlant(confirmRemove); setConfirmRemove(null); }} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:'#B4472E', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer' }}>Delete</div>
+            <div onClick={()=>setConfirmRemove(null)} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:rad(14), background:'rgba(45,80,22,0.07)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, cursor:'pointer' }}>Cancel</div>
+            <div onClick={()=>{ removePlant(confirmRemove); setConfirmRemove(null); }} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:rad(14), background:'#B4472E', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer' }}>Delete</div>
           </div>
         </div>
       </div>
@@ -1855,12 +1867,12 @@ window.onload=()=>{
 
   const bulkRemoveEl = bulkRemoveIds && bulkRemoveIds.length > 0 && (
     <div onClick={()=>setBulkRemoveIds(null)} style={{ position:'fixed', inset:0, zIndex:80, background:'rgba(20,30,12,0.42)', display:'flex', alignItems:'center', justifyContent:'center', padding:24, animation:'fade 160ms ease' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:320, background:C.panel, borderRadius:22, padding:'22px 22px 16px', boxShadow:'0 18px 48px rgba(0,0,0,0.3)', animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:320, background:C.panel, borderRadius:rad(22), padding:'22px 22px 16px', boxShadow:'0 18px 48px rgba(0,0,0,0.3)', animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)' }}>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.ink }}>Delete {bulkRemoveIds.length} plant{bulkRemoveIds.length===1?'':'s'}?</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.6, marginTop:6, lineHeight:1.5 }}>This removes them from your garden and cannot be undone.</div>
         <div style={{ display:'flex', gap:10, marginTop:20 }}>
-          <div onClick={()=>setBulkRemoveIds(null)} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:'rgba(45,80,22,0.07)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, cursor:'pointer' }}>Cancel</div>
-          <div onClick={doBulkRemove} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:14, background:'#B4472E', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer' }}>Delete</div>
+          <div onClick={()=>setBulkRemoveIds(null)} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:rad(14), background:'rgba(45,80,22,0.07)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, cursor:'pointer' }}>Cancel</div>
+          <div onClick={doBulkRemove} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:rad(14), background:'#B4472E', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer' }}>Delete</div>
         </div>
       </div>
     </div>
@@ -1873,14 +1885,14 @@ window.onload=()=>{
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} onWaterAll={waterAll} onWaterOne={waterOne} confirmDelete={confirmDelete} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} locations={locations} onAddLocationSetting={addLocation} onRenameLocation={renameLocation} onRemoveLocation={removeLocation} roomLight={roomLight} onSetRoomLight={setRoomLight} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} accent={accent} onSetAccent={setAccent} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} pushSupported={pushSupported} pushWatering={pushWatering} pushDigest={pushDigest} pushBusy={pushBusy} pushError={pushError} onTogglePushWatering={onTogglePushWatering} onTogglePushDigest={onTogglePushDigest} onOpenDigest={()=>setDigestOpen(true)} onDevTestPush={devTestPush} onDevDedupeHistory={devDedupeHistory} onDevDeleteHistoryEntry={devDeleteHistoryEntry} sessionInfo={gardenNode ? getSessionInfo(gardenNode) : null} onDevForcePull={devForcePull} onDevForcePush={devForcePush} syncBusy={syncBusy} syncMsg={syncMsg} badges={badges} ambientBadges={ambientBadges} onToggleAmbientBadges={()=>setAmbientBadges(!ambientBadges)} badgeDensity={badgeDensity} onSetBadgeDensity={setBadgeDensity} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} locations={locations} onAddLocationSetting={addLocation} onRenameLocation={renameLocation} onRemoveLocation={removeLocation} roomLight={roomLight} onSetRoomLight={setRoomLight} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} accent={accent} onSetAccent={setAccent} radiusDensity={radiusDensity} onSetRadiusDensity={setRadiusDensity} imageTreatment={imageTreatment} onSetImageTreatment={setImageTreatment} uiDensity={uiDensity} onSetUiDensity={setUiDensity} bgTexture={bgTexture} onSetBgTexture={setBgTexture} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} pushSupported={pushSupported} pushWatering={pushWatering} pushDigest={pushDigest} pushBusy={pushBusy} pushError={pushError} onTogglePushWatering={onTogglePushWatering} onTogglePushDigest={onTogglePushDigest} onOpenDigest={()=>setDigestOpen(true)} onDevTestPush={devTestPush} onDevDedupeHistory={devDedupeHistory} onDevDeleteHistoryEntry={devDeleteHistoryEntry} sessionInfo={gardenNode ? getSessionInfo(gardenNode) : null} onDevForcePull={devForcePull} onDevForcePush={devForcePush} syncBusy={syncBusy} syncMsg={syncMsg} badges={badges} ambientBadges={ambientBadges} onToggleAmbientBadges={()=>setAmbientBadges(!ambientBadges)} badgeDensity={badgeDensity} onSetBadgeDensity={setBadgeDensity} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
   // ════════════════════════════════════════
   if (isDesktop) {
     return (
-      <div style={{ display:'flex', minHeight:'100dvh', background:C.bg, flexDirection: sidebar.side === 'right' ? 'row-reverse' : 'row' }}>
+      <div style={{ display:'flex', minHeight:'100dvh', background:C.bg, flexDirection: sidebar.side === 'right' ? 'row-reverse' : 'row', ...bgTextureStyle() }}>
         <DesktopSidebar tab={tab} setTab={setTab} onAction={onNavAction} navConfig={navConfig} showLabels={navLabels} sidebar={sidebar}/>
         <div style={{ flex:1, height:'100dvh', overflowY:'auto', overflowX:'hidden', position:'relative' }}>
           <div key={tab} style={{ animation: tabAnim, minHeight:'100%' }}>{screen}</div>
@@ -1943,7 +1955,7 @@ window.onload=()=>{
   //  MOBILE LAYOUT
   // ════════════════════════════════════════
   return (
-    <div style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', background:C.bg, overflow:'hidden' }}>
+    <div style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', background:C.bg, overflow:'hidden', ...bgTextureStyle() }}>
       <div onPointerDown={onSwipeStart} onPointerMove={onSwipeMove} onPointerUp={onSwipeEnd} onPointerCancel={onSwipeEnd} style={{ flex:1, overflowY:'auto', overflowX:'hidden', overscrollBehavior:'contain', position:'relative', WebkitOverflowScrolling:'touch', touchAction:'pan-y' }}>
         {(pull > 0 || refreshing) && (
           <div style={{ position:'absolute', top:0, left:0, right:0, height:0, display:'flex', justifyContent:'center', pointerEvents:'none', zIndex:5 }}>

@@ -61,11 +61,48 @@ function useTextHighlight(ref, query, active) {
   }, [ref, query, active]);
 }
 
+// a row of plain colored swatches — no inline text label baked into each
+// swatch's box, so every row using this looks identical regardless of how
+// many options it has or how long their names are. The name only ever shows
+// via a hover title and a single "currently selected" chip in the row's own
+// header (see callers) — never repeated under every swatch.
+function SwatchRow({ options, value, onSelect, size = 32 }) {
+  return (
+    <div style={{ display:'flex', gap:12, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+      {options.map(opt => {
+        const on = value === opt.key;
+        return (
+          <div key={opt.key} onClick={()=>onSelect(opt.key)} title={opt.label} style={{
+            flexShrink:0, width:size, height:size, borderRadius:999, background:opt.swatch, cursor:'pointer',
+            boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${opt.ring || opt.swatch}` : '0 1px 3px rgba(43,42,38,0.18)',
+            transition:'box-shadow 160ms ease',
+          }}/>
+        );
+      })}
+    </div>
+  );
+}
+
+// a pill-style segmented picker — shared by every 2-4 option Appearance
+// control (card density, radius density, image treatment, spacing, texture)
+function Segmented({ options, value, onSelect }) {
+  return (
+    <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3, flexWrap:'wrap', gap:0 }}>
+      {options.map(([val,label]) => {
+        const on = value === val;
+        return (
+          <div key={String(val)} onClick={()=>onSelect(val)} style={{ cursor:'pointer', padding:'5px 12px', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, opacity:on?1:0.5, transition:'all 140ms ease', whiteSpace:'nowrap' }}>{label}</div>
+        );
+      })}
+    </div>
+  );
+}
+
 // collapsible settings category — module-level so children keep identity (no remount)
 function SettingsSection({ title, open, onToggle, children, id, matched, query, bodyRef }) {
   useTextHighlight(bodyRef, query, matched);
   return (
-    <div id={id} style={matched ? { borderRadius:16, boxShadow:`0 0 0 2px ${C.forest}`, transition:'box-shadow 200ms ease' } : { transition:'box-shadow 200ms ease' }}>
+    <div id={id} style={matched ? { borderRadius:rad(16), boxShadow:`0 0 0 2px ${C.forest}`, transition:'box-shadow 200ms ease' } : { transition:'box-shadow 200ms ease' }}>
       <div onClick={onToggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding: matched ? '8px 6px 8px' : '0 6px 8px' }}>
         <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color: matched ? C.forest : C.brown, opacity: matched ? 1 : 0.6, letterSpacing:0.6, textTransform:'uppercase' }}>{highlightText(title, query)}</span>
         <svg width="13" height="13" viewBox="0 0 24 24" style={{ transform: open?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45 }}><path d="M6 9l6 6 6-6" stroke={C.brown} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -145,11 +182,11 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
   const end = () => { setPress(false); if (timer.current) clearTimeout(timer.current); };
   const click = () => { if (selectable) { onToggleSelect(plant.id); return; } if (longed.current) { longed.current = false; return; } onOpen(plant.id); };
   return (
-    <div data-noswipe="1" style={{ position:'relative', borderRadius: compact ? 16 : 22, overflow:'hidden' }}>
+    <div data-noswipe="1" style={{ position:'relative', borderRadius: compact ? rad(16) : rad(22), overflow:'hidden' }}>
       <div
         onPointerDown={start} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} onClick={click}
         style={{
-          background:C.panel, borderRadius: compact ? 16 : 22, padding: compact ? 8 : 12, minWidth:0,
+          background:C.panel, borderRadius: compact ? rad(16) : rad(22), padding: ds(compact ? 8 : 12), minWidth:0,
           boxShadow: press ? '0 1px 3px rgba(43,42,38,0.06)' : '0 1px 2px rgba(43,42,38,0.04), 0 8px 22px rgba(45,80,22,0.05)',
           border: selected ? `1.5px solid ${C.forest}` : over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)',
           transform: `scale(${press ? 0.975 : 1})`,
@@ -267,7 +304,7 @@ function ContextMenu({ plant, onClose, onEdit, onMove, onRemove, isDesktop }) {
   );
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:35, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ margin:'0 12px 12px', background:C.bg, borderRadius:24, overflow:'hidden', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', boxShadow:'0 -4px 30px rgba(0,0,0,0.12)' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ margin:'0 12px 12px', background:C.bg, borderRadius:rad(24), overflow:'hidden', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', boxShadow:'0 -4px 30px rgba(0,0,0,0.12)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8, padding:'15px 16px 13px' }}>
           <Leaf size={17} color={C.forest}/>
           <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest }}>{plant.name}</span>
@@ -291,7 +328,7 @@ function EmptyGarden({ onAdd }) {
       </div>
       <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:27, color:C.forest, marginTop:26 }}>Your garden is empty</div>
       <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.58, marginTop:8, lineHeight:1.55, maxWidth:240 }}>Add your first plant to start tracking watering, light and care.</div>
-      <div onClick={onAdd} style={{ marginTop:24, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:9, background:C.forest, color:'#fff', borderRadius:16, padding:'14px 22px', boxShadow:'0 6px 16px rgba(45,80,22,0.24)' }}>
+      <div onClick={onAdd} style={{ marginTop:24, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:9, background:C.forest, color:'#fff', borderRadius:rad(16), padding:'14px 22px', boxShadow:'0 6px 16px rgba(45,80,22,0.24)' }}>
         <IconPlus s={17} c="#fff"/>
         <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600 }}>Add your first plant</span>
       </div>
@@ -326,7 +363,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
   const cols = gridColsPref || (density === 'compact' ? 3 : 2);
   const gridCols = isDesktop ? 'repeat(auto-fill, minmax(185px, 1fr))' : `repeat(${cols}, minmax(0, 1fr))`;
   const compact = !isDesktop && cols >= 3;
-  const gridGap = compact ? 10 : 14;
+  const gridGap = ds(compact ? 10 : 14);
 
   const nq = q.trim().toLowerCase();
   const matched = plants.filter(p => {
@@ -404,7 +441,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
               </div>
             )}
             {health && healthOpen && (
-              <div style={{ marginTop:8, padding:'10px 14px', borderRadius:14, background:'rgba(45,80,22,0.05)', display:'flex', flexDirection:'column', gap:4, maxWidth:280 }}>
+              <div style={{ marginTop:8, padding:'10px 14px', borderRadius:rad(14), background:'rgba(45,80,22,0.05)', display:'flex', flexDirection:'column', gap:4, maxWidth:280 }}>
                 {health.needs > 0 && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>{health.needs} need{health.needs===1?'s':''} water now</span>}
                 {health.soon > 0 && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>{health.soon} will soon</span>}
                 {health.mismatch > 0 && <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.7 }}>{health.mismatch} in a mismatched-light room</span>}
@@ -438,7 +475,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
 
       {!empty && (
         <div style={{ padding:`12px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:8, height:42, borderRadius:12, background:C.panel, border:C.hair, padding:'0 12px' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, height:42, borderRadius:rad(12), background:C.panel, border:C.hair, padding:'0 12px' }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0, opacity:0.5 }}><circle cx="11" cy="11" r="7" stroke={C.ink} strokeWidth="1.7"/><path d="M21 21l-4-4" stroke={C.ink} strokeWidth="1.7" strokeLinecap="round"/></svg>
             <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search plants…" style={{ flex:1, border:'none', background:'transparent', outline:'none', fontFamily:FONT_SANS, fontSize:14, color:C.ink }}/>
             {q && <div onClick={()=>setQ('')} style={{ cursor:'pointer', opacity:0.5 }}><svg width="13" height="13" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke={C.ink} strokeWidth="1.6" strokeLinecap="round"/></svg></div>}
@@ -589,7 +626,7 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
   const snoozePull = Math.max(0, Math.min(1, -dx / -SNOOZE_THRESH));
 
   return (
-    <div data-noswipe="1" style={{ position:'relative', borderRadius:18, overflow:'hidden' }}>
+    <div data-noswipe="1" style={{ position:'relative', borderRadius:rad(18), overflow:'hidden' }}>
       {dx < 0 && (
         <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:22, background:`rgba(201,138,43,${0.14 + snoozePull*0.22})`, transition:'background 120ms linear' }}>
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.soon.dot, transform:`scale(${0.85 + snoozePull*0.25})`, transition:'transform 120ms linear' }}>
@@ -607,7 +644,7 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
         </div>
       )}
       <div onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onClick={click} style={{
-        position:'relative', display:'flex', alignItems:'center', gap:13, background:C.panel, borderRadius:18, padding:10,
+        position:'relative', display:'flex', alignItems:'center', gap:ds(13), background:C.panel, borderRadius:rad(18), padding:ds(10),
         border:'0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)',
         cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y',
         transform: `translateX(${dx}px) scale(${press ? 0.985 : 1})`, transition: swiping.current ? 'none' : 'transform 220ms cubic-bezier(.2,.8,.2,1)',
@@ -649,7 +686,7 @@ function WaterForecast({ plants, czechMode, onOpen }) {
           const isOpen = openDay === i;
           return (
             <div key={i} onClick={() => busy && setOpenDay(isOpen ? null : i)} role={busy ? 'button' : undefined} style={{
-              flexShrink:0, minWidth:52, borderRadius:14, padding:'9px 6px', textAlign:'center', cursor: busy ? 'pointer' : 'default',
+              flexShrink:0, minWidth:52, borderRadius:rad(14), padding:'9px 6px', textAlign:'center', cursor: busy ? 'pointer' : 'default',
               background: i === 0 && busy ? C.forest : busy ? 'rgba(110,154,62,0.12)' : 'transparent',
               border: isOpen ? `1.5px solid ${C.forest}` : busy ? 'none' : `0.5px solid ${C.line}`,
               boxShadow: isOpen ? `0 0 0 2px ${i === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(45,80,22,0.15)'} inset` : 'none',
@@ -663,7 +700,7 @@ function WaterForecast({ plants, czechMode, onOpen }) {
       </div>
       {active && (
         <div style={{
-          marginTop:8, borderRadius:14, background:C.panel, border:C.hair, padding:'10px 12px',
+          marginTop:8, borderRadius:rad(14), background:C.panel, border:C.hair, padding:'10px 12px',
           display:'flex', flexDirection:'column', gap:2, animation:'slideUp 220ms cubic-bezier(.2,.8,.2,1)',
         }}>
           <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, letterSpacing:0.4, textTransform:'uppercase', color:C.brown, opacity:0.55, marginBottom:4 }}>
@@ -713,7 +750,7 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode }) {
       </div>
       <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', display:'flex', flexDirection:'column', gap:18 }}>
         {highlight && (
-          <div style={{ borderRadius:20, overflow:'hidden', position:'relative', height:180, flexShrink:0 }}>
+          <div style={{ borderRadius:rad(20), overflow:'hidden', position:'relative', height:180, flexShrink:0 }}>
             <img src={userPhoto(highlight.plant)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
             <div style={{ position:'absolute', left:0, right:0, bottom:0, padding:'28px 16px 12px', background:'linear-gradient(transparent, rgba(0,0,0,0.55))' }}>
               <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, color:'#fff' }}>{name(highlight.plant)}</div>
@@ -722,11 +759,11 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode }) {
           </div>
         )}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-          <div style={{ padding:'14px 16px', borderRadius:16, background:C.panel, border:C.hair }}>
+          <div style={{ padding:'14px 16px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:30, color:C.forest }}>{wateredCount}</div>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>waterings this week</div>
           </div>
-          <div style={{ padding:'14px 16px', borderRadius:16, background:C.panel, border:C.hair }}>
+          <div style={{ padding:'14px 16px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:30, color: needsNow.length ? STATUS.needs.dot : C.forest }}>{needsNow.length}</div>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>need water right now</div>
           </div>
@@ -740,7 +777,7 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode }) {
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Waiting on you</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {needsNow.slice(0, 6).map(p => (
-                <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:14, background:C.panel, border:C.hair }}>
+                <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair }}>
                   <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest }}>{name(p)}</span>
                   <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{p.location}</span>
                 </div>
@@ -770,7 +807,7 @@ function WaterAllPicker({ counts, defaultScope, onPick, onClose }) {
     <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:45, animation:'fade 140ms ease' }}>
       <div onClick={e=>e.stopPropagation()} style={{
         position:'absolute', top:'calc(56px + env(safe-area-inset-top) + 44px)', right:18, minWidth:212,
-        background:C.panel, borderRadius:16, overflow:'hidden', boxShadow:'0 10px 30px rgba(0,0,0,0.18)',
+        background:C.panel, borderRadius:rad(16), overflow:'hidden', boxShadow:'0 10px 30px rgba(0,0,0,0.18)',
         border:'0.5px solid rgba(45,80,22,0.08)', animation:'popUp 200ms cubic-bezier(.2,.9,.3,1.2)',
       }}>
         {rows.map(r => (
@@ -836,7 +873,7 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
       <div style={{ padding:`18px ${sp}px 0`, position:'relative', zIndex:2 }}>
         <WaterForecast plants={plants} czechMode={czechMode} onOpen={onOpen}/>
       </div>
-      <div style={{ display:'flex', flexDirection:'column', gap:12, padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
+      <div style={{ display:'flex', flexDirection:'column', gap:ds(12), padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
         {list.length === 0 && (
           <div style={{ textAlign:'center', padding:'60px 30px', position:'relative', zIndex:2 }}>
             <div onClick={tapEmpty} style={{ display:'inline-flex', width:64, height:64, borderRadius:999, background:'rgba(110,154,62,0.12)', alignItems:'center', justifyContent:'center', cursor:'pointer', userSelect:'none' }}>
@@ -956,7 +993,7 @@ function ScannerScreen({ plants, onScan, isDesktop, paused }) {
 // ════════════════════════════════════════════════════════════
 function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechMode, grip, dragging, over }) {
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:10, background:C.panel, borderRadius:18, padding:12, border: over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)', opacity: dragging ? 0.5 : 1, transition:'opacity 140ms ease, border-color 140ms ease' }}>
+    <div style={{ display:'flex', alignItems:'center', gap:10, background:C.panel, borderRadius:rad(18), padding:12, border: over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)', opacity: dragging ? 0.5 : 1, transition:'opacity 140ms ease, border-color 140ms ease' }}>
       <div {...grip} style={{ flexShrink:0, width:22, display:'flex', alignItems:'center', justifyContent:'center', cursor:'grab', touchAction:'none', opacity:0.45 }}><GripIcon/></div>
       <div style={{ width:48, height:48, flexShrink:0 }}><Specimen tint={TINTS[(plant.id-1)%TINTS.length]} height={48} radius={11} leafSize={22} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/></div>
       <div onClick={()=>onOpen(plant.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
@@ -1146,7 +1183,7 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLi
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1286,8 +1323,8 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
   // numStepper (dBtn), both of which sit outside that IIFE's scope. Any
   // reference to either from outside it was a ReferenceError on every
   // Settings render, not just once admin tools were opened.
-  const dInput = { width:'100%', padding:'11px 13px', borderRadius:12, border:`1px solid ${C.line}`, background:C.bg, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', boxSizing:'border-box' };
-  const dBtn = (filled) => ({ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'10px 16px', borderRadius:12, cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, border:`1px solid ${C.forest}`, background: filled?C.forest:'transparent', color: filled?'#fff':C.forest, userSelect:'none' });
+  const dInput = { width:'100%', padding:'11px 13px', borderRadius:rad(12), border:`1px solid ${C.line}`, background:C.bg, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', boxSizing:'border-box' };
+  const dBtn = (filled) => ({ display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'10px 16px', borderRadius:rad(12), cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, border:`1px solid ${C.forest}`, background: filled?C.forest:'transparent', color: filled?'#fff':C.forest, userSelect:'none' });
 
   const [renaming, setRenaming] = useState(false);
   const [renameKey, setRenameKey] = useState('');
@@ -1467,6 +1504,22 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
     } catch (e) {}
     setBackupBusy(false);
   };
+  // sidebar quick-action — re-pulls just the three numbers the aside card
+  // shows (stats/backups/system) without touching the gardens list, which
+  // is the heaviest call and isn't rendered there
+  const [adminQuickBusy, setAdminQuickBusy] = useState(false);
+  const refreshAdminQuick = async () => {
+    setAdminQuickBusy(true);
+    try {
+      const [stats, files, sys] = await Promise.all([
+        onAdminStats(adminSecret), onAdminListBackups(adminSecret), onAdminGetSystem(adminSecret),
+      ]);
+      if (stats) setAdminStatsData(stats);
+      if (files) setBackupFiles(files);
+      if (sys) setAdminSystemData(sys);
+    } catch (e) {}
+    setAdminQuickBusy(false);
+  };
   const fmtBytes = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n/1024).toFixed(1)} KB` : `${(n/1048576).toFixed(1)} MB`;
   const fmtDuration = (sec) => {
     const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
@@ -1505,7 +1558,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
   // language as the outer Settings accordion, namespaced under its own key so
   // it never collides with caulis_set_open
   const AdminSub = ({ id, title, children }) => (
-    <div style={{ borderRadius:14, border:C.hair, overflow:'hidden', background:C.panel }}>
+    <div style={{ borderRadius:rad(14), border:C.hair, overflow:'hidden', background:C.panel }}>
       <div onClick={()=>toggleAdminSec(id)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'12px 14px' }}>
         <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink }}>{title}</span>
         <svg width="12" height="12" viewBox="0 0 24 24" style={{ transform: isAdminOpen(id)?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45, flexShrink:0 }}><path d="M6 9l6 6 6-6" stroke={C.brown} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -1568,7 +1621,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
     const clamped = Math.max(0, Math.min(1, pct));
     const color = tone === 'warn' ? STATUS.soon.dot : tone === 'bad' ? STATUS.needs.dot : C.forest;
     return (
-      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'12px 8px', borderRadius:12, background:C.bg }}>
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'12px 8px', borderRadius:rad(12), background:C.bg }}>
         <svg width="64" height="64" viewBox="0 0 64 64">
           <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(45,80,22,0.1)" strokeWidth="6"/>
           <circle cx="32" cy="32" r={r} fill="none" stroke={color} strokeWidth="6" strokeLinecap="round"
@@ -1657,13 +1710,13 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
       <Sprig opacity={0.14}/>
       <ScreenHead eyebrow="Preferences" title="Settings" isDesktop={isDesktop}/>
       <div style={{ padding:`22px ${sp}px 0`, position:'relative', zIndex:2, display:'flex', gap:28, alignItems:'flex-start' }}>
-      <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? (adminUnlocked && isOpen('dev') ? 1040 : 680) : undefined, transition:'max-width 260ms ease' }}>
+      <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? 680 : undefined }}>
         <div style={{ position:'relative' }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', opacity:0.4, pointerEvents:'none' }}><circle cx="11" cy="11" r="6.5" stroke={C.brown} strokeWidth="1.8"/><path d="M20 20l-4.5-4.5" stroke={C.brown} strokeWidth="1.8" strokeLinecap="round"/></svg>
           <input
             ref={settingsSearchRef} value={settingsQuery} onChange={e=>setSettingsQuery(e.target.value)}
             placeholder={isDesktop ? 'Search settings… (Ctrl+F)' : 'Search settings…'}
-            style={{ width:'100%', boxSizing:'border-box', padding:'11px 14px 11px 38px', borderRadius:14, border:`1px solid ${C.line}`, background:C.input, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
+            style={{ width:'100%', boxSizing:'border-box', padding:'11px 14px 11px 38px', borderRadius:rad(14), border:`1px solid ${C.line}`, background:C.input, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
           {settingsQuery.trim() && (
             <div style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', display:'flex', alignItems:'center', gap:4 }}>
               {settingsMatches.length > 0 ? (
@@ -1686,7 +1739,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           )}
         </div>
         <SettingsSection title="Appearance" open={isOpen('appearance')} onToggle={()=>toggleSec('appearance')} id={'sec-'+'appearance'} matched={settingsMatches[settingsMatchIdx] === 'appearance'} query={settingsMatches.includes('appearance') ? settingsQuery : ''} bodyRef={registerSection('appearance')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
             <div onClick={onToggleDark} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Dark mode</div>
@@ -1697,35 +1750,81 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               </div>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
-              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Accent color</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:10 }}>Theme color for buttons, icons &amp; highlights</div>
-              <div style={{ display:'flex', gap:10 }}>
-                {PALETTE_ORDER.map(key => {
-                  const p = PALETTES[key]; const on = palette === key;
-                  return (
-                    <div key={key} onClick={()=>onSetPalette(key)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer' }}>
-                      <div style={{ width:34, height:34, borderRadius:999, background:p.swatch, boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${p.swatch}` : '0 1px 3px rgba(43,42,38,0.18)', transition:'box-shadow 160ms ease' }}/>
-                      <span style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight: on?600:500, color: on?C.forest:C.brown, opacity: on?1:0.7 }}>{p.label}</span>
-                    </div>
-                  );
-                })}
+              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Accent color</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Theme color for buttons, icons &amp; highlights</div>
+                </div>
+                <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{PALETTES[palette].label}</span>
               </div>
+              <SwatchRow value={palette} onSelect={onSetPalette} options={PALETTE_ORDER.map(key => ({ key, label:PALETTES[key].label, swatch:PALETTES[key].swatch }))}/>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
-              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Selected tab highlight</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:10 }}>Independent accent for the active nav tab</div>
-              <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-                {ACCENT_ORDER.map(key => {
-                  const a = ACCENTS[key]; const on = (accent || 'match') === key;
-                  const swatch = a.swatch ? (darkMode ? (a.dark || a.swatch) : a.swatch) : `linear-gradient(135deg, ${C.forest} 50%, ${C.sage} 50%)`;
-                  return (
-                    <div key={key} onClick={()=>onSetAccent(key)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer' }}>
-                      <div style={{ width:30, height:30, borderRadius:999, background:swatch, boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${a.swatch || C.forest}` : '0 1px 3px rgba(43,42,38,0.18)', transition:'box-shadow 160ms ease' }}/>
-                      <span style={{ fontFamily:FONT_SANS, fontSize:9.5, fontWeight: on?600:500, color: on?C.forest:C.brown, opacity: on?1:0.7 }}>{a.label}</span>
-                    </div>
-                  );
-                })}
+              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Selected tab highlight</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Independent accent for the active nav tab</div>
+                </div>
+                <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{ACCENTS[accent || 'match'].label}</span>
               </div>
+              <SwatchRow value={accent || 'match'} onSelect={onSetAccent} options={ACCENT_ORDER.map(key => {
+                const a = ACCENTS[key];
+                const swatch = a.swatch ? (darkMode ? (a.dark || a.swatch) : a.swatch) : `linear-gradient(135deg, ${C.forest} 50%, ${C.sage} 50%)`;
+                return { key, label:a.label, swatch, ring: a.swatch || C.forest };
+              })}/>
+            </div>
+            <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Shape &amp; photos</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Corner roundness</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Scales every card, button &amp; sheet corner</div>
+              </div>
+              <Segmented value={radiusDensity} onSelect={onSetRadiusDensity} options={RADIUS_ORDER.map(k=>[k, RADIUS_DENSITY[k].label])}/>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Photo treatment</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How plant photos render everywhere</div>
+              </div>
+              <Segmented value={imageTreatment} onSelect={onSetImageTreatment} options={IMAGE_TREATMENT_ORDER.map(k=>[k, IMAGE_TREATMENTS[k].label])}/>
+            </div>
+            <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Layout</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Card density</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Garden grid column count</div>
+              </div>
+              <Segmented value={cardDensity} onSelect={onSetDensity} options={[['comfy','Comfy'],['compact','Compact']]}/>
+            </div>
+            {!isDesktop && (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px' }}>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden columns</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Override the grid width</div>
+                </div>
+                <Segmented value={gridCols || 0} onSelect={onSetGridCols} options={[[0,'Auto'],[2,'2'],[3,'3'],[4,'4']]}/>
+              </div>
+            )}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Spacing</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Padding &amp; gaps across Garden &amp; Needs Water</div>
+              </div>
+              <Segmented value={uiDensity} onSelect={onSetUiDensity} options={UI_DENSITY_ORDER.map(k=>[k, UI_DENSITY[k].label])}/>
+            </div>
+            <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Background</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Texture</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A very subtle wash behind every screen</div>
+              </div>
+              <Segmented value={bgTexture} onSelect={onSetBgTexture} options={BG_TEXTURE_ORDER.map(k=>[k, BG_TEXTURES[k].label])}/>
             </div>
             <div onClick={onToggleReduceMotion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
               <div>
@@ -1736,40 +1835,10 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ position:'absolute', top:3, left:reduceMotion?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
               </div>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair }}>
-              <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Card density</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Garden grid layout</div>
-              </div>
-              <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
-                {[['comfy','Comfy'],['compact','Compact']].map(([val,label]) => {
-                  const on = cardDensity === val;
-                  return (
-                    <div key={val} onClick={()=>onSetDensity(val)} style={{ cursor:'pointer', padding:'5px 12px', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, opacity:on?1:0.5, transition:'all 140ms ease' }}>{label}</div>
-                  );
-                })}
-              </div>
-            </div>
-            {!isDesktop && (
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair }}>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden columns</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Override the grid width</div>
-                </div>
-                <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
-                  {[[0,'Auto'],[2,'2'],[3,'3'],[4,'4']].map(([val,label]) => {
-                    const on = (gridCols || 0) === val;
-                    return (
-                      <div key={val} onClick={()=>onSetGridCols(val)} style={{ cursor:'pointer', padding:'5px 11px', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, opacity:on?1:0.5, transition:'all 140ms ease' }}>{label}</div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </SettingsSection>
         <SettingsSection title="Garden" open={isOpen('garden')} onToggle={()=>toggleSec('garden')} id={'sec-'+'garden'} matched={settingsMatches[settingsMatchIdx] === 'garden'} query={settingsMatches.includes('garden') ? settingsQuery : ''} bodyRef={registerSection('garden')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
             <Row label="Plants tracked" value={String(plants.length)}/>
             <Row label="Locations" value={String(locations.length)}/>
             <LocationsManager plants={plants} locations={locations} onAdd={onAddLocationSetting} onRename={onRenameLocation} onRemove={onRemoveLocation} roomLight={roomLight} onSetRoomLight={onSetRoomLight}/>
@@ -1811,7 +1880,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           </div>
         </SettingsSection>
         <SettingsSection title="Badges" open={isOpen('badges')} onToggle={()=>toggleSec('badges')} id={'sec-'+'badges'} matched={settingsMatches[settingsMatchIdx] === 'badges'} query={settingsMatches.includes('badges') ? settingsQuery : ''} bodyRef={registerSection('badges')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
             <Row label="Earned" value={`${(badges||[]).filter(b=>!b.revoked).length} of ${BADGE_DEFS.length}`}/>
             <div onClick={onToggleAmbientBadges} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
               <div>
@@ -1837,7 +1906,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           </div>
         </SettingsSection>
         <SettingsSection title="Behavior" open={isOpen('behavior')} onToggle={()=>toggleSec('behavior')} id={'sec-'+'behavior'} matched={settingsMatches[settingsMatchIdx] === 'behavior'} query={settingsMatches.includes('behavior') ? settingsQuery : ''} bodyRef={registerSection('behavior')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
             <div onClick={onToggleConfirmDelete} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Confirm before delete</div>
@@ -1868,7 +1937,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           </div>
         </SettingsSection>
         <SettingsSection title="Notifications" open={isOpen('notif')} onToggle={()=>toggleSec('notif')} id={'sec-'+'notif'} matched={settingsMatches[settingsMatchIdx] === 'notif'} query={settingsMatches.includes('notif') ? settingsQuery : ''} bodyRef={registerSection('notif')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
             <div onClick={pushSupported && !pushBusy ? onTogglePushWatering : undefined} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:C.hair, cursor:pushSupported?'pointer':'default', opacity:pushSupported?1:0.5 }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Watering reminders</div>
@@ -1895,7 +1964,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           </div>
         </SettingsSection>
         <SettingsSection title="Printing" open={isOpen('printing')} onToggle={()=>toggleSec('printing')} id={'sec-'+'printing'} matched={settingsMatches[settingsMatchIdx] === 'printing'} query={settingsMatches.includes('printing') ? settingsQuery : ''} bodyRef={registerSection('printing')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderBottom:C.hair }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Label size</div>
@@ -1929,13 +1998,13 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           </div>
         </SettingsSection>
         <SettingsSection title="Plant data" open={isOpen('data')} onToggle={()=>toggleSec('data')} id={'sec-'+'data'} matched={settingsMatches[settingsMatchIdx] === 'data'} query={settingsMatches.includes('data') ? settingsQuery : ''} bodyRef={registerSection('data')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:14 }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:14 }}>
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Perenual — species photos &amp; care data</div>
               <div style={{ display:'flex', gap:8 }}>
                 <input value={key} onChange={e=>setKey(e.target.value)} placeholder="API key"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-                <div onClick={()=>{ onSavePerenualKey(key.trim()); setSaved(true); setTimeout(()=>setSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: saved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSavePerenualKey(key.trim()); setSaved(true); setTimeout(()=>setSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: saved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {saved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{saved?'Saved':'Save'}</span>
                 </div>
@@ -1951,8 +2020,8 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5, marginBottom:8 }}>RapidAPI key for FreeWebApi House Plants. Used when Perenual hits rate limits.</div>
               <div style={{ display:'flex', gap:8 }}>
                 <input value={housePlantsInput} onChange={e=>setHousePlantsInput(e.target.value)} placeholder="RapidAPI key"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-                <div onClick={()=>{ onSaveHousePlantsKey(housePlantsInput.trim()); setHousePlantsSaved(true); setTimeout(()=>setHousePlantsSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: housePlantsSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSaveHousePlantsKey(housePlantsInput.trim()); setHousePlantsSaved(true); setTimeout(()=>setHousePlantsSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: housePlantsSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {housePlantsSaved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{housePlantsSaved?'Saved':'Save'}</span>
                 </div>
@@ -1967,8 +2036,8 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>PlantNet — photo identification</div>
               <div style={{ display:'flex', gap:8 }}>
                 <input value={plantIdInput} onChange={e=>setPlantIdInput(e.target.value)} placeholder="API key"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-                <div onClick={()=>{ onSavePlantIdKey(plantIdInput.trim()); setPlantIdSaved(true); setTimeout(()=>setPlantIdSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: plantIdSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSavePlantIdKey(plantIdInput.trim()); setPlantIdSaved(true); setTimeout(()=>setPlantIdSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: plantIdSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {plantIdSaved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{plantIdSaved?'Saved':'Save'}</span>
                 </div>
@@ -1984,8 +2053,8 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5, lineHeight:1.5, marginBottom:8 }}>Anthropic API key. Claude reviews &amp; corrects species care data on identify — filling gaps and fixing wrong watering intervals. Key is stored server-side against your garden and used only to call Anthropic on your behalf, never sent to the browser directly.</div>
               <div style={{ display:'flex', gap:8 }}>
                 <input value={anthropicInput} onChange={e=>setAnthropicInput(e.target.value)} placeholder="sk-ant-…"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
-                <div onClick={()=>{ onSaveAnthropicKey(anthropicInput.trim()); setAnthropicSaved(true); setTimeout(()=>setAnthropicSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: anthropicSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 13px', fontFamily:'ui-monospace, Menlo, monospace', fontSize:12.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSaveAnthropicKey(anthropicInput.trim()); setAnthropicSaved(true); setTimeout(()=>setAnthropicSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: anthropicSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {anthropicSaved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{anthropicSaved?'Saved':'Save'}</span>
                 </div>
@@ -1998,7 +2067,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 const pending = (plants || []).filter(p => !p.aiV).length;
                 const busy = aiRecheck && aiRecheck.busy;
                 return (
-                  <div onClick={busy ? undefined : onRecheckAI} style={{ marginTop:12, padding:'11px 14px', borderRadius:12, border:`1px solid ${C.forest}`, background:'transparent', display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor: busy?'default':'pointer', opacity: busy?0.65:1 }}>
+                  <div onClick={busy ? undefined : onRecheckAI} style={{ marginTop:12, padding:'11px 14px', borderRadius:rad(12), border:`1px solid ${C.forest}`, background:'transparent', display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor: busy?'default':'pointer', opacity: busy?0.65:1 }}>
                     <LeafOutline size={14} color={C.forest} sw={1.7}/>
                     <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:C.forest }}>
                       {busy ? `Reviewing… ${aiRecheck.done}/${aiRecheck.total}` : `Recheck ${pending} older plant${pending===1?'':'s'} with AI`}
@@ -2044,14 +2113,14 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
         </SettingsSection>
         {(installPrompt || /iphone|ipad|ipod/i.test(navigator.userAgent)) && (
           <SettingsSection title="Install" open={isOpen('app')} onToggle={()=>toggleSec('app')} id={'sec-'+'app'} matched={settingsMatches[settingsMatchIdx] === 'app'} query={settingsMatches.includes('app') ? settingsQuery : ''} bodyRef={registerSection('app')}>
-            <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px' }}>
+            <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden', padding:'14px 16px' }}>
               {installPrompt ? (
                 <div onClick={onInstall} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
                   <div>
                     <div style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink }}>Install Caulis</div>
                     <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:2 }}>Add to your home screen</div>
                   </div>
-                  <div style={{ flexShrink:0, padding:'10px 18px', borderRadius:12, background:C.forest, color:'#fff', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Install</div>
+                  <div style={{ flexShrink:0, padding:'10px 18px', borderRadius:rad(12), background:C.forest, color:'#fff', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Install</div>
                 </div>
               ) : (
                 <div>
@@ -2063,7 +2132,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           </SettingsSection>
         )}
         <SettingsSection title="Google sync" open={isOpen('google')} onToggle={()=>toggleSec('google')} id={'sec-'+'google'} matched={settingsMatches[settingsMatchIdx] === 'google'} query={settingsMatches.includes('google') ? settingsQuery : ''} bodyRef={registerSection('google')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
             <div>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:C.ink, opacity:0.7, marginBottom:6 }}>Sync to</div>
               <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:10, padding:3 }}>
@@ -2096,14 +2165,14 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Paste your OAuth 2.0 web client ID from Google Cloud Console.</div>
               <div style={{ display:'flex', gap:8 }}>
                 <input value={gcalInput} onChange={e=>setGcalInput(e.target.value)} placeholder="OAuth client ID"
-                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:11, border:C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:11.5, color:C.ink, outline:'none' }}/>
-                <div onClick={()=>{ onSaveGoogleClientId(gcalInput.trim()); setGcalSaved(true); setTimeout(()=>setGcalSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:11, background: gcalSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
+                  style={{ flex:1, boxSizing:'border-box', height:42, borderRadius:rad(11), border:C.hair, background:C.input, padding:'0 12px', fontFamily:'ui-monospace,Menlo,monospace', fontSize:11.5, color:C.ink, outline:'none' }}/>
+                <div onClick={()=>{ onSaveGoogleClientId(gcalInput.trim()); setGcalSaved(true); setTimeout(()=>setGcalSaved(false),1800); }} style={{ flexShrink:0, padding:'0 14px', height:42, borderRadius:rad(11), background: gcalSaved?C.sage:C.forest, color:'#fff', display:'flex', alignItems:'center', gap:6, cursor:'pointer', transition:'background 200ms' }}>
                   {gcalSaved && <IconCheck s={14}/>}
                   <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{gcalSaved?'Saved':'Save'}</span>
                 </div>
               </div>
               {googleClientId && (
-                <div onClick={onConnectGoogle} style={{ height:42, borderRadius:12, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', gap:9, cursor:'pointer' }}>
+                <div onClick={onConnectGoogle} style={{ height:42, borderRadius:rad(12), background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', gap:9, cursor:'pointer' }}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="#fff" strokeWidth="1.7"/><path d="M3 9h18" stroke="#fff" strokeWidth="1.7"/><path d="M8 2v4M16 2v4" stroke="#fff" strokeWidth="1.7" strokeLinecap="round"/></svg>
                   <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600 }}>Connect Google {googleSyncMode === 'calendar' ? 'Calendar' : 'Tasks'}</span>
                 </div>
@@ -2118,7 +2187,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, flex:1 }}>Connected</span>
                 <div onClick={onDisconnectGoogle} style={{ padding:'6px 13px', borderRadius:10, background:'rgba(180,71,46,0.1)', cursor:'pointer', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:'#B4472E' }}>Disconnect</div>
               </div>
-              <div onClick={handleGcalSync} style={{ height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:9, cursor:'pointer' }}>
+              <div onClick={handleGcalSync} style={{ height:42, borderRadius:rad(12), background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:9, cursor:'pointer' }}>
                 {gcalSyncing
                   ? <div style={{ width:16, height:16, borderRadius:999, border:`2px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/>
                   : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 018-8 8 8 0 016.9 4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/><path d="M20 12a8 8 0 01-8 8 8 8 0 01-6.9-4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/><path d="M18 4l2 3h-3M6 20l-2-3h3" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -2131,13 +2200,13 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
         </SettingsSection>
         <SettingsSection title="Cloud sync" open={isOpen('cloud')} onToggle={()=>toggleSec('cloud')} id={'sec-'+'cloud'} matched={settingsMatches[settingsMatchIdx] === 'cloud'} query={settingsMatches.includes('cloud') ? settingsQuery : ''} bodyRef={registerSection('cloud')}>
           {!SYNC_READY && (
-            <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:'14px 16px' }}>
+            <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:'14px 16px' }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.62, lineHeight:1.5 }}>Firebase not configured. Fill in FIREBASE_CONFIG in caulis-firebase.jsx.</div>
             </div>
           )}
           {SYNC_READY && (
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-              <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+              <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:12, padding:'13px 16px', borderBottom:C.hair }}>
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.4, textTransform:'uppercase', marginBottom:3 }}>Garden key</div>
@@ -2177,12 +2246,12 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               </div>
               {!renaming && !joining && (
                 <div style={{ display:'flex', gap:8 }}>
-                  <div onClick={()=>{ setRenaming(true); setRenameKey(''); setRenameStatus('idle'); }} style={{ flex:1, height:38, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Rename</div>
-                  <div onClick={()=>{ setJoining(true); setJoinKey(''); setJoinPassword(''); setJoinStatus('idle'); }} style={{ flex:1, height:38, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join garden</div>
+                  <div onClick={()=>{ setRenaming(true); setRenameKey(''); setRenameStatus('idle'); }} style={{ flex:1, height:38, borderRadius:rad(12), background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Rename</div>
+                  <div onClick={()=>{ setJoining(true); setJoinKey(''); setJoinPassword(''); setJoinStatus('idle'); }} style={{ flex:1, height:38, borderRadius:rad(12), background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Join garden</div>
                 </div>
               )}
               {renaming && (
-                <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
+                <div style={{ background:C.panel, borderRadius:rad(14), border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                   <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>Rename keeps your current plants under a new key.</div>
                   <div style={{ display:'flex', gap:8 }}>
                     <input value={renameKey} onChange={e=>{ setRenameKey(e.target.value); setRenameStatus('idle'); }} onKeyDown={e=>{ if(e.key==='Enter') checkRename(); }} placeholder="new-garden-name"
@@ -2205,7 +2274,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 </div>
               )}
               {joining && (
-                <div style={{ background:C.panel, borderRadius:14, border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
+                <div style={{ background:C.panel, borderRadius:rad(14), border:C.hair, padding:'14px 16px', display:'flex', flexDirection:'column', gap:8, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                   <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6 }}>
                     {joinStatus==='notFound' ? "No garden found. Create it now?" : "Enter the garden key and its password (if any). Your current plants will be replaced."}
                   </div>
@@ -2248,21 +2317,21 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           )}
         </SettingsSection>
         <SettingsSection title="Backup" open={isOpen('backup')} onToggle={()=>toggleSec('backup')} id={'sec-'+'backup'} matched={settingsMatches[settingsMatchIdx] === 'backup'} query={settingsMatches.includes('backup') ? settingsQuery : ''} bodyRef={registerSection('backup')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden', padding:'14px 16px', display:'flex', flexDirection:'column', gap:12 }}>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Export your whole garden (plants, photos, queue) to a JSON file, or restore from one.</div>
             <input ref={importRef} type="file" accept="application/json,.json" onChange={onImportFile} style={{ display:'none' }}/>
             <div style={{ display:'flex', gap:8 }}>
-              <div onClick={()=>requestGate('export')} style={{ flex:1, height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
+              <div onClick={()=>requestGate('export')} style={{ flex:1, height:42, borderRadius:rad(12), background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3v12M12 15l-4-4M12 15l4-4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 20h14" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/></svg>
                 <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Export</span>
               </div>
-              <div onClick={()=>{ setImportErr(false); requestGate('import'); }} style={{ flex:1, height:42, borderRadius:12, background: imported?C.sage:'rgba(45,80,22,0.08)', color: imported?'#fff':C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', transition:'background 200ms' }}>
+              <div onClick={()=>{ setImportErr(false); requestGate('import'); }} style={{ flex:1, height:42, borderRadius:rad(12), background: imported?C.sage:'rgba(45,80,22,0.08)', color: imported?'#fff':C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer', transition:'background 200ms' }}>
                 {imported ? <IconCheck s={15}/> : <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 15V3M12 3l-4 4M12 3l4 4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/><path d="M5 20h14" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/></svg>}
                 <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>{imported?'Imported':'Import'}</span>
               </div>
             </div>
             {pwGate && (
-              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:rad(12), background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.75 }}>Confirm your garden password to {pwGate}.</div>
                 <input type="password" autoComplete="current-password" name="garden-password" value={pwGateInput} onChange={e=>{ setPwGateInput(e.target.value); setPwGateErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') confirmGate(); }} placeholder="Garden password" style={dInput} autoFocus/>
                 {pwGateErr && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Wrong password</div>}
@@ -2274,7 +2343,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             )}
             {importErr && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'#B4472E' }}>Not a valid Caulis export file.</div>}
             {importData && (
-              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', borderRadius:12, background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:'12px', borderRadius:rad(12), background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.75, lineHeight:1.5 }}>{importData.plants.length} plants in file. Merge keeps your current plants; Replace overwrites them.</div>
                 <div style={{ display:'flex', gap:8 }}>
                   <div onClick={()=>setImportData(null)} style={{ flex:1, height:38, borderRadius:10, border:C.hair, color:C.brown, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>Cancel</div>
@@ -2285,11 +2354,11 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             )}
             <div style={{ height:1, background:C.line, margin:'2px 0' }}/>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, lineHeight:1.5 }}>Moving to a new phone or browser? Get a one-time code that carries your garden key, password and settings over — read it out or paste it there.</div>
-            <div onClick={()=>requestGate('migrate')} style={{ height:42, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
+            <div onClick={()=>requestGate('migrate')} style={{ height:42, borderRadius:rad(12), background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', gap:8, cursor:'pointer' }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Share settings as a code</span>
             </div>
             {migrationCode && (
-              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:12, background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
+              <div style={{ display:'flex', flexDirection:'column', gap:8, padding:12, borderRadius:rad(12), background:'rgba(45,80,22,0.05)', animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                 <div style={{ fontFamily:'ui-monospace,monospace', fontSize:20, fontWeight:600, letterSpacing:1, color:C.forest, textAlign:'center', padding:'6px 0' }}>{migrationCode}</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:'#B4472E', textAlign:'center' }}>Treat this like a password — anyone with the code gets your garden.</div>
                 <div onClick={copyMigrationCode} style={{ height:38, borderRadius:10, background:C.forest, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{codeCopied?'Copied ✓':'Copy code'}</div>
@@ -2297,7 +2366,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             )}
             <div style={{ display:'flex', gap:8 }}>
               <input value={enterCode} onChange={e=>setEnterCode(e.target.value)} placeholder="Have a code? Enter it here" style={{ ...dInput, flex:1 }}/>
-              <div onClick={()=>enterCode.trim() && onApplyMigrationCode(enterCode)} style={{ flexShrink:0, padding:'0 16px', borderRadius:12, background:C.forest, color:'#fff', display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Apply</div>
+              <div onClick={()=>enterCode.trim() && onApplyMigrationCode(enterCode)} style={{ flexShrink:0, padding:'0 16px', borderRadius:rad(12), background:C.forest, color:'#fff', display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>Apply</div>
             </div>
             <a href="https://api.caulis.czeddaru.dev/docs" target="_blank" rel="noopener" style={{ textDecoration:'none', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.brown, opacity:0.8 }}>View format &amp; API docs ↗</a>
           </div>
@@ -2318,13 +2387,13 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           );
           return (
           <SettingsSection title="Navigation bar" open={isOpen('nav')} onToggle={()=>toggleSec('nav')} id={'sec-'+'nav'} matched={settingsMatches[settingsMatchIdx] === 'nav'} query={settingsMatches.includes('nav') ? settingsQuery : ''} bodyRef={registerSection('nav')}>
-            <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:8 }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, padding:'0 2px 2px' }}>Tap a slot to change its button, reorder with the arrows{isDesktop ? '' : ', pick which one is raised in the center'}, and add up to {NAV_MAX}. The “More” button opens everything not on the bar — so nothing is ever out of reach.</div>
               {nav.map((s, i) => {
                 const meta = NAV_ACTIONS[s.action];
                 const isEmpty = s.action === 'empty';
                 return (
-                  <div key={i} style={{ display:'flex', flexDirection:'column', gap:8, padding:'8px 10px', borderRadius:12, background:C.bg }}>
+                  <div key={i} style={{ display:'flex', flexDirection:'column', gap:8, padding:'8px 10px', borderRadius:rad(12), background:C.bg }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                       <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
                         {arrow('▲', i > 0, ()=>swap(i, i-1))}
@@ -2383,7 +2452,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 </div>
               </div>
             </div>
-            <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:12, marginTop:14 }}>
+            <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:12, marginTop:14 }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>Desktop sidebar</div>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Position</div>
@@ -2434,7 +2503,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           const plantEditor = (rows, onSet) => (
             <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:240, overflowY:'auto' }}>
               {rows.map(p => (
-                <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 10px', borderRadius:11, background:C.bg }}>
+                <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 10px', borderRadius:rad(11), background:C.bg }}>
                   <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14.5, color:C.forest, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
                   <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
                     <div onClick={()=>onSet(p.id, Math.max(0,(p.days||0)-1))} style={{ ...dBtn(false), padding:'4px 11px', fontSize:15 }}>−</div>
@@ -2461,7 +2530,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             const h = Array.isArray(p.history) ? p.history : [];
             const open = historyPlantId === p.id;
             return (
-              <div key={p.id} style={{ borderRadius:11, background:C.bg, overflow:'hidden' }}>
+              <div key={p.id} style={{ borderRadius:rad(11), background:C.bg, overflow:'hidden' }}>
                 <div onClick={()=>setHistoryPlantId(open ? null : p.id)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 10px', cursor:'pointer' }}>
                   <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14.5, color:C.forest, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
                   <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6, flexShrink:0 }}>{h.length} entries {open ? '▾' : '▸'}</span>
@@ -2485,7 +2554,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           };
           return (
           <SettingsSection title="Developer" open={isOpen('dev')} onToggle={()=>toggleSec('dev')} id={'sec-'+'dev'} matched={settingsMatches[settingsMatchIdx] === 'dev'} query={settingsMatches.includes('dev') ? settingsQuery : ''} bodyRef={registerSection('dev')}>
-            <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:16, display:'flex', flexDirection:'column', gap:18 }}>
+            <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:16, display:'flex', flexDirection:'column', gap:18 }}>
               {!devAuthed ? (
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                   <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.brown, opacity:0.75 }}>{pinIsSet ? 'Enter developer PIN' : 'Set a developer PIN to protect these tools'}</div>
@@ -2524,7 +2593,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     ) : (
                       <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                         {issues.map(({ plant, dupRuns, size, oversized }) => (
-                          <div key={plant.id} style={{ padding:'10px 12px', borderRadius:12, background:'rgba(201,138,43,0.1)', border:'1px solid rgba(201,138,43,0.25)' }}>
+                          <div key={plant.id} style={{ padding:'10px 12px', borderRadius:rad(12), background:'rgba(201,138,43,0.1)', border:'1px solid rgba(201,138,43,0.25)' }}>
                             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
                               <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14.5, color:C.forest }}>{plant.name}</span>
                               {dupRuns > 0 && <div onClick={()=>onDevDedupeHistory(plant.id)} style={{ ...dBtn(true), padding:'5px 12px', fontSize:12.5 }}>Clean up</div>}
@@ -2592,11 +2661,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                         {adminErr && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:STATUS.needs.dot }}>Wrong secret or request failed</span>}
                       </>
                     ) : (
-                      <div style={{
-                        display: isDesktop ? 'grid' : 'flex', flexDirection: isDesktop ? undefined : 'column',
-                        gridTemplateColumns: isDesktop ? '1fr 1fr' : undefined, alignItems:'start',
-                        gap:10, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)',
-                      }}>
+                      <div style={{ display:'flex', flexDirection:'column', gap:10, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
                         <AdminSub id="overview" title="Overview">
                         {adminStats && (() => {
                           const claimedPct = adminStats.totalGardens > 0 ? 1 - (adminStats.unclaimedCount / adminStats.totalGardens) : 0;
@@ -2625,14 +2690,14 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                                 ['Active today · top 10', activeToday],
                                 ['Avg / garden', adminStats.avgPlantsPerGarden],
                               ].map(([label, val]) => (
-                                <div key={label} style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
+                                <div key={label} style={{ padding:'10px 12px', borderRadius:rad(12), background:C.bg }}>
                                   <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
                                   <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest }}>{val}</div>
                                 </div>
                               ))}
                             </div>
                             {adminStats.gardensPerDay && adminStats.gardensPerDay.length > 0 && (
-                              <div style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
+                              <div style={{ padding:'10px 12px', borderRadius:rad(12), background:C.bg }}>
                                 <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4, marginBottom:6 }}>Gardens created · last 14 days</div>
                                 <Sparkline data={adminStats.gardensPerDay}/>
                               </div>
@@ -2659,7 +2724,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                             <div onClick={()=>bulkDelete('empty')} style={{ ...dBtn(false), flex:1, fontSize:12.5 }}>Delete all empty</div>
                           </div>
                           {filteredAdminGardens && (
-                            <div style={{ display:'flex', flexDirection:'column', gap:1, marginTop:4, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:280, overflowY:'auto' }}>
+                            <div style={{ display:'flex', flexDirection:'column', gap:1, marginTop:4, borderRadius:rad(14), overflow:'hidden', border:C.hair, maxHeight:280, overflowY:'auto' }}>
                               {filteredAdminGardens.map(g => (
                                 <div key={g.key} onClick={()=>loadAdminGarden(g.key)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
                                   <span style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{g.key}{g.unclaimed ? ' · unclaimed' : ''}</span>
@@ -2671,7 +2736,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                           )}
                           {adminStatus==='empty' && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>No plants in that garden</span>}
                           {adminLoaded && (
-                            <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:4, padding:12, borderRadius:14, background:C.bg, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
+                            <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:4, padding:12, borderRadius:rad(14), background:C.bg, animation:'popUp 220ms cubic-bezier(.2,.8,.2,1)' }}>
                               <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{adminLoaded.key} · {adminLoaded.plants.length} plants loaded · edits stay local until pushed</div>
                               {adminLoaded.plants.length > 0 && <>
                                 <div onClick={adminWaterAll} style={dBtn(true)}><IconDrop s={15} c="#fff"/> Water all to today</div>
@@ -2696,7 +2761,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                           {adminLoaded && (
                             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                               <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.7 }}>{adminLoaded.key} · {(Array.isArray(adminLoaded.data.badges) ? adminLoaded.data.badges.filter(b=>!b.revoked).length : 0)} of {BADGE_DEFS.length} earned · edits stay local until pushed</div>
-                              <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair }}>
+                              <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:rad(14), overflow:'hidden', border:C.hair }}>
                                 {BADGE_DEFS.map(def => {
                                   const earned = Array.isArray(adminLoaded.data.badges) && adminLoaded.data.badges.some(b => b.id === def.id && !b.revoked);
                                   return (
@@ -2727,7 +2792,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                               </div>
                               <div onClick={runBackupNow} style={dBtn(true)}>{backupBusy ? 'Running…' : 'Run backup now'}</div>
                               {backupFiles && (
-                                <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:14, overflow:'hidden', border:C.hair, maxHeight:220, overflowY:'auto' }}>
+                                <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:rad(14), overflow:'hidden', border:C.hair, maxHeight:220, overflowY:'auto' }}>
                                   {backupFiles.map(f => (
                                     <div key={f.name} onClick={()=>onAdminBackupUrl(adminSecret, f.name)} style={{ display:'flex', justifyContent:'space-between', padding:'8px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
                                       <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.forest, fontWeight:600 }}>{f.name}</span>
@@ -2764,13 +2829,13 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                                   ['Backup dir', fmtBytes(s.backupDirBytes)],
                                   ['Requests', `${s.requestCount} · ${s.requestsPerMin}/min`],
                                 ].map(([label, val]) => (
-                                  <div key={label} style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
+                                  <div key={label} style={{ padding:'10px 12px', borderRadius:rad(12), background:C.bg }}>
                                     <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
                                     <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:18, color:C.forest }}>{val}</div>
                                   </div>
                                 ))}
                               </div>
-                              <div style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
+                              <div style={{ padding:'10px 12px', borderRadius:rad(12), background:C.bg }}>
                                 <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4, marginBottom:6 }}>Load average · 1m / 5m / 15m</div>
                                 <div style={{ display:'flex', gap:16 }}>
                                   {s.loadavg.map((l, i) => (
@@ -2778,7 +2843,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                                   ))}
                                 </div>
                               </div>
-                              <div style={{ padding:'10px 12px', borderRadius:12, background:C.bg }}>
+                              <div style={{ padding:'10px 12px', borderRadius:rad(12), background:C.bg }}>
                                 <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4, marginBottom:6 }}>DB pool · total / idle / waiting</div>
                                 <div style={{ display:'flex', gap:16 }}>
                                   <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink }}>{s.pool.total}</div>
@@ -2807,7 +2872,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           );
         })()}
         <SettingsSection title="About" open={isOpen('about')} onToggle={()=>toggleSec('about')} id={'sec-'+'about'} matched={settingsMatches[settingsMatchIdx] === 'about'} query={settingsMatches.includes('about') ? settingsQuery : ''} bodyRef={registerSection('about')}>
-          <div style={{ background:C.panel, borderRadius:18, border:C.hair, overflow:'hidden' }}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
             <div onClick={tapVersion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px', borderBottom:C.hair, cursor:'default', userSelect:'none' }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Version</span>
               <span style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.brown, opacity:0.7 }}>{`v${APP_VERSION}`}{!devRevealed && verTaps >= 3 && verTaps < 7 ? ` · ${7-verTaps} more` : ''}</span>
@@ -2817,7 +2882,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Check for updates</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Clear cache & reload latest version</div>
               </div>
-              <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:11, background:'rgba(45,80,22,0.08)', color:C.forest }}>
+              <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:7, padding:'8px 14px', borderRadius:rad(11), background:'rgba(45,80,22,0.08)', color:C.forest }}>
                 {updating
                   ? <div style={{ width:15, height:15, borderRadius:999, border:`2px solid rgba(45,80,22,0.2)`, borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/>
                   : <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 018-8 8 8 0 016.9 4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/><path d="M20 12a8 8 0 01-8 8 8 8 0 01-6.9-4" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round"/><path d="M18 4l2 3h-3M6 20l-2-3h3" stroke={C.forest} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -2833,7 +2898,12 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
         <div style={{ width:260, flexShrink:0, position:'sticky', top:32, display:'flex', flexDirection:'column', gap:14 }}>
           <DesktopSettingsAside
             plants={plants} adminUnlocked={adminUnlocked} adminStats={adminStats}
-            backupSettings={backupSettings} backupFiles={backupFiles} BackupGauge={BackupGauge}/>
+            backupSettings={backupSettings} backupFiles={backupFiles} BackupGauge={BackupGauge} Gauge={Gauge}
+            adminSecret={adminSecret} setAdminSecret={setAdminSecret} unlockAdmin={unlockAdmin} adminBusy={adminBusy} adminErr={adminErr}
+            adminSystemData={adminSystemData} adminSystemBusy={adminSystemBusy} loadAdminSystem={loadAdminSystem}
+            onRunBackup={runBackupNow} backupBusy={backupBusy}
+            onRefreshQuick={refreshAdminQuick} adminQuickBusy={adminQuickBusy}
+            fmtBytes={fmtBytes} fmtDuration={fmtDuration}/>
         </div>
       )}
       </div>
@@ -2842,13 +2912,35 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
 }
 
 // desktop-only right rail — the accordion tops out at 680px, leaving a bare
-// column on wide screens. Fills it with an always-useful glance card plus,
-// once the admin panel is unlocked, a condensed live-stat summary.
-function DesktopSettingsAside({ plants, adminUnlocked, adminStats, backupSettings, backupFiles, BackupGauge }) {
+// column on wide screens. Fills it with an always-useful glance card, a
+// compact admin summary/unlock card, and (once unlocked) a couple of small
+// focused widget cards — system health + quick actions — so real admin data
+// and controls are reachable right here without a trip into Developer/Admin.
+function DesktopSettingsAside({
+  plants, adminUnlocked, adminStats, backupSettings, backupFiles, BackupGauge, Gauge,
+  adminSecret, setAdminSecret, unlockAdmin, adminBusy, adminErr,
+  adminSystemData, adminSystemBusy, loadAdminSystem,
+  onRunBackup, backupBusy, onRefreshQuick, adminQuickBusy,
+  fmtBytes, fmtDuration,
+}) {
   const needs = plants.filter(p => statusOf(p.days, p.every, p.snoozedUntil) !== 'ok').length;
+  const [unlockOpen, setUnlockOpen] = useState(false);
+  useEffect(() => {
+    if (adminUnlocked && !adminSystemData && !adminSystemBusy) loadAdminSystem();
+  }, [adminUnlocked]);
+
+  const cardStyle = { background:C.panel, borderRadius:rad(18), border:C.hair, padding:18, display:'flex', flexDirection:'column', gap:12 };
+  const eyebrow = { fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' };
+  const pill = (busy) => ({
+    flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+    padding:'8px 10px', borderRadius:rad(999), cursor: busy?'default':'pointer',
+    fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest,
+    background:'rgba(122,158,78,0.14)', opacity: busy?0.6:1, userSelect:'none',
+  });
+
   return (
     <>
-      <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:18, display:'flex', flexDirection:'column', gap:10 }}>
+      <div style={cardStyle}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <Leaf size={22} color={C.forest}/>
           <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, color:C.forest }}>Caulis</div>
@@ -2863,19 +2955,75 @@ function DesktopSettingsAside({ plants, adminUnlocked, adminStats, backupSetting
           <IconGear s={15} c={C.brown}/> Docs &amp; changelog
         </a>
       </div>
-      {adminUnlocked && adminStats && (
-        <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:18, display:'flex', flexDirection:'column', gap:12, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
-          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>Admin at a glance</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-            {[['Gardens', adminStats.totalGardens], ['Plants', adminStats.totalPlants]].map(([label, val]) => (
-              <div key={label} style={{ padding:'9px 10px', borderRadius:11, background:C.bg }}>
-                <div style={{ fontFamily:FONT_SANS, fontSize:10, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
-                <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:19, color:C.forest }}>{val}</div>
-              </div>
-            ))}
+
+      {!adminUnlocked ? (
+        <div style={cardStyle}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div style={eyebrow}>Admin at a glance</div>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke={C.brown} strokeWidth="1.8" opacity="0.6"/><path d="M8 11V8a4 4 0 018 0v3" stroke={C.brown} strokeWidth="1.8" opacity="0.6"/></svg>
           </div>
-          {backupSettings && BackupGauge && <BackupGauge settings={backupSettings} files={backupFiles}/>}
+          {!unlockOpen ? (
+            <div onClick={()=>setUnlockOpen(true)} style={{ ...pill(false), padding:'9px 10px' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke={C.forest} strokeWidth="2"/><path d="M8 11V8a4 4 0 018 0v3" stroke={C.forest} strokeWidth="2"/></svg>
+              Unlock admin
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              <input type="password" autoFocus value={adminSecret} onChange={e=>setAdminSecret(e.target.value)}
+                onKeyDown={e=>{ if(e.key==='Enter') unlockAdmin(); }} placeholder="Admin secret"
+                style={{ width:'100%', padding:'8px 10px', borderRadius:rad(10), border:`1px solid ${C.line}`, background:C.bg, fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, outline:'none', boxSizing:'border-box' }}/>
+              <div onClick={()=>unlockAdmin()} style={{ ...pill(adminBusy), background:C.forest, color:'#fff' }}>{adminBusy ? 'Unlocking…' : 'Unlock'}</div>
+              {adminErr && <span style={{ fontFamily:FONT_SANS, fontSize:11, color:STATUS.needs.dot }}>Wrong secret</span>}
+            </div>
+          )}
         </div>
+      ) : (
+        <>
+          {adminStats && (
+            <div style={{ ...cardStyle, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
+              <div style={eyebrow}>Admin at a glance</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                {[['Gardens', adminStats.totalGardens], ['Plants', adminStats.totalPlants]].map(([label, val]) => (
+                  <div key={label} style={{ padding:'9px 10px', borderRadius:rad(11), background:C.bg }}>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:10, color:C.brown, opacity:0.6, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
+                    <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:19, color:C.forest }}>{val}</div>
+                  </div>
+                ))}
+              </div>
+              {backupSettings && BackupGauge && <BackupGauge settings={backupSettings} files={backupFiles}/>}
+            </div>
+          )}
+
+          <div style={{ ...cardStyle, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
+            <div style={eyebrow}>System</div>
+            {adminSystemBusy && !adminSystemData && <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>Loading…</div>}
+            {adminSystemData && Gauge && (() => {
+              const s = adminSystemData;
+              const heapPct = s.memory.heapTotal > 0 ? s.memory.heapUsed / s.memory.heapTotal : 0;
+              const loadPct = s.cpuCount > 0 ? Math.min(1, s.loadavg[0] / s.cpuCount) : 0;
+              return (
+                <>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
+                    <Gauge label="Heap" sub={fmtBytes(s.memory.heapUsed)} pct={heapPct} tone={heapPct > 0.85 ? 'bad' : heapPct > 0.6 ? 'warn' : 'forest'}/>
+                    <Gauge label="Load" sub={`${s.loadavg[0].toFixed(2)}/${s.cpuCount}c`} pct={loadPct} tone={loadPct > 0.85 ? 'bad' : loadPct > 0.6 ? 'warn' : 'forest'}/>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.75, padding:'0 2px' }}>
+                    <span>Up {fmtDuration(s.uptimeSec)}</span>
+                    <span>{s.requestsPerMin}/min</span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          <div style={{ ...cardStyle, gap:8, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
+            <div style={eyebrow}>Quick actions</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <div onClick={backupBusy ? undefined : onRunBackup} style={pill(backupBusy)}>{backupBusy ? 'Running…' : 'Backup now'}</div>
+              <div onClick={adminQuickBusy ? undefined : onRefreshQuick} style={pill(adminQuickBusy)}>{adminQuickBusy ? 'Refreshing…' : 'Refresh'}</div>
+            </div>
+          </div>
+        </>
       )}
     </>
   );
@@ -2942,7 +3090,7 @@ function MoveSheet({ plant, ids, locations, onClose, onPick, onAddLocation, isDe
   };
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:36, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:26, borderTopRightRadius:26, padding:'10px 18px 30px', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'80%', overflowY:'auto' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:rad(26), borderTopRightRadius:rad(26), padding:'10px 18px 30px', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'80%', overflowY:'auto' }}>
         <div style={{ width:38, height:4, borderRadius:999, background:'rgba(45,80,22,0.16)', margin:'0 auto 14px' }}/>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, color:C.forest, textAlign:'center' }}>{bulk ? `Move ${ids.length} plants` : `Move ${plant.name}`}</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65, textAlign:'center', marginTop:3, marginBottom:16 }}>{bulk ? 'Choose a room' : `Currently in ${plant.location}`}</div>
@@ -2952,7 +3100,7 @@ function MoveSheet({ plant, ids, locations, onClose, onPick, onAddLocation, isDe
             return (
               <div key={l} onClick={()=>{ targets.forEach(id => onPick(id, l)); onClose(); }} style={{
                 display:'flex', alignItems:'center', gap:11, padding:'13px 14px', cursor:'pointer',
-                background:C.panel, borderRadius:14, border: on ? '1px solid rgba(110,154,62,0.5)' : '0.5px solid rgba(45,80,22,0.12)',
+                background:C.panel, borderRadius:rad(14), border: on ? '1px solid rgba(110,154,62,0.5)' : '0.5px solid rgba(45,80,22,0.12)',
               }}>
                 <IconPin s={16} c={on?C.forest:C.brown}/>
                 <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:14, fontWeight:on?600:500, color: on?C.forest:C.ink }}>{l}</span>
@@ -2963,8 +3111,8 @@ function MoveSheet({ plant, ids, locations, onClose, onPick, onAddLocation, isDe
         </div>
         <div style={{ display:'flex', gap:8, marginTop:12 }}>
           <input value={typed} onChange={e=>setTyped(e.target.value)} onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); addNew(); } }} placeholder="New room…"
-            style={{ flex:1, boxSizing:'border-box', height:46, borderRadius:14, border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 15px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
-          <div onClick={addNew} style={{ flexShrink:0, width:46, height:46, borderRadius:14, background: typed.trim()?C.forest:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            style={{ flex:1, boxSizing:'border-box', height:46, borderRadius:rad(14), border:'1px solid rgba(45,80,22,0.14)', background:C.input, padding:'0 15px', fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none' }}/>
+          <div onClick={addNew} style={{ flexShrink:0, width:46, height:46, borderRadius:rad(14), background: typed.trim()?C.forest:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <IconPlus s={16} c={typed.trim()?'#fff':C.forest}/>
           </div>
         </div>
@@ -2985,7 +3133,7 @@ function PlantNotFoundScreen({ onBack }) {
       </div>
       <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:28, color:C.forest, marginTop:24, textAlign:'center', position:'relative', zIndex:2 }}>Plant not found</div>
       <div style={{ fontFamily:FONT_SANS, fontSize:13.5, color:C.ink, opacity:0.55, marginTop:8, lineHeight:1.6, textAlign:'center', maxWidth:260, position:'relative', zIndex:2 }}>This QR code points to a plant that doesn't exist in your garden.</div>
-      <div onClick={onBack} style={{ marginTop:28, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:9, background:C.forest, color:'#fff', borderRadius:16, padding:'14px 24px', boxShadow:'0 6px 16px rgba(45,80,22,0.24)', position:'relative', zIndex:2 }}>
+      <div onClick={onBack} style={{ marginTop:28, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:9, background:C.forest, color:'#fff', borderRadius:rad(16), padding:'14px 24px', boxShadow:'0 6px 16px rgba(45,80,22,0.24)', position:'relative', zIndex:2 }}>
         <IconBack s={17} c="#fff"/>
         <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600 }}>Back to garden</span>
       </div>
@@ -3029,7 +3177,7 @@ function DesktopSidebar({ tab, setTab, onAction, navConfig, showLabels = true, s
           return (
             <div key={i} onClick={()=>fire(s.action)} title={collapsed ? navLabel(s) : undefined} style={{
               display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', gap:11,
-              padding: collapsed ? '11px 0' : '11px 12px', borderRadius:12, marginBottom:4,
+              padding: collapsed ? '11px 0' : '11px 12px', borderRadius:rad(12), marginBottom:4,
               cursor:'pointer',
               background: active ? 'rgba(45,80,22,0.09)' : 'transparent',
               transition:'background 140ms ease',

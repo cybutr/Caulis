@@ -5,7 +5,7 @@
 // ── info tile ─────────────────────────────────────────────
 function InfoTile({ icon, label, children, accent = C.forest }) {
   return (
-    <div style={{ background:C.panel, borderRadius:18, border:C.hair, padding:'14px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)' }}>
+    <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:'14px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)' }}>
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:7 }}>
         <div style={{ width:24, height:24, borderRadius:7, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center' }}>{icon}</div>
         <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:accent, letterSpacing:0.5, textTransform:'uppercase', whiteSpace:'nowrap' }}>{label}</span>
@@ -162,7 +162,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
 
           {/* water button */}
           {readonly ? (
-            <div style={{ marginTop:18, height:52, borderRadius:16, background:'rgba(45,80,22,0.06)', border:'0.5px solid rgba(45,80,22,0.12)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+            <div style={{ marginTop:18, height:52, borderRadius:rad(16), background:'rgba(45,80,22,0.06)', border:'0.5px solid rgba(45,80,22,0.12)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
               <LeafOutline size={16} color={C.brown} sw={1.5}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.brown, opacity:0.7 }}>View only — not your garden</span>
             </div>
@@ -170,7 +170,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
             <div onClick={!justWatered ? water : undefined} style={{
               marginTop:18, cursor: justWatered?'default':'pointer',
               display:'flex', alignItems:'center', justifyContent:'center', gap:9,
-              height:52, borderRadius:16,
+              height:52, borderRadius:rad(16),
               background: justWatered ? 'rgba(110,154,62,0.14)' : C.forest,
               color: justWatered ? C.sage : '#fff',
               boxShadow: justWatered ? 'none' : '0 6px 16px rgba(45,80,22,0.24)',
@@ -191,14 +191,14 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
           </>)}
 
           {onAskDoctor && (
-            <div onClick={()=>onAskDoctor(plant)} style={{ marginTop:10, display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:46, borderRadius:16, border:`1px solid ${C.forest}`, cursor:'pointer' }}>
+            <div onClick={()=>onAskDoctor(plant)} style={{ marginTop:10, display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:46, borderRadius:rad(16), border:`1px solid ${C.forest}`, cursor:'pointer' }}>
               <IconDoctor s={17} c={C.forest}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.forest }}>Ask the doctor</span>
             </div>
           )}
 
           {!readonly && onCareCheck && careCheckDue(plant) && (
-            <div style={{ marginTop:14, padding:14, borderRadius:16, background:'rgba(122,158,78,0.1)', border:'1px solid rgba(122,158,78,0.3)' }}>
+            <div style={{ marginTop:14, padding:14, borderRadius:rad(16), background:'rgba(122,158,78,0.1)', border:'1px solid rgba(122,158,78,0.3)' }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.forest, marginBottom:10 }}>How's {czechMode && plant.czech ? plant.czech : plant.name} doing lately?</div>
               <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                 {[
@@ -281,15 +281,15 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
           </div>
 
           {/* QR block */}
-          {!readonly && <div style={{ marginTop:18, marginBottom:24, background:C.panel, borderRadius:20, border:C.hair, padding:'20px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)', display:'flex', flexDirection:'column', alignItems:'center' }}>
+          {!readonly && <div style={{ marginTop:18, marginBottom:24, background:C.panel, borderRadius:rad(20), border:C.hair, padding:'20px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)', display:'flex', flexDirection:'column', alignItems:'center' }}>
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>Plant tag</div>
-            <div style={{ width:148, height:148, marginTop:14, padding:10, background:C.bg, borderRadius:14, border:C.hair }}>
+            <div style={{ width:148, height:148, marginTop:14, padding:10, background:C.bg, borderRadius:rad(14), border:C.hair }}>
               <img src={qrUrl(PLANT_QR_URL(plant.id), 220)} alt="QR code" style={{ width:'100%', height:'100%', display:'block' }}/>
             </div>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest, marginTop:12 }}>Scan to open {czechMode && plant.czech ? plant.czech : plant.name}</div>
             <div onClick={()=>onToggleQueue(plant.id)} style={{
               marginTop:16, cursor:'pointer', width:'100%',
-              display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:48, borderRadius:14,
+              display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:48, borderRadius:rad(14),
               background: inQueue ? 'rgba(122,158,78,0.14)' : 'rgba(45,80,22,0.06)',
               border: inQueue ? '1px solid rgba(110,154,62,0.4)' : '0.5px solid rgba(45,80,22,0.12)',
               color: inQueue ? C.sage : C.forest, transition:'all 200ms ease',
@@ -333,7 +333,7 @@ function Field({ label, children }) {
   );
 }
 const inputStyle = () => ({
-  width:'100%', boxSizing:'border-box', height:48, borderRadius:14, border:C.hair,
+  width:'100%', boxSizing:'border-box', height:48, borderRadius:rad(14), border:C.hair,
   background:C.input, padding:'0 15px', fontFamily:FONT_SANS, fontSize:15, color:C.ink, outline:'none',
 });
 
@@ -606,7 +606,7 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
               </div>
             )}
             {identifying && (
-              <div style={{ position:'absolute', inset:0, borderRadius:20, background:'rgba(45,80,22,0.32)', backdropFilter:'blur(2px)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
+              <div style={{ position:'absolute', inset:0, borderRadius:rad(20), background:'rgba(45,80,22,0.32)', backdropFilter:'blur(2px)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12 }}>
                 <div style={{ width:38, height:38, borderRadius:999, border:'3px solid rgba(255,255,255,0.35)', borderTopColor:'#fff', animation:'spin 0.9s linear infinite' }}/>
                 <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:'#fff', letterSpacing:0.3 }}>Identifying plant…</span>
               </div>
@@ -617,14 +617,14 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
             <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:2 }}>
               {photos.map((img, i) => (
                 <div key={i} onClick={()=> i!==0 && setPhotos(prev => [prev[i], ...prev.filter((_,idx)=>idx!==i)])} style={{ position:'relative', flexShrink:0, cursor: i!==0 ? 'pointer' : 'default' }}>
-                  <img src={img} alt="" style={{ width:54, height:54, borderRadius:11, objectFit:'cover', border: i===0 ? `2px solid ${C.forest}` : C.hair }}/>
+                  <img src={img} alt="" style={{ width:54, height:54, borderRadius:rad(11), objectFit:'cover', border: i===0 ? `2px solid ${C.forest}` : C.hair }}/>
                   {i===0 && <span style={{ position:'absolute', bottom:3, left:3, fontFamily:FONT_SANS, fontSize:8, fontWeight:700, color:'#fff', background:'rgba(45,80,22,0.85)', borderRadius:5, padding:'1px 5px', letterSpacing:0.3 }}>COVER</span>}
                   <div onClick={(e)=>{ e.stopPropagation(); removePhoto(i); }} style={{ position:'absolute', top:-5, right:-5, width:20, height:20, borderRadius:999, background:C.toast, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 1px 3px rgba(0,0,0,0.3)' }}>
                     <svg width="9" height="9" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
                   </div>
                 </div>
               ))}
-              <div onClick={addPhoto} style={{ flexShrink:0, width:54, height:54, borderRadius:11, border:'1.5px dashed rgba(45,80,22,0.3)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              <div onClick={addPhoto} style={{ flexShrink:0, width:54, height:54, borderRadius:rad(11), border:'1.5px dashed rgba(45,80,22,0.3)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
                 <IconPlus s={18} c={C.forest}/>
               </div>
             </div>
@@ -632,11 +632,11 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
           </>); })()}
 
           {candidates.length > 0 && (
-            <div style={{ background:C.panel, borderRadius:16, border:'1px solid rgba(110,154,62,0.35)', padding:'12px 14px' }}>
+            <div style={{ background:C.panel, borderRadius:rad(16), border:'1px solid rgba(110,154,62,0.35)', padding:'12px 14px' }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest, marginBottom:8 }}>Not sure — pick the closest:</div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 {candidates.map((c, i) => (
-                  <div key={i} onClick={()=>chooseCandidate(c)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'10px 12px', borderRadius:12, background:C.bg, border:'0.5px solid rgba(45,80,22,0.12)', cursor:'pointer' }}>
+                  <div key={i} onClick={()=>chooseCandidate(c)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'10px 12px', borderRadius:rad(12), background:C.bg, border:'0.5px solid rgba(45,80,22,0.12)', cursor:'pointer' }}>
                     <div style={{ minWidth:0 }}>
                       <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{c.commonName || c.scientificName}</div>
                       <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:12, color:C.brown, opacity:0.75 }}>{c.scientificName}</div>
@@ -655,7 +655,7 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
                 {suggestions.map(p => (
                   <div key={p.id} onClick={()=>pickSuggestion(p)} style={{
                     display:'flex', alignItems:'center', justifyContent:'space-between',
-                    padding:'10px 14px', borderRadius:12, cursor:'pointer',
+                    padding:'10px 14px', borderRadius:rad(12), cursor:'pointer',
                     background:C.panel, border:'0.5px solid rgba(45,80,22,0.12)',
                     transition:'background 120ms ease',
                   }}>
@@ -692,7 +692,7 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
                 onKeyDown={e=>{ if(e.key==='Enter'){ e.preventDefault(); commitTyped(); } }}
                 placeholder={loc ? '' : 'Type a room or spot…'}
                 style={{ ...inputStyle(), flex:1 }}/>
-              <div onClick={commitTyped} style={{ flexShrink:0, width:48, height:48, borderRadius:14, background: typed.trim()?C.forest:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'background 160ms' }}>
+              <div onClick={commitTyped} style={{ flexShrink:0, width:48, height:48, borderRadius:rad(14), background: typed.trim()?C.forest:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', transition:'background 160ms' }}>
                 <IconPlus s={17} c={typed.trim()?'#fff':C.forest}/>
               </div>
             </div>
@@ -757,16 +757,16 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
           </Field>
           <Field label="Last watered">
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              <div onClick={()=>setLastWatered(d=>Math.max(0, d-1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>−</div>
+              <div onClick={()=>setLastWatered(d=>Math.max(0, d-1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:rad(12), background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>−</div>
               <span style={{ flex:1, textAlign:'center', fontFamily:FONT_SANS, fontSize:15, fontWeight:600, color:C.ink }}>{offsetLabel(lastWatered)}</span>
-              <div onClick={()=>setLastWatered(d=>Math.min(365, d+1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:12, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>+</div>
+              <div onClick={()=>setLastWatered(d=>Math.min(365, d+1))} style={{ cursor:'pointer', width:44, height:44, borderRadius:rad(12), background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:20, fontWeight:600 }}>+</div>
             </div>
           </Field>
 
           {editing && editing.species_id && (
             <div onClick={refreshFromSpecies} style={{
               marginTop: 10,
-              height: 48, borderRadius: 14, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+              height: 48, borderRadius: rad(14), display:'flex', alignItems:'center', justifyContent:'center', gap:8,
               background: 'rgba(45,80,22,0.05)', border: `1px solid rgba(45,80,22,0.2)`,
               cursor: refreshingSpecies ? 'default' : 'pointer',
               opacity: refreshingSpecies ? 0.7 : 1, transition:'all 200ms ease'
@@ -785,7 +785,7 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
           {hasAnthropicKey() && (
             <div onClick={runAiRecheck} style={{
               marginTop: 10,
-              height: 48, borderRadius: 14, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+              height: 48, borderRadius: rad(14), display:'flex', alignItems:'center', justifyContent:'center', gap:8,
               background: 'rgba(122,158,78,0.1)', border: `1px solid rgba(122,158,78,0.3)`,
               cursor: rechecking || !latin ? 'default' : 'pointer',
               opacity: !latin ? 0.5 : 1, transition:'all 200ms ease'
@@ -807,7 +807,7 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
       <div style={{ flexShrink:0, padding:'12px 18px 26px', borderTop:'0.5px solid rgba(45,80,22,0.1)', background:C.bg+'F2', backdropFilter:'blur(14px)' }}>
         <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, photos, every, light:light.trim(), care:care.trim(), fact:fact.trim(), days:lastWatered, toxicToPets, propagatedFrom }) : undefined}
           style={{
-            height:52, borderRadius:16, display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+            height:52, borderRadius:rad(16), display:'flex', alignItems:'center', justifyContent:'center', gap:8,
             background: canSave ? C.forest : 'rgba(45,80,22,0.18)', color:'#fff',
             boxShadow: canSave ? '0 6px 16px rgba(45,80,22,0.24)' : 'none',
             cursor: canSave?'pointer':'default', transition:'all 200ms ease',
@@ -820,18 +820,18 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
       {/* photo action sheet — mobile only */}
       {!isDesktop && sheet && (
         <div onClick={()=>setSheet(false)} style={{ position:'absolute', inset:0, zIndex:10, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 180ms ease' }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:26, borderTopRightRadius:26, padding:'10px 16px 30px', animation:'slideUp 280ms cubic-bezier(.2,.8,.2,1)' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:rad(26), borderTopRightRadius:rad(26), padding:'10px 16px 30px', animation:'slideUp 280ms cubic-bezier(.2,.8,.2,1)' }}>
             <div style={{ width:38, height:4, borderRadius:999, background:'rgba(45,80,22,0.16)', margin:'0 auto 14px' }}/>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.forest, textAlign:'center', marginBottom:14 }}>Add a photo</div>
-            <div onClick={takePhoto} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:16, border:C.hair, cursor:'pointer', marginBottom:10 }}>
-              <div style={{ width:42, height:42, borderRadius:12, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}><CameraIcon s={22}/></div>
+            <div onClick={takePhoto} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:rad(16), border:C.hair, cursor:'pointer', marginBottom:10 }}>
+              <div style={{ width:42, height:42, borderRadius:rad(12), background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}><CameraIcon s={22}/></div>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14.5, fontWeight:600, color:C.ink }}>Take photo</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:1 }}>Open camera directly</div>
               </div>
             </div>
-            <div onClick={fromGallery} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:16, border:C.hair, cursor:'pointer', marginBottom:10 }}>
-              <div style={{ width:42, height:42, borderRadius:12, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <div onClick={fromGallery} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:rad(16), border:C.hair, cursor:'pointer', marginBottom:10 }}>
+              <div style={{ width:42, height:42, borderRadius:rad(12), background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke={C.forest} strokeWidth="1.6"/><circle cx="8.5" cy="8.5" r="2" stroke={C.forest} strokeWidth="1.4"/><path d="M3 15l5-5 4 4 2-2 4 4" stroke={C.forest} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round"/></svg>
               </div>
               <div>
@@ -839,8 +839,8 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
                 <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:1 }}>Pick an existing photo</div>
               </div>
             </div>
-            <div onClick={identify} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:16, border:'1px solid rgba(110,154,62,0.35)', cursor:'pointer' }}>
-              <div style={{ width:42, height:42, borderRadius:12, background:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}><SparkIcon s={22}/></div>
+            <div onClick={identify} style={{ display:'flex', alignItems:'center', gap:13, padding:'14px 14px', background:C.panel, borderRadius:rad(16), border:'1px solid rgba(110,154,62,0.35)', cursor:'pointer' }}>
+              <div style={{ width:42, height:42, borderRadius:rad(12), background:'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}><SparkIcon s={22}/></div>
               <div style={{ flex:1 }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14.5, fontWeight:600, color:C.forest }}>Identify plant</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.55, marginTop:1 }}>Take a photo to auto-fill name &amp; species</div>
@@ -1151,7 +1151,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
     const c = m.correction; const done = c.status !== 'pending';
     return (
       <div key={i} style={{ display:'flex', justifyContent:'flex-start', marginBottom:10 }}>
-        <div style={{ maxWidth:'90%', width:'100%', background:C.panel, border:`1px solid ${c.status==='accepted'?'rgba(110,154,62,0.5)':C.line}`, borderRadius:20, padding:'14px 15px', boxShadow:'0px 8px 32px rgba(45,80,22,0.07)' }}>
+        <div style={{ maxWidth:'90%', width:'100%', background:C.panel, border:`1px solid ${c.status==='accepted'?'rgba(110,154,62,0.5)':C.line}`, borderRadius:rad(20), padding:'14px 15px', boxShadow:'0px 8px 32px rgba(45,80,22,0.07)' }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
             <div style={{ width:26, height:26, borderRadius:999, background:'rgba(110,154,62,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
               <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M13 3.5l3.5 3.5L7 16.5H3.5V13L13 3.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round"/></svg>
@@ -1170,10 +1170,10 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
           {c.reason && <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.6, marginTop:10, lineHeight:1.45 }}>{c.reason}</div>}
           {c.status === 'pending' ? (
             <div style={{ display:'flex', gap:9, marginTop:13 }}>
-              <div onClick={()=>acceptCorrection(i)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:40, borderRadius:13, background:C.forest, color:'#fff', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>
+              <div onClick={()=>acceptCorrection(i)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6, height:40, borderRadius:rad(13), background:C.forest, color:'#fff', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>
                 <IconCheck s={16} c="#fff"/> Apply
               </div>
-              <div onClick={()=>dismissCorrection(i)} style={{ flexShrink:0, padding:'0 18px', height:40, borderRadius:13, border:C.hair, color:C.brown, display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Dismiss</div>
+              <div onClick={()=>dismissCorrection(i)} style={{ flexShrink:0, padding:'0 18px', height:40, borderRadius:rad(13), border:C.hair, color:C.brown, display:'flex', alignItems:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600 }}>Dismiss</div>
             </div>
           ) : (
             <div style={{ marginTop:12, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color: c.status==='accepted'?C.sage:C.brown, opacity: c.status==='accepted'?1:0.6 }}>{c.status==='accepted'?'✓ Applied':'Dismissed'}</div>
@@ -1188,11 +1188,11 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
     return (
       <div key={i} style={{ display:'flex', justifyContent: mine ? 'flex-end' : 'flex-start', marginBottom:10 }}>
         <div style={{ maxWidth:'82%', display:'flex', flexDirection:'column', gap:6, alignItems: mine ? 'flex-end' : 'flex-start' }}>
-          {m.image && <img src={m.image} alt="" style={{ width:150, height:150, objectFit:'cover', borderRadius:15, border:C.hair }}/>}
-          {!m.image && m.imgStripped && <div style={{ width:150, height:96, borderRadius:15, background:'rgba(45,80,22,0.05)', border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6 }}>photo from earlier</div>}
+          {m.image && <img src={m.image} alt="" style={{ width:150, height:150, objectFit:'cover', borderRadius:rad(15), border:C.hair }}/>}
+          {!m.image && m.imgStripped && <div style={{ width:150, height:96, borderRadius:rad(15), background:'rgba(45,80,22,0.05)', border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.6 }}>photo from earlier</div>}
           {m.error
-            ? <div style={{ fontFamily:FONT_SANS, fontSize:13.5, color:STATUS.needs.dot, background:'rgba(180,71,46,0.08)', padding:'10px 13px', borderRadius:16 }}>{m.error}</div>
-            : !!m.text && <div style={{ fontFamily:FONT_SANS, fontSize:14, color: mine ? '#fff' : C.ink, background: mine ? C.forest : C.panel, border: mine ? 'none' : C.hair, padding:'11px 14px', borderRadius:18, boxShadow: mine ? 'none' : '0px 4px 18px rgba(45,80,22,0.05)', animation: mine ? 'none' : 'doctorIn 360ms cubic-bezier(.2,.8,.2,1)' }}>
+            ? <div style={{ fontFamily:FONT_SANS, fontSize:13.5, color:STATUS.needs.dot, background:'rgba(180,71,46,0.08)', padding:'10px 13px', borderRadius:rad(16) }}>{m.error}</div>
+            : !!m.text && <div style={{ fontFamily:FONT_SANS, fontSize:14, color: mine ? '#fff' : C.ink, background: mine ? C.forest : C.panel, border: mine ? 'none' : C.hair, padding:'11px 14px', borderRadius:rad(18), boxShadow: mine ? 'none' : '0px 4px 18px rgba(45,80,22,0.05)', animation: mine ? 'none' : 'doctorIn 360ms cubic-bezier(.2,.8,.2,1)' }}>
                 {mine ? <span style={{ whiteSpace:'pre-wrap', lineHeight:1.5 }}>{m.text}</span> : (m.animate ? <TypewriterMarkdown text={m.text} onTick={pinScroll}/> : <MarkdownText text={m.text}/>)}
               </div>}
         </div>
@@ -1221,7 +1221,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
           </div>
         )}
         {showHistory && (
-          <div style={{ position:'absolute', top:'calc(100% - 4px)', right:sp, width:'min(320px, 78vw)', background:C.panel, borderRadius:18, border:C.hair, boxShadow:'0px 12px 40px rgba(45,80,22,0.14)', overflow:'hidden', zIndex:8, animation:'doctorIn 200ms cubic-bezier(.2,.8,.2,1)' }}>
+          <div style={{ position:'absolute', top:'calc(100% - 4px)', right:sp, width:'min(320px, 78vw)', background:C.panel, borderRadius:rad(18), border:C.hair, boxShadow:'0px 12px 40px rgba(45,80,22,0.14)', overflow:'hidden', zIndex:8, animation:'doctorIn 200ms cubic-bezier(.2,.8,.2,1)' }}>
             <div style={{ padding:'11px 15px', fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', borderBottom:C.hair }}>Recent chats</div>
             {[...chats].reverse().map(c => {
               const firstQ = (c.thread.find(m => m.role === 'user' && m.text) || {}).text || 'Photo';
@@ -1253,7 +1253,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
         {thread.map((m, i) => m.role === 'card' ? correctionCard(m, i) : bubble(m, i))}
         {busy && (
           <div style={{ display:'flex', justifyContent:'flex-start', marginBottom:10, animation:'doctorIn 360ms cubic-bezier(.2,.8,.2,1)' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:9, padding:'12px 16px', background:C.panel, border:C.hair, borderRadius:18, boxShadow:'0px 4px 18px rgba(45,80,22,0.05)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:9, padding:'12px 16px', background:C.panel, border:C.hair, borderRadius:rad(18), boxShadow:'0px 4px 18px rgba(45,80,22,0.05)' }}>
               <div style={{ display:'flex', alignItems:'center', gap:4, height:16 }}>
                 {[0,1,2,3].map(i => <div key={i} style={{ width:3.5, height:16, borderRadius:999, background:C.sage, transformOrigin:'center', animation:`bar 1.1s ${i*0.13}s ease-in-out infinite` }}/>)}
               </div>
@@ -1273,7 +1273,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
             {pendingImage && (
               <div style={{ display:'inline-flex', position:'relative' }}>
-                <img src={pendingImage} alt="" style={{ width:56, height:56, objectFit:'cover', borderRadius:12, border:C.hair }}/>
+                <img src={pendingImage} alt="" style={{ width:56, height:56, objectFit:'cover', borderRadius:rad(12), border:C.hair }}/>
                 <div onClick={()=>setPendingImage(null)} style={{ position:'absolute', top:-6, right:-6, width:20, height:20, borderRadius:999, background:C.ink, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontFamily:FONT_SANS, fontSize:13 }}>×</div>
               </div>
             )}
@@ -1287,16 +1287,16 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
           </div>
         )}
         <div style={{ display:'flex', alignItems:'flex-end', gap:9 }}>
-          <div onClick={openPicker} title="Take / upload a photo" style={{ flexShrink:0, width:42, height:42, borderRadius:13, background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+          <div onClick={openPicker} title="Take / upload a photo" style={{ flexShrink:0, width:42, height:42, borderRadius:rad(13), background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1l1-1.5h7L16.5 6h2A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5v-9Z" stroke={C.forest} strokeWidth="1.6"/><circle cx="12" cy="13" r="3.2" stroke={C.forest} strokeWidth="1.6"/></svg>
           </div>
           {gardenWithPhotos.length > 0 && (
-            <div onClick={()=>setShowGarden(true)} title="Pick a plant from your garden" style={{ flexShrink:0, width:42, height:42, borderRadius:13, background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            <div onClick={()=>setShowGarden(true)} title="Pick a plant from your garden" style={{ flexShrink:0, width:42, height:42, borderRadius:rad(13), background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
               <LeafOutline size={19} color={C.forest} sw={1.7}/>
             </div>
           )}
-          <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={hasPhoto ? 'Ask the doctor…' : 'Ask about your garden, or add a photo'} rows={1} style={{ flex:1, resize:'none', maxHeight:120, padding:'11px 14px', borderRadius:16, border:C.hair, background:C.panel, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', lineHeight:1.4 }}/>
-          <div onClick={send} style={{ flexShrink:0, width:42, height:42, borderRadius:13, background: canSend ? C.forest : 'rgba(45,80,22,0.12)', display:'flex', alignItems:'center', justifyContent:'center', cursor: canSend ? 'pointer' : 'default' }}>
+          <textarea value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{ if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} placeholder={hasPhoto ? 'Ask the doctor…' : 'Ask about your garden, or add a photo'} rows={1} style={{ flex:1, resize:'none', maxHeight:120, padding:'11px 14px', borderRadius:rad(16), border:C.hair, background:C.panel, fontFamily:FONT_SANS, fontSize:14, color:C.ink, outline:'none', lineHeight:1.4 }}/>
+          <div onClick={send} style={{ flexShrink:0, width:42, height:42, borderRadius:rad(13), background: canSend ? C.forest : 'rgba(45,80,22,0.12)', display:'flex', alignItems:'center', justifyContent:'center', cursor: canSend ? 'pointer' : 'default' }}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke={canSend ? '#fff' : C.forest} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
         </div>
@@ -1304,14 +1304,14 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
 
       {showGarden && (
         <div onClick={()=>setShowGarden(false)} style={{ position:'absolute', inset:0, zIndex:10, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:26, borderTopRightRadius:26, padding:'10px 18px calc(26px + env(safe-area-inset-bottom))', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'70%', overflowY:'auto' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:C.bg, borderTopLeftRadius:rad(26), borderTopRightRadius:rad(26), padding:'10px 18px calc(26px + env(safe-area-inset-bottom))', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', maxHeight:'70%', overflowY:'auto' }}>
             <div style={{ width:38, height:4, borderRadius:999, background:'rgba(45,80,22,0.16)', margin:'0 auto 14px' }}/>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, color:C.forest, textAlign:'center' }}>From your garden</div>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65, textAlign:'center', marginTop:3, marginBottom:14 }}>Use a saved plant's photo — no new shot needed</div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(96px, 1fr))', gap:12 }}>
               {gardenWithPhotos.map(p => (
                 <div key={p.id} onClick={()=>pickGardenPlant(p)} style={{ cursor:'pointer', display:'flex', flexDirection:'column', gap:5 }}>
-                  <img src={firstPhoto(p)} alt="" style={{ width:'100%', aspectRatio:'1', objectFit:'cover', borderRadius:14, border: activePlant && activePlant.id===p.id ? `2px solid ${C.forest}` : C.hair }}/>
+                  <img src={firstPhoto(p)} alt="" style={{ width:'100%', aspectRatio:'1', objectFit:'cover', borderRadius:rad(14), border: activePlant && activePlant.id===p.id ? `2px solid ${C.forest}` : C.hair }}/>
                   <span style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'center' }}>{p.name}</span>
                 </div>
               ))}
