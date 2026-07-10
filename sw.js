@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v145';
+const CACHE = 'caulis-v146';
 const SHELL = [
   './',
   './index.html',
@@ -72,13 +72,29 @@ self.addEventListener('notificationclick', e => {
   // a way to see/fix it manually.
   if (e.action === 'water' && data.actionToken) {
     e.notification.close();
-    e.waitUntil(
-      fetch('https://api.caulis.czeddaru.dev/api/push/action', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ token: data.actionToken, action: 'water' }),
-      }).catch(() => {})
-    );
+    e.waitUntil((async () => {
+      try {
+        const r = await fetch('https://api.caulis.czeddaru.dev/api/push/action', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token: data.actionToken, action: 'water' }),
+        });
+        if (r.ok) return;
+      } catch (err) {}
+      // request failed (offline, expired token, server error) — the comment
+      // above always described this fallback but the fetch's .catch(()=>{})
+      // used to swallow it silently instead, so a failed tap looked identical
+      // to a successful one: notification gone, nothing actually watered.
+      // Open the app deep-linked to the plant so the user can see it wasn't
+      // recorded and water it manually.
+      const target = new URL(url, self.registration.scope).href;
+      const clientList = await self.clients.matchAll({ type: 'window' });
+      for (const client of clientList) {
+        if ('navigate' in client) { try { await client.navigate(target); } catch (err) {} }
+        if ('focus' in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    })());
     return;
   }
 

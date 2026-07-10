@@ -532,7 +532,17 @@ app.post('/api/push/action', async (req, reply) => {
     // this whole dev-panel scan tool exists to catch.
     if (history[history.length - 1] !== todayStr) {
       const nextHistory = [...history, todayStr].slice(-60);
-      plants[idx] = { ...p, history: nextHistory, wateredAt: todayMidnightUTC(), wv: 3, days: 0 };
+      // wateredAt has to be the real tap instant (Date.now()), not a
+      // UTC-midnight snap: a client re-derives "days since" against ITS OWN
+      // local midnight (deriveWateredAt/daysSinceMidnight in caulis-core.jsx),
+      // and the server has no idea what that local midnight is. Snapping to
+      // UTC midnight put wateredAt up to a day in the "past" for anyone in a
+      // timezone ahead of UTC tapping the action button in their own early
+      // morning hours — daysSinceMidnight would then round up to 1, showing
+      // the plant as still needing water right after the tap that watered it.
+      // Date.now() has no such failure mode: "now" is always at-or-after
+      // local midnight in every timezone, so it always derives to 0 days.
+      plants[idx] = { ...p, history: nextHistory, wateredAt: Date.now(), wv: 3, days: 0 };
       await client.query(
         'UPDATE garden_data SET plants = $1, rev = rev + 1, updated_at = now() WHERE garden_id = $2',
         [JSON.stringify(plants), claims.gardenId]
