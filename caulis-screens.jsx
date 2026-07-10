@@ -397,6 +397,9 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
                 <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink, opacity:0.75 }}>
                   Garden health {health.score} · {HEALTH_TIERS[health.tier].label}
                 </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" style={{ transform: healthOpen?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45, flexShrink:0 }}>
+                  <path d="M6 9l6 6 6-6" stroke={C.ink} strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </div>
             )}
             {health && healthOpen && (
@@ -412,9 +415,10 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
           </div>
           <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8 }}>
             {!empty && badges && badges.length > 0 && (
-              <div onClick={onOpenBadges} title="Badges" style={{ height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', gap:6, padding:'0 12px', cursor:'pointer' }}>
+              <div onClick={onOpenBadges} title="Badges" style={{ height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', gap:6, padding:'0 10px 0 12px', cursor:'pointer' }}>
                 <BadgeIconSprout s={16} c={C.forest}/>
                 <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink }}>{badges.length}/{BADGE_DEFS.length}</span>
+                <svg width="8" height="8" viewBox="0 0 24 24" style={{ opacity:0.4, flexShrink:0 }}><path d="M9 6l6 6-6 6" stroke={C.brown} strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </div>
             )}
             {!empty && (
