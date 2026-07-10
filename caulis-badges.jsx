@@ -67,6 +67,66 @@ function BadgeIconPortrait({ s = 22, c = C.forest }) {
     <path d="M12 14.5c-2.3-2.6-3.6-4-3.6-5.4C8.4 7.6 9.5 7 10.6 7c.7 0 1.3.35 1.4.9.1-.55.7-.9 1.4-.9 1.1 0 2.2.6 2.2 2.1 0 1.4-1.3 2.8-3.6 5.4Z" stroke={c} strokeWidth="1.3" strokeLinejoin="round"/>
   </svg>);
 }
+function BadgeIconCalendar({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <rect x="4" y="5.5" width="16" height="14.5" rx="2" stroke={c} strokeWidth="1.5"/>
+    <path d="M4 9.5h16" stroke={c} strokeWidth="1.4"/>
+    <path d="M8 4v3M16 4v3" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M8.5 13.5l2.2 2.2 4.8-4.8" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>);
+}
+function BadgeIconLantern({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="7" fill="none" stroke={c} strokeWidth="1.5"/>
+    <path d="M12 3.2v2.6M12 18.2v2.6M4.2 12H2M22 12h-2.2M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M6.3 17.7l1.8-1.8M15.9 8.1l1.8-1.8" stroke={c} strokeWidth="1.3" strokeLinecap="round" opacity="0.55"/>
+    <path d="M9.5 9.5a3.6 3.6 0 0 0 5 5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>);
+}
+function BadgeIconDroplet({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M12 3.5c3 4 5.5 7.3 5.5 10.3a5.5 5.5 0 1 1-11 0C6.5 10.8 9 7.5 12 3.5Z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>
+  </svg>);
+}
+function BadgeIconCamel({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M3.5 17.5c1-4 3-6 5-6 1.2 0 1.8 1 2.6 1s1-1.2 2.2-1.2 2 1.2 3.2 1.2c1.6 0 2.7-1.5 3.8-.7" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M6 17.5v2.3M18 17.5v2.3" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <circle cx="4.3" cy="10.5" r="1.3" fill="none" stroke={c} strokeWidth="1.3"/>
+  </svg>);
+}
+function BadgeIconMoon({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M17.5 14.2A7.2 7.2 0 1 1 9.8 6.5a5.7 5.7 0 0 0 7.7 7.7Z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>
+    <path d="M18.5 4.5v2.4M17.3 5.7h2.4" stroke={c} strokeWidth="1.3" strokeLinecap="round"/>
+  </svg>);
+}
+function BadgeIconKey({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <circle cx="7.5" cy="14.5" r="4" stroke={c} strokeWidth="1.5"/>
+    <path d="M10.8 11.2 19 3M16 6l2.5 2.5M18.3 3.7l2.2 2.2" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>);
+}
+function BadgeIconGamepad({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M6.5 8.5h11a3.5 3.5 0 0 1 3.4 4.3l-.6 2.5a2.6 2.6 0 0 1-4.6 1L14 14.5h-4l-1.7 1.8a2.6 2.6 0 0 1-4.6-1l-.6-2.5A3.5 3.5 0 0 1 6.5 8.5Z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M8 10.8v2.4M6.8 12h2.4" stroke={c} strokeWidth="1.2" strokeLinecap="round"/>
+    <circle cx="17" cy="11" r="0.9" fill={c}/>
+    <circle cx="15" cy="13" r="0.9" fill={c}/>
+  </svg>);
+}
+function BadgeIconViewfinder({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16" stroke={c} strokeWidth="1.6" strokeLinecap="round"/>
+    <circle cx="12" cy="12" r="3.2" stroke={c} strokeWidth="1.4"/>
+  </svg>);
+}
+function BadgeIconSeal({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="10.5" r="6.5" stroke={c} strokeWidth="1.5"/>
+    <path d="M9 10.7l2 2 4-4.2" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M9 16l-1.5 5 3.8-2 1.7 2 1.7-2 3.8 2-1.5-5" stroke={c} strokeWidth="1.3" strokeLinejoin="round"/>
+  </svg>);
+}
 
 // ── badge definitions ─────────────────────────────────────────
 // check(state) receives { plants, locations, roomLight } — the same read of
@@ -77,6 +137,7 @@ const BADGE_MILESTONES = [
   { n: 25,  id: 'plants-25',  name: 'Greenhouse Keeper', text: 'Twenty-five and counting.',               Icon: BadgeIconCluster },
   { n: 50,  id: 'plants-50',  name: 'Botanist',          text: 'Fifty plants under one roof.',            Icon: BadgeIconArboretum },
   { n: 100, id: 'plants-100', name: 'The Arboretum',     text: 'A hundred plants. This is a lifestyle now.', Icon: BadgeIconArboretum },
+  { n: 200, id: 'plants-200', name: 'Botanical Garden',  text: 'Two hundred plants. There is no more room.', Icon: BadgeIconArboretum },
 ];
 
 // a plant is "on schedule" for a stretch of history if no gap between
@@ -115,6 +176,44 @@ const BADGE_DEFS = [
     check: ({ plants }) => plants.some(p => p.propagatedFrom != null) },
   { id: 'documented', name: 'Portrait Mode', text: 'You gave a plant its own photograph.', Icon: BadgeIconPortrait,
     check: ({ plants }) => plants.some(p => p.userImage || (p.photos && p.photos.length)) },
+  { id: 'documented-5', name: 'Full Gallery', text: 'Five plants, five photographs.', Icon: BadgeIconPortrait,
+    check: ({ plants }) => plants.filter(p => p.userImage || (p.photos && p.photos.length)).length >= 5 },
+  { id: 'variety-species-15', name: 'The Herbarium', text: 'Fifteen distinct species under one roof.', Icon: BadgeIconSpecies,
+    check: ({ plants }) => new Set(plants.map(p => (p.latin || '').trim().toLowerCase()).filter(v => v && v !== '—')).size >= 15 },
+  { id: 'on-schedule-16', name: 'Iron Watering Can', text: 'Sixteen waterings, never once late.', Icon: BadgeIconSteady,
+    check: ({ plants }) => plants.some(p => longestOnScheduleStreak(p) >= 16) },
+  { id: 'thriving-10', name: 'Green Thumb', text: 'Ten plants thriving, not one asking for water.', Icon: BadgeIconThriving,
+    check: ({ plants }) => plants.length >= 10 && plants.every(p => statusOf(p.days, p.every, p.snoozedUntil) !== 'needs') },
+  { id: 'garden-anniversary', name: 'One Year In', text: 'A full year of keeping something alive.', Icon: BadgeIconCalendar,
+    check: ({ plants }) => {
+      const stamps = plants.flatMap(p => (Array.isArray(p.history) ? p.history : []));
+      if (!stamps.length) return false;
+      const earliest = stamps.reduce((min, s) => (s < min ? s : min), stamps[0]);
+      return (Date.now() - earliest) >= 365 * DAY_MS;
+    } },
+  { id: 'well-lit', name: 'Sun Room', text: 'Every plant matched to a room with the right light.', Icon: BadgeIconLantern,
+    check: ({ plants, roomLight }) => plants.length >= 5 && !!roomLight &&
+      plants.every(p => roomLight[p.location] && !roomLightMismatch(p, roomLight[p.location])) },
+  // ── secret: not shown in the locked list until earned, discoverable only
+  // by stumbling into the exact condition. Real conditions, no fake gating.
+  { id: 'secret-night-owl', name: 'Night Owl', text: 'Tending the garden well past midnight.', Icon: BadgeIconMoon, secret: true,
+    check: () => { const h = new Date().getHours(); return h >= 1 && h < 4; } },
+  { id: 'secret-thirsty', name: 'High Maintenance', text: 'A plant that needs water every single day.', Icon: BadgeIconDroplet, secret: true,
+    check: ({ plants }) => plants.some(p => p.every <= 1) },
+  { id: 'secret-camel', name: 'Camel Plant', text: 'A plant that barely needs water at all.', Icon: BadgeIconCamel, secret: true,
+    check: ({ plants }) => plants.some(p => p.every >= 45) },
+  { id: 'secret-konami', name: 'Old Habits', text: 'Some codes never leave muscle memory.', Icon: BadgeIconGamepad, secret: true,
+    check: () => { try { return localStorage.getItem('caulis_egg_konami') === '1'; } catch(e) { return false; } } },
+  { id: 'secret-sprig', name: 'Leaf Me Alone', text: "Found what the corner sprig does when you won't stop.", Icon: BadgeIconSprout, secret: true,
+    check: () => { try { return localStorage.getItem('caulis_egg_sprig') === '1'; } catch(e) { return false; } } },
+  { id: 'secret-viewfinder', name: 'Nothing to Scan', text: 'Tapped the scanner viewfinder until it talked back.', Icon: BadgeIconViewfinder, secret: true,
+    check: () => { try { return localStorage.getItem('caulis_egg_viewfinder') === '1'; } catch(e) { return false; } } },
+  // ── admin-only: check() always false — never earned through normal play,
+  // only ever granted/revoked from the Admin panel's badge tool.
+  { id: 'admin-verified', name: 'Verified by the Gardener', text: 'A stamp of approval, personally handed out.', Icon: BadgeIconSeal, adminOnly: true,
+    check: () => false },
+  { id: 'admin-beta', name: 'Beta Sprout', text: 'Here before it was finished.', Icon: BadgeIconKey, adminOnly: true,
+    check: () => false },
 ];
 const BADGE_BY_ID = Object.fromEntries(BADGE_DEFS.map(d => [d.id, d]));
 
@@ -261,13 +360,16 @@ function BadgeMedallion({ badge, def }) {
 }
 
 function LockedMedallion({ def }) {
+  const hidden = !!def.secret;
   return (
-    <div title={def.name} style={{
+    <div title={hidden ? 'Secret badge' : def.name} style={{
       flexShrink:0, width:60, height:60, borderRadius:999, background:'transparent',
       border:'1.5px dashed rgba(45,80,22,0.22)',
       display:'flex', alignItems:'center', justifyContent:'center',
     }}>
-      <div style={{ opacity:0.45, display:'flex' }}><def.Icon s={24} c={C.brown}/></div>
+      {hidden
+        ? <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.brown, opacity:0.45 }}>?</div>
+        : <div style={{ opacity:0.45, display:'flex' }}><def.Icon s={24} c={C.brown}/></div>}
     </div>
   );
 }
@@ -356,17 +458,22 @@ function BadgesView({ badges, onBack, isDesktop }) {
           <div>
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:10 }}>Locked</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {locked.map(def => (
-                <div key={def.id} style={{ display:'flex', alignItems:'center', gap:13, padding:'12px 14px', borderRadius:16, background:'transparent', border:'1px dashed rgba(45,80,22,0.18)' }}>
-                  <div style={{ flexShrink:0, width:48, height:48, borderRadius:999, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    <div style={{ opacity:0.4, display:'flex' }}><def.Icon s={22} c={C.brown}/></div>
+              {locked.map(def => {
+                const hidden = !!def.secret;
+                return (
+                  <div key={def.id} style={{ display:'flex', alignItems:'center', gap:13, padding:'12px 14px', borderRadius:16, background:'transparent', border:'1px dashed rgba(45,80,22,0.18)' }}>
+                    <div style={{ flexShrink:0, width:48, height:48, borderRadius:999, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      {hidden
+                        ? <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.brown, opacity:0.4 }}>?</div>
+                        : <div style={{ opacity:0.4, display:'flex' }}><def.Icon s={22} c={C.brown}/></div>}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.ink, opacity:0.7 }}>{hidden ? 'Secret badge' : def.name}</div>
+                      <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.5, marginTop:2 }}>{hidden ? 'Keep exploring to find this one.' : def.text}</div>
+                    </div>
                   </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.ink, opacity:0.7 }}>{def.name}</div>
-                    <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.5, marginTop:2 }}>{def.text}</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

@@ -364,6 +364,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
       sprigTaps.current = 0;
       setSprigMsg(SPRIG_LINES[Math.floor(Math.random() * SPRIG_LINES.length)]);
       setTimeout(() => setSprigMsg(null), 2200);
+      try { localStorage.setItem('caulis_egg_sprig', '1'); } catch(e) {}
     }
   };
 
@@ -627,30 +628,57 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
 // bucketing it. Only the *next* time a plant comes due is shown, not every
 // future recurrence — this answers the planning question, a full recurring
 // calendar would just be noise for a week-out glance.
-function WaterForecast({ plants }) {
+function WaterForecast({ plants, czechMode, onOpen }) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const buckets = Array.from({ length: 7 }, (_, i) => ({ date: new Date(today.getTime() + i * 86400000), count: 0 }));
+  const buckets = Array.from({ length: 7 }, (_, i) => ({ date: new Date(today.getTime() + i * 86400000), count: 0, plants: [] }));
   plants.forEach(p => {
     const daysUntil = Math.max(0, (p.every || 7) - (p.days || 0));
-    if (daysUntil <= 6) buckets[daysUntil].count++;
+    if (daysUntil <= 6) { buckets[daysUntil].count++; buckets[daysUntil].plants.push(p); }
   });
+  const [openDay, setOpenDay] = useState(null);
+  useEffect(() => { setOpenDay(null); }, [plants.length]);
   if (!plants.length) return null;
+  const name = p => (czechMode && p.czech) ? p.czech : p.name;
+  const active = openDay != null ? buckets[openDay] : null;
   return (
-    <div style={{ display:'flex', gap:7, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
-      {buckets.map((b, i) => {
-        const label = i === 0 ? 'Today' : b.date.toLocaleDateString('en-US', { weekday:'short' });
-        const busy = b.count > 0;
-        return (
-          <div key={i} style={{
-            flexShrink:0, minWidth:52, borderRadius:14, padding:'9px 6px', textAlign:'center',
-            background: i === 0 && busy ? C.forest : busy ? 'rgba(110,154,62,0.12)' : 'transparent',
-            border: busy ? 'none' : `0.5px solid ${C.line}`,
-          }}>
-            <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, letterSpacing:0.3, textTransform:'uppercase', color: i === 0 && busy ? 'rgba(255,255,255,0.75)' : C.brown, opacity: i === 0 && busy ? 1 : 0.65 }}>{label}</div>
-            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, marginTop:3, color: i === 0 && busy ? '#fff' : busy ? C.forest : C.ink, opacity: busy ? 1 : 0.3 }}>{b.count || '·'}</div>
+    <div>
+      <div style={{ display:'flex', gap:7, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+        {buckets.map((b, i) => {
+          const label = i === 0 ? 'Today' : b.date.toLocaleDateString('en-US', { weekday:'short' });
+          const busy = b.count > 0;
+          const isOpen = openDay === i;
+          return (
+            <div key={i} onClick={() => busy && setOpenDay(isOpen ? null : i)} role={busy ? 'button' : undefined} style={{
+              flexShrink:0, minWidth:52, borderRadius:14, padding:'9px 6px', textAlign:'center', cursor: busy ? 'pointer' : 'default',
+              background: i === 0 && busy ? C.forest : busy ? 'rgba(110,154,62,0.12)' : 'transparent',
+              border: isOpen ? `1.5px solid ${C.forest}` : busy ? 'none' : `0.5px solid ${C.line}`,
+              boxShadow: isOpen ? `0 0 0 2px ${i === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(45,80,22,0.15)'} inset` : 'none',
+              transition:'border 150ms, box-shadow 150ms',
+            }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, letterSpacing:0.3, textTransform:'uppercase', color: i === 0 && busy ? 'rgba(255,255,255,0.75)' : C.brown, opacity: i === 0 && busy ? 1 : 0.65 }}>{label}</div>
+              <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, marginTop:3, color: i === 0 && busy ? '#fff' : busy ? C.forest : C.ink, opacity: busy ? 1 : 0.3 }}>{b.count || '·'}</div>
+            </div>
+          );
+        })}
+      </div>
+      {active && (
+        <div style={{
+          marginTop:8, borderRadius:14, background:C.panel, border:C.hair, padding:'10px 12px',
+          display:'flex', flexDirection:'column', gap:2, animation:'slideUp 220ms cubic-bezier(.2,.8,.2,1)',
+        }}>
+          <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, letterSpacing:0.4, textTransform:'uppercase', color:C.brown, opacity:0.55, marginBottom:4 }}>
+            {openDay === 0 ? 'Today' : active.date.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' })}
           </div>
-        );
-      })}
+          {active.plants.map(p => (
+            <div key={p.id} onClick={() => onOpen && onOpen(p.id)} role={onOpen ? 'button' : undefined} style={{
+              display:'flex', alignItems:'center', gap:8, padding:'6px 2px', cursor: onOpen ? 'pointer' : 'default',
+            }}>
+              <div style={{ width:6, height:6, borderRadius:999, background:C.sage, flexShrink:0 }}/>
+              <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:15, color:C.forest }}>{name(p)}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -705,7 +733,7 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode }) {
         </div>
         <div>
           <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Next 7 days</div>
-          <WaterForecast plants={plants}/>
+          <WaterForecast plants={plants} czechMode={czechMode}/>
         </div>
         {needsNow.length > 0 && (
           <div>
@@ -806,7 +834,7 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
       )}
       {picking && <WaterAllPicker counts={counts} defaultScope="needs" onPick={pickScope} onClose={()=>setPicking(false)}/>}
       <div style={{ padding:`18px ${sp}px 0`, position:'relative', zIndex:2 }}>
-        <WaterForecast plants={plants}/>
+        <WaterForecast plants={plants} czechMode={czechMode} onOpen={onOpen}/>
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:12, padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
         {list.length === 0 && (
@@ -863,6 +891,7 @@ function ScannerScreen({ plants, onScan, isDesktop, paused }) {
       vfTaps.current = 0;
       setVfMsg(VF_LINES[Math.floor(Math.random() * VF_LINES.length)]);
       setTimeout(() => setVfMsg(null), 2200);
+      try { localStorage.setItem('caulis_egg_viewfinder', '1'); } catch(e) {}
     }
   };
 
@@ -1117,7 +1146,7 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLi
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1660,6 +1689,22 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     <div key={key} onClick={()=>onSetPalette(key)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer' }}>
                       <div style={{ width:34, height:34, borderRadius:999, background:p.swatch, boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${p.swatch}` : '0 1px 3px rgba(43,42,38,0.18)', transition:'box-shadow 160ms ease' }}/>
                       <span style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight: on?600:500, color: on?C.forest:C.brown, opacity: on?1:0.7 }}>{p.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Selected tab highlight</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:10 }}>Independent accent for the active nav tab</div>
+              <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                {ACCENT_ORDER.map(key => {
+                  const a = ACCENTS[key]; const on = (accent || 'match') === key;
+                  const swatch = a.swatch ? (darkMode ? (a.dark || a.swatch) : a.swatch) : `linear-gradient(135deg, ${C.forest} 50%, ${C.sage} 50%)`;
+                  return (
+                    <div key={key} onClick={()=>onSetAccent(key)} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer' }}>
+                      <div style={{ width:30, height:30, borderRadius:999, background:swatch, boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${a.swatch || C.forest}` : '0 1px 3px rgba(43,42,38,0.18)', transition:'box-shadow 160ms ease' }}/>
+                      <span style={{ fontFamily:FONT_SANS, fontSize:9.5, fontWeight: on?600:500, color: on?C.forest:C.brown, opacity: on?1:0.7 }}>{a.label}</span>
                     </div>
                   );
                 })}

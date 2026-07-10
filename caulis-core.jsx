@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '144'; // keep in sync with sw.js CACHE
+const APP_VERSION = '145'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -86,16 +86,39 @@ const PALETTES = {
   teal:   { label:'Teal',   swatch:'#15605A', light:{ forest:'#15605A', sage:'#3E9E92' }, dark:{ forest:'#5FC7BC', sage:'#76C8BE' } },
   plum:   { label:'Plum',   swatch:'#5A2456', light:{ forest:'#5A2456', sage:'#9E4E92' }, dark:{ forest:'#C870BC', sage:'#C876BE' } },
   clay:   { label:'Clay',   swatch:'#8A3A1E', light:{ forest:'#8A3A1E', sage:'#C07A4E' }, dark:{ forest:'#D4885F', sage:'#D8A074' } },
+  ocean:  { label:'Ocean',  swatch:'#1D4E89', light:{ forest:'#1D4E89', sage:'#5487B0' }, dark:{ forest:'#7DAEDC', sage:'#8FC0E8' } },
+  amber:  { label:'Amber',  swatch:'#8A6A12', light:{ forest:'#8A6A12', sage:'#C0973E' }, dark:{ forest:'#E0B84E', sage:'#D8C074' } },
+  rose:   { label:'Rose',   swatch:'#8A2A3E', light:{ forest:'#8A2A3E', sage:'#C06478' }, dark:{ forest:'#E08096', sage:'#E0A0B0' } },
 };
-const PALETTE_ORDER = ['forest','teal','plum','clay'];
+const PALETTE_ORDER = ['forest','teal','plum','clay','ocean','amber','rose'];
 let activePalette = 'forest';
 
-function applyTheme(dark, palette) {
+// the "active/selected" highlight — independent of the main forest/sage
+// accent pair above so someone can e.g. run a Teal palette with an Amber
+// selected-tab highlight. 'match' (the default) just mirrors C.forest so
+// existing gardens see zero visual change until they opt in.
+const ACCENTS = {
+  match: { label:'Match palette', swatch:null },
+  forest: { label:'Forest', swatch:'#2D5016', dark:'#7EC870' },
+  teal:   { label:'Teal',   swatch:'#15605A', dark:'#5FC7BC' },
+  plum:   { label:'Plum',   swatch:'#5A2456', dark:'#C870BC' },
+  clay:   { label:'Clay',   swatch:'#8A3A1E', dark:'#D4885F' },
+  ocean:  { label:'Ocean',  swatch:'#1D4E89', dark:'#7DAEDC' },
+  amber:  { label:'Amber',  swatch:'#8A6A12', dark:'#E0B84E' },
+  rose:   { label:'Rose',   swatch:'#8A2A3E', dark:'#E08096' },
+};
+const ACCENT_ORDER = ['match','forest','teal','plum','clay','ocean','amber','rose'];
+let activeAccent = 'match';
+
+function applyTheme(dark, palette, accent) {
   if (palette && PALETTES[palette]) activePalette = palette;
+  if (accent && ACCENTS[accent]) activeAccent = accent;
   const src = dark ? C_DARK : C_LIGHT;
   Object.assign(C, src);
   const pal = PALETTES[activePalette] || PALETTES.forest;
   Object.assign(C, dark ? pal.dark : pal.light);
+  const acc = ACCENTS[activeAccent] || ACCENTS.match;
+  C.accent = acc.swatch ? (dark ? (acc.dark || acc.swatch) : acc.swatch) : C.forest;
   const ss = dark ? STATUS_DARK : STATUS_LIGHT;
   Object.assign(STATUS.ok, ss.ok);
   Object.assign(STATUS.soon, ss.soon);
@@ -490,7 +513,7 @@ function normalizeNav(cfg) {
   return slots;
 }
 const navLabel = (s) => (s && s.label) || (NAV_ACTIONS[s && s.action] ? NAV_ACTIONS[s.action].label : '');
-const navColor = (s) => (s && s.color) || C.forest;
+const navColor = (s) => (s && s.color) || C.accent || C.forest;
 // ordered tab actions present in the bar — what swipes and launch-tab respect
 function navTabOrder(cfg) {
   const seen = new Set();
@@ -508,7 +531,7 @@ Object.assign(window, {
   careCheckDue, adjustEveryForOutcome, HEALTH_TIERS, gardenHealthScore,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor, MILESTONES,
-  PALETTES, PALETTE_ORDER,
+  PALETTES, PALETTE_ORDER, ACCENTS, ACCENT_ORDER,
   Leaf, LeafOutline, Sprig,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore,
   StatusDot, LocationPill, StatusTag, Specimen,
