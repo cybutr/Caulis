@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '155'; // keep in sync with sw.js CACHE
+const APP_VERSION = '156'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -374,21 +374,77 @@ function LeafOutline({ size = 22, color = C.forest, sw = 1.4 }) {
   );
 }
 
-function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2, onTap }) {
-  const leaf = (cx, cy, rot) => (
-    <g transform={`translate(${cx} ${cy}) rotate(${rot})`}>
+// growth stage — "how overgrown the garden's watermark has become" driven by
+// real, already-persisted account data: badges earned counts most (each one
+// is a genuine milestone), plant count and total waterings logged add a
+// smaller, gentler pull. Reads localStorage directly rather than threading
+// props through every Sprig call site (8 of them, across 3 files) — same
+// "read a persisted flag straight from storage" pattern already used by the
+// secret badge checks and _badgeReduceMotion in caulis-badges.jsx.
+function gardenGrowthStage() {
+  try {
+    const badges = JSON.parse(localStorage.getItem('caulis_badges') || '[]');
+    const earned = Array.isArray(badges) ? badges.filter(b => !b.revoked).length : 0;
+    const plants = JSON.parse(localStorage.getItem('caulis_plants') || '[]');
+    const plantCount = Array.isArray(plants) ? plants.length : 0;
+    const waterings = Array.isArray(plants)
+      ? plants.reduce((s, p) => s + (Array.isArray(p.history) ? p.history.length : 0), 0)
+      : 0;
+    const score = earned * 3 + Math.min(plantCount, 30) * 0.4 + Math.min(waterings, 200) * 0.05;
+    return Math.max(0, Math.min(6, Math.floor(score / 3.5)));
+  } catch (e) { return 0; }
+}
+
+// tracks the distinct values a setting has ever been set to — used by a few
+// "tried everything" secret badges (full accent spectrum, both theme modes,
+// every corner-radius density). Same shape as the badge system's other
+// persisted-flag reads: a plain localStorage array, best-effort, never throws.
+function trackSeenValue(key, value) {
+  try {
+    const seen = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!seen.includes(value)) { seen.push(value); localStorage.setItem(key, JSON.stringify(seen)); }
+  } catch (e) {}
+}
+
+function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2, onTap, growth }) {
+  const leaf = (cx, cy, rot, scale = 1) => (
+    <g transform={`translate(${cx} ${cy}) rotate(${rot}) scale(${scale})`}>
       <ellipse cx="0" cy="-13" rx="7.5" ry="15" fill="none" stroke={C.brown} strokeWidth="1.4"/>
       <line x1="0" y1="0" x2="0" y2="-26" stroke={C.brown} strokeWidth="1.1"/>
     </g>
   );
+  const bud = (cx, cy, r = 4) => <circle cx={cx} cy={cy} r={r} fill="none" stroke={C.brown} strokeWidth="1.3"/>;
+  const bloom = (cx, cy, rot = 0) => (
+    <g transform={`translate(${cx} ${cy}) rotate(${rot})`}>
+      {[0, 72, 144, 216, 288].map(a => (
+        <ellipse key={a} cx="0" cy="-6" rx="3.2" ry="6" fill="none" stroke={C.brown} strokeWidth="1.1" transform={`rotate(${a})`}/>
+      ))}
+      <circle r="2" fill={C.brown} opacity="0.5"/>
+    </g>
+  );
+  // stage 0 is the original 6-leaf sprig, unchanged — every stage above adds
+  // one more tendril/bud/bloom element so a returning user with a bigger,
+  // busier garden sees a visibly fuller corner watermark than they did on day one
+  const stage = Math.max(0, Math.min(6, growth == null ? gardenGrowthStage() : growth));
+  const stages = [
+    () => <g key="g1"><path d="M132 96 C 110 108, 96 128, 92 152" fill="none" stroke={C.brown} strokeWidth="1.1" strokeLinecap="round" opacity="0.85"/>{leaf(94,146,-40,0.85)}</g>,
+    () => <g key="g2">{leaf(178,60,26,0.8)}</g>,
+    () => <g key="g3">{bud(112,120,3.4)}</g>,
+    () => <g key="g4">{bloom(184,22,-8)}</g>,
+    () => <g key="g5"><path d="M146 76 C 160 92, 168 112, 162 134" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{leaf(163,132,50,0.75)}</g>,
+    () => <g key="g6">{bloom(108,148,14)}{bud(150,32,3)}</g>,
+  ];
+  const sway = !onTap && stage > 0;
   return (
     <svg width={w} height={h} viewBox="0 0 260 300" onClick={onTap}
-      style={{ position:'absolute', right, bottom, opacity, pointerEvents: onTap ? 'auto' : 'none', cursor: onTap ? 'pointer' : 'default' }}>
+      style={{ position:'absolute', right, bottom, opacity, pointerEvents: onTap ? 'auto' : 'none', cursor: onTap ? 'pointer' : 'default',
+        transformOrigin:'85% 95%', animation: sway ? 'sprigSway 9s ease-in-out infinite' : 'none' }}>
       <path d="M205 296 C 150 250, 120 180, 132 96 C 138 56, 158 30, 196 14"
         fill="none" stroke={C.brown} strokeWidth="1.4" strokeLinecap="round"/>
       {leaf(150,232,38)}{leaf(133,188,-34)}{leaf(126,150,30)}
       {leaf(128,112,-28)}{leaf(146,76,22)}{leaf(170,46,-18)}
       <circle cx="196" cy="14" r="4.5" fill="none" stroke={C.brown} strokeWidth="1.4"/>
+      {stages.slice(0, stage).map(fn => fn())}
     </svg>
   );
 }
@@ -602,7 +658,7 @@ Object.assign(window, {
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,
   BG_TEXTURES, BG_TEXTURE_ORDER, applyBgTexture, bgTextureStyle,
-  Leaf, LeafOutline, Sprig,
+  Leaf, LeafOutline, Sprig, gardenGrowthStage, trackSeenValue,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,

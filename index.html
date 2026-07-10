@@ -165,6 +165,8 @@
   @keyframes slideFromL { from { transform: translateX(-26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
   @keyframes confettiFall { from { transform: translateY(0) rotate(0deg); opacity: 0.95; } to { transform: translateY(105vh) rotate(340deg); opacity: 0; } }
   @keyframes badgeDrift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  @keyframes badgeNudge { 0% { transform: scale(1) rotate(var(--bn-rot, 0deg)); } 30% { transform: scale(1.32) rotate(var(--bn-rot, 0deg)); } 55% { transform: scale(0.92) rotate(var(--bn-rot, 0deg)); } 100% { transform: scale(1) rotate(var(--bn-rot, 0deg)); } }
+  @keyframes sprigSway { 0%, 100% { transform: rotate(-1.2deg); } 50% { transform: rotate(1.2deg); } }
   html[data-rm="1"] *, html[data-rm="1"] *::before, html[data-rm="1"] *::after {
     animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important; scroll-behavior: auto !important;

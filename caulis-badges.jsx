@@ -120,6 +120,95 @@ function BadgeIconViewfinder({ s = 22, c = C.forest }) {
     <circle cx="12" cy="12" r="3.2" stroke={c} strokeWidth="1.4"/>
   </svg>);
 }
+function BadgeIconCompass({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="8.5" stroke={c} strokeWidth="1.5"/>
+    <path d="M15.2 8.8 13 13l-4.2 2.2L11 11l4.2-2.2Z" stroke={c} strokeWidth="1.3" strokeLinejoin="round"/>
+    <circle cx="12" cy="12" r="1.1" fill={c}/>
+  </svg>);
+}
+function BadgeIconSunrise({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M6 15a6 6 0 0 1 12 0" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M3.5 15h17M12 5.5v2.4M5 8.5l1.7 1.7M19 8.5l-1.7 1.7" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M9 18.5h6" stroke={c} strokeWidth="1.3" strokeLinecap="round" opacity="0.6"/>
+  </svg>);
+}
+function BadgeIconClover({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M12 12C12 12 8 10.5 8 6.8a2.6 2.6 0 0 1 5.2 0" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M12 12C12 12 16 10.5 16 6.8a2.6 2.6 0 0 0-5.2 0" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M12 12C12 12 8 13.5 8 17.2a2.6 2.6 0 0 0 5.2 0" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M12 20.5V12" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M15.5 14.2 19 17.8M19 14.2l-3.5 3.6" stroke={c} strokeWidth="1.3" strokeLinecap="round" opacity="0.7"/>
+  </svg>);
+}
+function BadgeIconStarburst({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5M5.3 5.3l3.5 3.5M15.2 15.2l3.5 3.5M18.7 5.3l-3.5 3.5M8.8 15.2l-3.5 3.5" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <circle cx="12" cy="12" r="2.8" stroke={c} strokeWidth="1.4"/>
+  </svg>);
+}
+function BadgeIconSpectrum({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M3.5 17.5a8.5 8.5 0 0 1 17 0" stroke={c} strokeWidth="1.4"/>
+    <path d="M6.3 17.5a5.7 5.7 0 0 1 11.4 0" stroke={c} strokeWidth="1.4" opacity="0.7"/>
+    <path d="M9.1 17.5a2.9 2.9 0 0 1 5.8 0" stroke={c} strokeWidth="1.4" opacity="0.45"/>
+  </svg>);
+}
+function BadgeIconYinLeaf({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="8" stroke={c} strokeWidth="1.5"/>
+    <path d="M12 4a8 8 0 0 1 0 16 4 4 0 0 1 0-8 4 4 0 0 0 0-8Z" fill={c} opacity="0.85"/>
+    <circle cx="12" cy="8" r="1.3" fill={C.panel}/>
+    <circle cx="12" cy="16" r="1.3" fill={c}/>
+  </svg>);
+}
+function BadgeIconPrism({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M12 3.5 20 18H4Z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <circle cx="12" cy="14" r="4.2" stroke={c} strokeWidth="1.3" opacity="0.6"/>
+  </svg>);
+}
+function BadgeIconHouseFull({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M4 11.5 12 4l8 7.5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M6.5 10v9.5h11V10" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>
+    <path d="M9.5 19.5V15h5v4.5" stroke={c} strokeWidth="1.3" strokeLinejoin="round"/>
+    <path d="M9 13.5c1-1.4 2-1.4 3 0 1-1.4 2-1.4 3 0" stroke={c} strokeWidth="1.1" strokeLinecap="round" opacity="0.7"/>
+  </svg>);
+}
+function BadgeIconMap({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M9 4.5 4 6.5v13l5-2 6 2 5-2v-13l-5 2-6-2Z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M9 4.5v13M15 6.5v13" stroke={c} strokeWidth="1.2" opacity="0.6"/>
+    <circle cx="9" cy="11" r="1.3" fill={c}/>
+    <circle cx="15" cy="14.5" r="1.3" fill={c}/>
+  </svg>);
+}
+function BadgeIconScale({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M12 3.5v17M7 6.5h10" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+    <path d="M4 8.5 7 6.5l3 2-3 5-3-5ZM17 8.5l3-2 3 2-3 5-3-5Z" stroke={c} strokeWidth="1.2" strokeLinejoin="round"/>
+    <path d="M9 20.5h6" stroke={c} strokeWidth="1.4" strokeLinecap="round"/>
+  </svg>);
+}
+function BadgeIconOldFriend({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M12 20.3c-4.4-3-8-6.4-8-10.3a4.5 4.5 0 0 1 8-2.8 4.5 4.5 0 0 1 8 2.8c0 3.9-3.6 7.3-8 10.3Z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <path d="M12 12.5V8" stroke={c} strokeWidth="1.2" strokeLinecap="round" opacity="0.6"/>
+    <path d="M12 8c0-1.6 1.4-2.4 1.4-2.4" stroke={c} strokeWidth="1.1" strokeLinecap="round" opacity="0.55"/>
+  </svg>);
+}
+function BadgeIconSproutFace({ s = 22, c = C.forest }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
+    <path d="M12 21v-8.5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M12 12.5C12 12.5 6.5 12.5 6.5 7C11.9 7 12 12.5 12 12.5ZM12 12.5C12 12.5 17.5 12.5 17.5 7C12.1 7 12 12.5 12 12.5Z" fill="none" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>
+    <ellipse cx="9.6" cy="8.7" rx="0.85" ry="1.1" fill={c}/>
+    <ellipse cx="14.4" cy="8.7" rx="0.85" ry="1.1" fill={c}/>
+    <path d="M10.2 10.6c0.6 0.7 2 0.7 3.6 0" stroke={c} strokeWidth="1" strokeLinecap="round"/>
+  </svg>);
+}
 function BadgeIconSeal({ s = 22, c = C.forest }) {
   return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none">
     <circle cx="12" cy="10.5" r="6.5" stroke={c} strokeWidth="1.5"/>
@@ -208,6 +297,60 @@ const BADGE_DEFS = [
     check: () => { try { return localStorage.getItem('caulis_egg_sprig') === '1'; } catch(e) { return false; } } },
   { id: 'secret-viewfinder', name: 'Nothing to Scan', text: 'Tapped the scanner viewfinder until it talked back.', Icon: BadgeIconViewfinder, secret: true,
     check: () => { try { return localStorage.getItem('caulis_egg_viewfinder') === '1'; } catch(e) { return false; } } },
+  { id: 'variety-species-25', name: 'Living Encyclopedia', text: 'Twenty-five distinct species. You could write a field guide.', Icon: BadgeIconSpecies,
+    check: ({ plants }) => new Set(plants.map(p => (p.latin || '').trim().toLowerCase()).filter(v => v && v !== '—')).size >= 25 },
+  { id: 'on-schedule-30', name: 'Clockwork Gardener', text: 'Thirty waterings, never once late.', Icon: BadgeIconSteady,
+    check: ({ plants }) => plants.some(p => longestOnScheduleStreak(p) >= 30) },
+  // ── secret: same rules as above — real conditions, not shown until earned.
+  // This batch leans hard into "tried everything" / "caught in the act" /
+  // "found every other secret" territory, on purpose — the more of these a
+  // returning user stumbles into, the more the ambient layer has to show.
+  { id: 'secret-completionist', name: 'Every Corner Turned', text: 'Found every other hidden thing this app has to offer.', Icon: BadgeIconStarburst, secret: true,
+    check: () => { try {
+      return localStorage.getItem('caulis_egg_konami') === '1'
+        && localStorage.getItem('caulis_egg_sprig') === '1'
+        && localStorage.getItem('caulis_egg_viewfinder') === '1';
+    } catch(e) { return false; } } },
+  { id: 'secret-dawn', name: 'Dawn Patrol', text: 'Out in the garden before the sun’s properly up.', Icon: BadgeIconSunrise, secret: true,
+    check: () => { const h = new Date().getHours(); return h >= 4 && h < 6; } },
+  { id: 'secret-friday13', name: 'Unlucky Sprout', text: 'Tending the garden on a Friday the 13th.', Icon: BadgeIconClover, secret: true,
+    check: () => { const d = new Date(); return d.getDay() === 5 && d.getDate() === 13; } },
+  { id: 'secret-leap', name: 'Leap Day Gardener', text: 'A watering logged on the rarest date on the calendar.', Icon: BadgeIconStarburst, secret: true,
+    check: () => { const d = new Date(); return d.getMonth() === 1 && d.getDate() === 29; } },
+  { id: 'secret-spectrum', name: 'Full Spectrum', text: 'Tried on every accent color in the wardrobe.', Icon: BadgeIconSpectrum, secret: true,
+    check: () => { try {
+      const seen = JSON.parse(localStorage.getItem('caulis_seen_accents') || '[]');
+      return ACCENT_ORDER.every(a => seen.includes(a));
+    } catch(e) { return false; } } },
+  { id: 'secret-two-sides', name: 'Two Sides of the Leaf', text: 'Seen the garden in both light and dark.', Icon: BadgeIconYinLeaf, secret: true,
+    check: () => { try {
+      const seen = JSON.parse(localStorage.getItem('caulis_seen_modes') || '[]');
+      return seen.includes('light') && seen.includes('dark');
+    } catch(e) { return false; } } },
+  { id: 'secret-shapeshifter', name: 'Shape Shifter', text: 'Tried every corner on the radius scale.', Icon: BadgeIconPrism, secret: true,
+    check: () => { try {
+      const seen = JSON.parse(localStorage.getItem('caulis_seen_radius') || '[]');
+      return RADIUS_ORDER.every(r => seen.includes(r));
+    } catch(e) { return false; } } },
+  { id: 'secret-monoroom', name: 'One Room Empire', text: 'Eight plants, one room, no compromise.', Icon: BadgeIconHouseFull, secret: true,
+    check: ({ plants }) => {
+      if (plants.length < 8) return false;
+      const locs = new Set(plants.map(p => p.location).filter(Boolean));
+      return locs.size === 1;
+    } },
+  { id: 'secret-sprawl', name: 'Sprawling Estate', text: 'Ten different rooms, all of them green.', Icon: BadgeIconMap, secret: true,
+    check: ({ plants }) => new Set(plants.map(p => p.location).filter(Boolean)).size >= 10 },
+  { id: 'secret-opposites', name: 'Opposites Thrive', text: 'One plant that barely drinks, one that never stops asking.', Icon: BadgeIconScale, secret: true,
+    check: ({ plants }) => plants.some(p => p.every <= 1) && plants.some(p => p.every >= 45) },
+  { id: 'secret-old-friend', name: 'Old Friend', text: 'Thirty waterings for one plant. That’s a relationship.', Icon: BadgeIconOldFriend, secret: true,
+    check: ({ plants }) => plants.some(p => Array.isArray(p.history) && p.history.length >= 30) },
+  { id: 'secret-well-traveled', name: 'Well Traveled', text: 'Visited three different gardens from one device.', Icon: BadgeIconCompass, secret: true,
+    check: () => { try {
+      const hist = JSON.parse(localStorage.getItem('caulis_gardens') || '[]');
+      return Array.isArray(hist) && hist.length >= 3;
+    } catch(e) { return false; } } },
+  { id: 'secret-its-alive', name: 'It’s Alive', text: 'A plant named after the most famous carnivore in fiction.', Icon: BadgeIconSproutFace, secret: true,
+    check: ({ plants }) => plants.some(p => ['audrey', 'audrey ii', 'seymour'].includes((p.name || '').trim().toLowerCase())) },
   // ── admin-only: check() always false — never earned through normal play,
   // only ever granted/revoked from the Admin panel's badge tool.
   { id: 'admin-verified', name: 'Verified by the Gardener', text: 'A stamp of approval, personally handed out.', Icon: BadgeIconSeal, adminOnly: true,
@@ -234,15 +377,86 @@ function _hash(str) {
 //  absolutely-positioned band anchored to the top of the content used to
 //  scroll away with the first screenful and leave nothing behind it.
 // ════════════════════════════════════════════════════════════
+// The layer itself, and every decorative element inside it (positioning
+// wrapper, drift animation wrapper, connecting nothing-else), stays
+// `pointer-events:none` throughout — that's what makes it safe to render
+// underneath the entire app without risking the July gesture-bleed bug
+// (a reorder-drag hit-region bleeding into a card's own swipe tracking).
+// The ONLY element that ever gets `pointer-events:auto` is the small
+// icon-sized hit target below (`_BadgeHit`), sized exactly to the icon it
+// wraps — never the layer, the positioning wrapper, or anything larger.
+function _BadgeHit({ def, size, dur, delay }) {
+  const [bump, setBump] = useState(false);
+  const [tip, setTip] = useState(false);
+  const tipTimer = useRef(null);
+  const bumpTimer = useRef(null);
+  const tap = (e) => {
+    e.stopPropagation();
+    if (!_badgeReduceMotion()) {
+      setBump(false);
+      requestAnimationFrame(() => setBump(true));
+      if (bumpTimer.current) clearTimeout(bumpTimer.current);
+      bumpTimer.current = setTimeout(() => setBump(false), 520);
+    }
+    setTip(true);
+    if (tipTimer.current) clearTimeout(tipTimer.current);
+    tipTimer.current = setTimeout(() => setTip(false), 1700);
+  };
+  useEffect(() => () => {
+    if (tipTimer.current) clearTimeout(tipTimer.current);
+    if (bumpTimer.current) clearTimeout(bumpTimer.current);
+  }, []);
+  const active = bump || tip;
+  return (
+    <div style={{ position:'relative' }}>
+      <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite`, opacity: active ? 0.9 : 0.16, transition:'opacity 200ms ease' }}>
+        <div
+          onClick={tap}
+          role="button"
+          aria-label={def.name}
+          style={{
+            width:size, height:size, display:'flex', alignItems:'center', justifyContent:'center',
+            pointerEvents:'auto', cursor:'pointer', touchAction:'manipulation',
+            animation: bump ? 'badgeNudge 520ms cubic-bezier(.3,1.8,.4,1)' : 'none',
+          }}>
+          <def.Icon s={size} c={C.sage}/>
+        </div>
+      </div>
+      {tip && (
+        <div style={{
+          position:'absolute', bottom:'100%', left:'50%', transform:'translateX(-50%)', marginBottom:6,
+          background:C.toast, color:'#fff', fontFamily:FONT_SANS, fontSize:11, fontWeight:600,
+          padding:'5px 9px', borderRadius:8, whiteSpace:'nowrap', boxShadow:'0 6px 16px rgba(0,0,0,0.22)',
+          pointerEvents:'none', animation:'popUp 180ms cubic-bezier(.2,.9,.3,1.2)',
+        }}>{def.name}</div>
+      )}
+    </div>
+  );
+}
+
 function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
   const held = badges ? badges.filter(b => !b.revoked) : [];
-  if (!enabled || !held.length) return null;
+  const wantVisible = !!enabled && held.length > 0;
+  const [mounted, setMounted] = useState(wantVisible);
+  const [shown_, setShown_] = useState(wantVisible);
+  useEffect(() => {
+    let t;
+    if (wantVisible) { setMounted(true); t = setTimeout(() => setShown_(true), 20); }
+    else { setShown_(false); t = setTimeout(() => setMounted(false), MOTION.base); }
+    return () => clearTimeout(t);
+  }, [wantVisible]);
+  if (!mounted) return null;
   const cap = { few: 3, normal: 6, many: 10 }[density] || 6;
-  const shown = [...held].sort((a, b) => b.earnedAt - a.earnedAt).slice(0, cap);
+  const list = [...held].sort((a, b) => b.earnedAt - a.earnedAt).slice(0, cap);
   const bandH = (typeof window !== 'undefined' && window.innerHeight) || (isDesktop ? 900 : 700);
   return (
-    <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:0 }} aria-hidden="true">
-      {shown.map((b, i) => {
+    <div
+      style={{
+        position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:0,
+        opacity: shown_ ? 1 : 0, transition:`opacity ${MOTION.base}ms ${MOTION.out}`,
+      }}
+      aria-hidden="true">
+      {list.map((b, i) => {
         const def = BADGE_BY_ID[b.id];
         if (!def) return null;
         const h = _hash(b.id + i);
@@ -254,9 +468,7 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
         const dur = 6 + (h % 30) / 10;
         return (
           <div key={b.id} style={{ position:'absolute', left:`${left}%`, top, transform:`rotate(${rot}deg)` }}>
-            <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite`, opacity:0.16 }}>
-              <def.Icon s={size} c={C.sage}/>
-            </div>
+            <_BadgeHit def={def} size={size} dur={dur} delay={delay}/>
           </div>
         );
       })}

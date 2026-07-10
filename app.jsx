@@ -746,13 +746,14 @@ function App() {
   const setDarkMode = (v) => {
     try { localStorage.setItem('caulis_dark', v ? '1' : '0'); } catch(e) {}
     setDarkModeState(v);
+    trackSeenValue('caulis_seen_modes', v ? 'dark' : 'light');
   };
   const [palette, setPaletteRaw] = useState(() => lsGet('caulis_palette', 'forest'));
   const setPalette = (v) => { setPaletteRaw(v); lsSet('caulis_palette', v); };
   const [accent, setAccentRaw] = useState(() => lsGet('caulis_accent', 'match'));
-  const setAccent = (v) => { setAccentRaw(v); lsSet('caulis_accent', v); };
+  const setAccent = (v) => { setAccentRaw(v); lsSet('caulis_accent', v); trackSeenValue('caulis_seen_accents', v); };
   const [radiusDensity, setRadiusDensityRaw] = useState(() => lsGet('caulis_radius_density', 'soft'));
-  const setRadiusDensity = (v) => { setRadiusDensityRaw(v); lsSet('caulis_radius_density', v); };
+  const setRadiusDensity = (v) => { setRadiusDensityRaw(v); lsSet('caulis_radius_density', v); trackSeenValue('caulis_seen_radius', v); };
   const [imageTreatment, setImageTreatmentRaw] = useState(() => lsGet('caulis_image_treatment', 'natural'));
   const setImageTreatment = (v) => { setImageTreatmentRaw(v); lsSet('caulis_image_treatment', v); };
   const [uiDensity, setUiDensityRaw] = useState(() => lsGet('caulis_ui_density', 'comfortable'));
@@ -768,6 +769,11 @@ function App() {
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = C.bg === '#111610' ? '#111610' : C.forest;
   }, [darkMode, palette]);
+  useEffect(() => {
+    trackSeenValue('caulis_seen_accents', accent);
+    trackSeenValue('caulis_seen_modes', darkMode ? 'dark' : 'light');
+    trackSeenValue('caulis_seen_radius', radiusDensity);
+  }, []);
 
   const fromRemoteRef = useRef(false);
   // true whenever a local edit has an 800ms push debounce armed (or a push is
@@ -1893,8 +1899,9 @@ window.onload=()=>{
   if (isDesktop) {
     return (
       <div style={{ display:'flex', minHeight:'100dvh', background:C.bg, flexDirection: sidebar.side === 'right' ? 'row-reverse' : 'row', ...bgTextureStyle() }}>
+        <AmbientBadgeLayer badges={badges} enabled={ambientBadges} density={badgeDensity} isDesktop={isDesktop}/>
         <DesktopSidebar tab={tab} setTab={setTab} onAction={onNavAction} navConfig={navConfig} showLabels={navLabels} sidebar={sidebar}/>
-        <div style={{ flex:1, height:'100dvh', overflowY:'auto', overflowX:'hidden', position:'relative' }}>
+        <div style={{ flex:1, height:'100dvh', overflowY:'auto', overflowX:'hidden', position:'relative', zIndex:1 }}>
           <div key={tab} style={{ animation: tabAnim, minHeight:'100%' }}>{screen}</div>
         </div>
 
@@ -1956,7 +1963,8 @@ window.onload=()=>{
   // ════════════════════════════════════════
   return (
     <div style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', background:C.bg, overflow:'hidden', ...bgTextureStyle() }}>
-      <div onPointerDown={onSwipeStart} onPointerMove={onSwipeMove} onPointerUp={onSwipeEnd} onPointerCancel={onSwipeEnd} style={{ flex:1, overflowY:'auto', overflowX:'hidden', overscrollBehavior:'contain', position:'relative', WebkitOverflowScrolling:'touch', touchAction:'pan-y' }}>
+      <AmbientBadgeLayer badges={badges} enabled={ambientBadges} density={badgeDensity} isDesktop={isDesktop}/>
+      <div onPointerDown={onSwipeStart} onPointerMove={onSwipeMove} onPointerUp={onSwipeEnd} onPointerCancel={onSwipeEnd} style={{ flex:1, overflowY:'auto', overflowX:'hidden', overscrollBehavior:'contain', position:'relative', zIndex:1, WebkitOverflowScrolling:'touch', touchAction:'pan-y' }}>
         {(pull > 0 || refreshing) && (
           <div style={{ position:'absolute', top:0, left:0, right:0, height:0, display:'flex', justifyContent:'center', pointerEvents:'none', zIndex:5 }}>
             <div style={{ marginTop: Math.max(6, pull - 24), opacity: Math.min(1, pull / PULL_TRIG), transform:`scale(${Math.min(1, 0.55 + pull / PULL_MAX)})`, width:32, height:32, borderRadius:999, background:C.panel, boxShadow:'0 4px 16px rgba(45,80,22,0.2)', display:'flex', alignItems:'center', justifyContent:'center', transition: pulling ? 'none' : `margin-top ${MOTION.base}ms ${MOTION.out}, opacity ${MOTION.base}ms ${MOTION.out}` }}>

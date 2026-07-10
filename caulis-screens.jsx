@@ -413,7 +413,6 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
       <Sprig onTap={tapSprig}/>
-      <AmbientBadgeLayer badges={badges} enabled={ambientBadges} density={badgeDensity} isDesktop={isDesktop}/>
       {sprigMsg && (
         <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
           <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)', display:'flex', alignItems:'center', gap:8 }}><Leaf size={14} color="#fff"/> {sprigMsg}</div>
