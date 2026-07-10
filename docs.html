@@ -251,68 +251,7 @@ x-upstream-key: your_perenual_key_here
 
   <h2 id="changelog">Changelog</h2>
   <p>A real history, pulled from the project's own commits — newest first.</p>
-
-  <div class="change">
-    <div class="date">2026-07-08</div>
-    <div class="body">
-      <h4>Backend reliability, public API, settings search polish</h4>
-      <ul>
-        <li>Scheduled backups actually run now — a periodic check compares the last backup's age against the configured interval and triggers <code>pg_dump</code> automatically, with FIFO cleanup.</li>
-        <li>New standalone Public API (<a href="#public-api">above</a>) with its own <code>x-api-key</code> auth, per-key daily rate limits, and admin-managed key issuance — a foundation for the API as a sellable product independent of the Caulis app.</li>
-        <li>Settings search now highlights the exact matched text in place and ranks word-prefix matches over loose substring hits.</li>
-        <li>Doctor gained more agentic tools for watering-schedule and garden-wide risk checks.</li>
-        <li>Replaced remaining emoji glyphs across the app and site with the same inline-SVG icon system used everywhere else.</li>
-        <li>Fixed the "Docs &amp; changelog" link in Settings → About, which pointed at a relative <code>docs.html</code> excluded from the frontend deploy — it now goes straight to this page.</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="change">
-    <div class="date">2026-07-08</div>
-    <div class="body">
-      <h4>Cold-review fixes, iOS polish, error pages</h4>
-      <ul>
-        <li>Settings search box, a flexible launch action, honest admin gauges, a desktop rail, and new 403/404 error pages.</li>
-        <li>Three rounds of fixes from fresh UX review: admin gauge honesty, milestone-toast gating on the real sync event instead of a timer, launch feedback, search-match cycling, motion + modal guards.</li>
-        <li>iOS polish pass — input zoom, safe-area handling, an error boundary, admin panel redesign.</li>
-        <li>Loading splash now respects dark mode.</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="change">
-    <div class="date">2026-07-07</div>
-    <div class="body">
-      <h4>Self-hosted backend migration</h4>
-      <ul>
-        <li>Moved off Firebase Realtime Database onto a self-hosted Fastify + Postgres backend with an admin panel — this page's REST API section reflects that backend.</li>
-        <li>Frontend moved from GitHub Pages to <code>caulis.czeddaru.dev</code>; existing gardens carried their <code>localStorage</code> across via a short-lived server-side migration token instead of a giant URL payload.</li>
-        <li>Fixed a cross-origin sync bug and a Safari service-worker crash that surfaced during the move.</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="change">
-    <div class="date">2026-06-14 – 06-15</div>
-    <div class="body">
-      <h4>Plant Doctor + customizable navigation</h4>
-      <ul>
-        <li>Added the Doctor — a vision-capable AI chat over a plant's photo, with agentic tools (<code>list_garden_plants</code>, <code>suggest_correction</code>), threaded history, and markdown replies.</li>
-        <li>Customizable bottom navigation (reorder, add/remove slots, center action) with matching desktop sidebar behavior; swipe and launch-tab now respect the custom layout.</li>
-      </ul>
-    </div>
-  </div>
-
-  <div class="change">
-    <div class="date">2026-06-13</div>
-    <div class="body">
-      <h4>Developer panel + watering model fixes</h4>
-      <ul>
-        <li>Hidden developer panel (water-all, bulk day shift, cross-garden node tools) gated behind a PIN.</li>
-        <li>Fixed a watering-history backfill bug and a sync issue affecting <code>days</code>/<code>wateredAt</code> derivation.</li>
-      </ul>
-    </div>
-  </div>
+  <div id="changelog-list"><p class="note">Loading recent history from GitHub…</p></div>
 
   <div class="change">
     <div class="date">Earlier</div>
@@ -327,5 +266,28 @@ x-upstream-key: your_perenual_key_here
 
   <footer>Caulis · grown with care</footer>
 </div>
+<script>
+(function() {
+  var el = document.getElementById('changelog-list');
+  fetch('/api/changelog').then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function(entries) {
+    if (!entries || !entries.length) { el.innerHTML = '<p class="note">No recent history available.</p>'; return; }
+    var byDay = {};
+    var order = [];
+    entries.forEach(function(e) {
+      var day = e.date.slice(0, 10);
+      if (!byDay[day]) { byDay[day] = []; order.push(day); }
+      byDay[day].push(e.message);
+    });
+    el.innerHTML = order.map(function(day) {
+      var items = byDay[day].map(function(m) {
+        return '<li>' + m.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</li>';
+      }).join('');
+      return '<div class="change"><div class="date">' + day + '</div><div class="body"><ul>' + items + '</ul></div></div>';
+    }).join('');
+  }).catch(function() {
+    el.innerHTML = '<p class="note">Couldn’t load live history right now — check back shortly.</p>';
+  });
+})();
+</script>
 </body>
 </html>

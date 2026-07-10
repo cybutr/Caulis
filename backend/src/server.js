@@ -442,6 +442,33 @@ app.delete('/api/garden/photos/:plantId', { preHandler: requireAuth }, async (re
   return { ok: true };
 });
 
+// live from GitHub's own commit history rather than a hand-maintained list
+// that inevitably goes stale — cached in memory since GitHub's unauthenticated
+// rate limit is tight (60/hr) and this repo is public, no token needed
+let changelogCache = { at: 0, data: null };
+app.get('/api/changelog', { preHandler: rateLimit(60, 60000) }, async (req, reply) => {
+  if (changelogCache.data && Date.now() - changelogCache.at < 3600000) return changelogCache.data;
+  try {
+    const res = await fetch('https://api.github.com/repos/cybutr/Caulis/commits?per_page=40', {
+      headers: { 'user-agent': 'caulis-backend', accept: 'application/vnd.github+json' },
+    });
+    if (!res.ok) throw new Error(`github ${res.status}`);
+    const commits = await res.json();
+    const entries = commits
+      .map(c => ({
+        sha: c.sha.slice(0, 7),
+        date: c.commit.author.date,
+        message: (c.commit.message || '').split('\n')[0],
+      }))
+      .filter(e => e.message && !/^bump version$/i.test(e.message) && !e.message.startsWith('Merge '));
+    changelogCache = { at: Date.now(), data: entries };
+    return entries;
+  } catch (e) {
+    if (changelogCache.data) return changelogCache.data;
+    return reply.code(502).send({ error: 'changelog unavailable' });
+  }
+});
+
 app.get('/api/push/vapid-key', async (req, reply) => {
   if (!VAPID_PUBLIC_KEY) return reply.code(503).send({ error: 'push not configured' });
   return { key: VAPID_PUBLIC_KEY };
