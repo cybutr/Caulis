@@ -1187,7 +1187,7 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLi
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1367,6 +1367,14 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
     setTimeout(() => setResyncMsg(null), 3000);
   };
   const [historyPlantId, setHistoryPlantId] = useState(null);
+  const [bulkUndoSel, setBulkUndoSel] = useState(() => new Set());
+  const [bulkUndoResult, setBulkUndoResult] = useState(null);
+  const toggleBulkUndoSel = (id) => { setBulkUndoResult(null); setBulkUndoSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }); };
+  const runBulkUndo = () => {
+    const res = onDevBulkUndoLastWatering([...bulkUndoSel]);
+    setBulkUndoResult(res);
+    setBulkUndoSel(new Set());
+  };
   const [testPushBusy, setTestPushBusy] = useState(null); // 'watering' | 'digest' | null
   const [testPushMsg, setTestPushMsg] = useState(null);
   const runTestPush = async (kind) => {
@@ -2633,6 +2641,55 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                       </div>
                     )}
                   </div>
+
+                  <div style={{ height:1, background:C.line }}/>
+
+                  {(() => {
+                    const lastDateOf = (p) => { const h = Array.isArray(p.history) ? p.history : []; return h.length ? h[h.length - 1] : null; };
+                    const dateCounts = {};
+                    plants.forEach(p => { const d = lastDateOf(p); if (d) dateCounts[d] = (dateCounts[d] || 0) + 1; });
+                    const dateChips = Object.entries(dateCounts).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? 1 : -1)).slice(0, 5);
+                    const selectByDate = (d) => { setBulkUndoResult(null); setBulkUndoSel(new Set(plants.filter(p => lastDateOf(p) === d).map(p => p.id))); };
+                    return (
+                    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                      <div style={grpLabel}>Undo most recent watering · batch</div>
+                      <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7, lineHeight:1.5 }}>
+                        For fixing a bad swipe/sync that logged the same wrong date across several plants — pick the affected plants, pop each one's last watering-log entry, and recompute its watered date from what's left.
+                      </div>
+                      {dateChips.length > 0 && (
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                          {dateChips.map(([d, n]) => (
+                            <div key={d} onClick={()=>selectByDate(d)} style={{ ...dBtn(false), padding:'6px 11px', fontSize:12.5 }}>{d} · {n} plant{n===1?'':'s'}</div>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display:'flex', flexDirection:'column', gap:6, maxHeight:240, overflowY:'auto' }}>
+                        {plants.map(p => {
+                          const d = lastDateOf(p);
+                          const checked = bulkUndoSel.has(p.id);
+                          return (
+                            <div key={p.id} onClick={()=>toggleBulkUndoSel(p.id)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 10px', borderRadius:rad(11), background:C.bg, cursor:'pointer' }}>
+                              <div style={{ display:'flex', alignItems:'center', gap:9, overflow:'hidden' }}>
+                                <div style={{ width:20, height:20, borderRadius:999, background: checked?C.forest:C.panel, border: checked?'none':'1.5px solid rgba(45,80,22,0.28)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                                  {checked && <IconCheck s={12} c="#fff"/>}
+                                </div>
+                                <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14.5, color:C.forest, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
+                              </div>
+                              <span style={{ fontFamily:'ui-monospace,Menlo,monospace', fontSize:11.5, color:C.brown, opacity:0.65, flexShrink:0 }}>{d || 'no log'}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div onClick={bulkUndoSel.size ? runBulkUndo : undefined} style={{ ...dBtn(true), opacity: bulkUndoSel.size ? 1 : 0.4, cursor: bulkUndoSel.size ? 'pointer' : 'default' }}>Undo last watering for selected ({bulkUndoSel.size})</div>
+                      {bulkUndoResult && (
+                        <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.8, lineHeight:1.5 }}>
+                          {bulkUndoResult.updated} plant{bulkUndoResult.updated===1?'':'s'} updated
+                          {bulkUndoResult.skipped.length > 0 && ` · ${bulkUndoResult.skipped.length} skipped — no prior watering on record for ${bulkUndoResult.skipped.join(', ')}`}
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })()}
 
                   <div style={{ height:1, background:C.line }}/>
 
