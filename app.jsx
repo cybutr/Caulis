@@ -869,9 +869,10 @@ function App() {
   }, []);
 
   // ── Open plant from URL param once data loads ──
+  const pendingPlantOpenedRef = useRef(false);
   useEffect(() => {
-    if (!pendingPlantId || !plants.length) return;
-    if (plants.find(p => p.id === pendingPlantId)) openDetail(pendingPlantId, true);
+    if (!pendingPlantId || pendingPlantOpenedRef.current || !plants.length) return;
+    if (plants.find(p => p.id === pendingPlantId)) { pendingPlantOpenedRef.current = true; openDetail(pendingPlantId, true); }
   }, [plants]);
 
 
