@@ -452,7 +452,18 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
   return (
     <div
       style={{
-        position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:0,
+        // z-index:1 (not 0) is load-bearing: every screen wraps its actual
+        // content — headers, plant grids, settings accordions — in an
+        // ancestor with an explicit z-index of 2 or higher (a pre-existing
+        // convention to stay above the decorative Sprig watermark, which
+        // sits at the implicit z-index:auto tier). At z-index:0 this layer
+        // ties with that same z-index:auto tier and loses every DOM-order
+        // tiebreak to each screen's own root wrapper — verified empirically,
+        // badges landed unreachable on every screen. z-index:1 beats only
+        // that inert, non-interactive tier; every real interactive surface
+        // (grids/headers at 2-3, nav at 30, sheets/overlays at 40+) still
+        // safely wins, unconditionally, regardless of DOM order.
+        position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:1,
         opacity: shown_ ? 1 : 0, transition:`opacity ${MOTION.base}ms ${MOTION.out}`,
       }}
       aria-hidden="true">
