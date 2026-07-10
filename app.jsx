@@ -1899,7 +1899,7 @@ window.onload=()=>{
   if (isDesktop) {
     return (
       <div style={{ display:'flex', minHeight:'100dvh', background:C.bg, flexDirection: sidebar.side === 'right' ? 'row-reverse' : 'row', ...bgTextureStyle() }}>
-        <AmbientBadgeLayer badges={badges} enabled={ambientBadges} density={badgeDensity} isDesktop={isDesktop}/>
+        <AmbientBadgeLayer badges={badges} enabled={ambientBadges} density={badgeDensity} isDesktop={isDesktop} screenKey={tab}/>
         <DesktopSidebar tab={tab} setTab={setTab} onAction={onNavAction} navConfig={navConfig} showLabels={navLabels} sidebar={sidebar}/>
         <div style={{ flex:1, height:'100dvh', overflowY:'auto', overflowX:'hidden', position:'relative' }}>
           <div key={tab} style={{ animation: tabAnim, minHeight:'100%' }}>{screen}</div>
@@ -1963,7 +1963,7 @@ window.onload=()=>{
   // ════════════════════════════════════════
   return (
     <div style={{ position:'fixed', inset:0, display:'flex', flexDirection:'column', background:C.bg, overflow:'hidden', ...bgTextureStyle() }}>
-      <AmbientBadgeLayer badges={badges} enabled={ambientBadges} density={badgeDensity} isDesktop={isDesktop}/>
+      <AmbientBadgeLayer badges={badges} enabled={ambientBadges} density={badgeDensity} isDesktop={isDesktop} screenKey={tab}/>
       <div onPointerDown={onSwipeStart} onPointerMove={onSwipeMove} onPointerUp={onSwipeEnd} onPointerCancel={onSwipeEnd} style={{ flex:1, overflowY:'auto', overflowX:'hidden', overscrollBehavior:'contain', position:'relative', WebkitOverflowScrolling:'touch', touchAction:'pan-y' }}>
         {(pull > 0 || refreshing) && (
           <div style={{ position:'absolute', top:0, left:0, right:0, height:0, display:'flex', justifyContent:'center', pointerEvents:'none', zIndex:5 }}>

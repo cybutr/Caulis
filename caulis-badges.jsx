@@ -385,7 +385,13 @@ function _hash(str) {
 // The ONLY element that ever gets `pointer-events:auto` is the small
 // icon-sized hit target below (`_BadgeHit`), sized exactly to the icon it
 // wraps — never the layer, the positioning wrapper, or anything larger.
-function _BadgeHit({ def, size, dur, delay }) {
+// `clickable` is decided by the parent layer's occlusion check — this
+// component never assumes it's safe to receive taps on its own. Until that
+// check confirms nothing real (anything the codebase already marks
+// `cursor:pointer` — its existing signature for "this is a control") sits
+// at this exact spot, the icon stays exactly as inert as the old pure-CSS
+// watermark: no pointer-events, no handler, no role.
+function _BadgeHit({ def, size, dur, delay, clickable }) {
   const [bump, setBump] = useState(false);
   const [tip, setTip] = useState(false);
   const tipTimer = useRef(null);
@@ -411,12 +417,14 @@ function _BadgeHit({ def, size, dur, delay }) {
     <div style={{ position:'relative' }}>
       <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite`, opacity: active ? 0.9 : 0.16, transition:'opacity 200ms ease' }}>
         <div
-          onClick={tap}
-          role="button"
-          aria-label={def.name}
+          data-badge-hit={def.id}
+          onClick={clickable ? tap : undefined}
+          role={clickable ? 'button' : undefined}
+          aria-label={clickable ? def.name : undefined}
           style={{
             width:size, height:size, display:'flex', alignItems:'center', justifyContent:'center',
-            pointerEvents:'auto', cursor:'pointer', touchAction:'manipulation',
+            pointerEvents: clickable ? 'auto' : 'none', cursor: clickable ? 'pointer' : 'default',
+            touchAction: clickable ? 'manipulation' : undefined,
             animation: bump ? 'badgeNudge 520ms cubic-bezier(.3,1.8,.4,1)' : 'none',
           }}>
           <def.Icon s={size} c={C.sage}/>
@@ -434,7 +442,39 @@ function _BadgeHit({ def, size, dur, delay }) {
   );
 }
 
-function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
+// Every screen in this app wraps its real content — headers, plant grids,
+// settings accordions — in an ancestor with an explicit z-index (a
+// pre-existing convention to stay above the decorative Sprig watermark).
+// That means simple z-index tuning can't make this layer "sometimes on top,
+// safely" — either it loses everywhere (badges permanently unreachable,
+// even in genuinely empty gaps) or it wins everywhere in a given subtree
+// (which would let a badge that happens to land on a real card or button
+// steal that tap — exactly what must never happen).
+//
+// So reachability is decided empirically instead of geometrically: after
+// each badge is laid out, check what's actually painted at its own center
+// with the hit target still fully inert (pointer-events:none, so the probe
+// can't influence its own result). If the real element there — or a nearby
+// ancestor, walking up a few levels — carries `cursor:pointer` (this
+// codebase's own consistent signature for "this is a control": every card,
+// row, toggle and button in Caulis sets it), the badge stays permanently
+// non-interactive, forever, exactly like the old pure-CSS watermark. Only
+// when the probe finds nothing clickable there does the badge get promoted
+// to a real tap target. Re-probed on resize and on every screen change,
+// since the same fixed coordinate shows completely different content once
+// the tab underneath switches.
+function _looksClickable(el, layerEl) {
+  let cur = el, depth = 0;
+  while (cur && depth < 6) {
+    if (layerEl && layerEl.contains(cur)) return false;
+    if (typeof getComputedStyle === 'function' && getComputedStyle(cur).cursor === 'pointer') return true;
+    cur = cur.parentElement;
+    depth++;
+  }
+  return false;
+}
+
+function AmbientBadgeLayer({ badges, enabled, density, isDesktop, screenKey }) {
   const held = badges ? badges.filter(b => !b.revoked) : [];
   const wantVisible = !!enabled && held.length > 0;
   const [mounted, setMounted] = useState(wantVisible);
@@ -445,24 +485,41 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
     else { setShown_(false); t = setTimeout(() => setMounted(false), MOTION.base); }
     return () => clearTimeout(t);
   }, [wantVisible]);
-  if (!mounted) return null;
+  const layerRef = useRef(null);
+  const itemRefs = useRef({});
+  const [clickableIds, setClickableIds] = useState(() => new Set());
   const cap = { few: 3, normal: 6, many: 10 }[density] || 6;
   const list = [...held].sort((a, b) => b.earnedAt - a.earnedAt).slice(0, cap);
   const bandH = (typeof window !== 'undefined' && window.innerHeight) || (isDesktop ? 900 : 700);
+  const listKey = list.map(b => b.id).join(',');
+  useEffect(() => {
+    if (!mounted) return;
+    let cancelled = false;
+    const probe = () => {
+      if (cancelled || !layerRef.current) return;
+      const next = new Set();
+      Object.entries(itemRefs.current).forEach(([id, el]) => {
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) return;
+        const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+        if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return;
+        const top = document.elementFromPoint(cx, cy);
+        if (top && !_looksClickable(top, layerRef.current)) next.add(id);
+      });
+      if (!cancelled) setClickableIds(next);
+    };
+    // wait out the ~280-320ms tab-slide animation so the probe measures the
+    // settled layout, not a mid-transform frame
+    const t = setTimeout(probe, 340);
+    window.addEventListener('resize', probe);
+    return () => { cancelled = true; clearTimeout(t); window.removeEventListener('resize', probe); };
+  }, [mounted, listKey, screenKey, isDesktop]);
+  if (!mounted) return null;
   return (
     <div
+      ref={layerRef}
       style={{
-        // z-index:1 (not 0) is load-bearing: every screen wraps its actual
-        // content — headers, plant grids, settings accordions — in an
-        // ancestor with an explicit z-index of 2 or higher (a pre-existing
-        // convention to stay above the decorative Sprig watermark, which
-        // sits at the implicit z-index:auto tier). At z-index:0 this layer
-        // ties with that same z-index:auto tier and loses every DOM-order
-        // tiebreak to each screen's own root wrapper — verified empirically,
-        // badges landed unreachable on every screen. z-index:1 beats only
-        // that inert, non-interactive tier; every real interactive surface
-        // (grids/headers at 2-3, nav at 30, sheets/overlays at 40+) still
-        // safely wins, unconditionally, regardless of DOM order.
         position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:1,
         opacity: shown_ ? 1 : 0, transition:`opacity ${MOTION.base}ms ${MOTION.out}`,
       }}
@@ -478,8 +535,8 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
         const delay = (h % 40) / 10;
         const dur = 6 + (h % 30) / 10;
         return (
-          <div key={b.id} style={{ position:'absolute', left:`${left}%`, top, transform:`rotate(${rot}deg)` }}>
-            <_BadgeHit def={def} size={size} dur={dur} delay={delay}/>
+          <div key={b.id} ref={el => { itemRefs.current[b.id] = el; }} style={{ position:'absolute', left:`${left}%`, top, transform:`rotate(${rot}deg)` }}>
+            <_BadgeHit def={def} size={size} dur={dur} delay={delay} clickable={clickableIds.has(b.id)}/>
           </div>
         );
       })}
