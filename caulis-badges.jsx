@@ -497,9 +497,18 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop, screenKey }) {
     let cancelled = false;
     const probe = () => {
       if (cancelled || !layerRef.current) return;
+      // force every hit target inert for the duration of the probe — a badge
+      // already promoted clickable from a previous pass must not shadow
+      // itself and short-circuit its own re-check into a false positive
+      const entries = Object.entries(itemRefs.current).filter(([, el]) => el);
+      const restore = entries.map(([, el]) => {
+        const hit = el.querySelector('[data-badge-hit]');
+        const prev = hit ? hit.style.pointerEvents : null;
+        if (hit) hit.style.pointerEvents = 'none';
+        return () => { if (hit) hit.style.pointerEvents = prev; };
+      });
       const next = new Set();
-      Object.entries(itemRefs.current).forEach(([id, el]) => {
-        if (!el) return;
+      entries.forEach(([id, el]) => {
         const r = el.getBoundingClientRect();
         if (r.width === 0 || r.height === 0) return;
         const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
@@ -507,6 +516,7 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop, screenKey }) {
         const top = document.elementFromPoint(cx, cy);
         if (top && !_looksClickable(top, layerRef.current)) next.add(id);
       });
+      restore.forEach(fn => fn());
       if (!cancelled) setClickableIds(next);
     };
     // wait out the ~280-320ms tab-slide animation so the probe measures the
@@ -520,7 +530,15 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop, screenKey }) {
     <div
       ref={layerRef}
       style={{
-        position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:1,
+        // z-index:3 matches the highest of the common "stay above the
+        // decorative watermark" tier (2-3) this codebase's screens already
+        // use for their headers/grids/accordions. Safe only *because* every
+        // badge's own pointer-events stays 'none' until the occlusion probe
+        // above has separately confirmed nothing cursor:pointer sits at its
+        // exact coordinates — this z-index only decides paint order for
+        // badges already cleared as touching nothing real; it does not by
+        // itself grant any badge the ability to intercept a real tap.
+        position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:3,
         opacity: shown_ ? 1 : 0, transition:`opacity ${MOTION.base}ms ${MOTION.out}`,
       }}
       aria-hidden="true">
