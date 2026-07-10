@@ -415,7 +415,7 @@ function _BadgeHit({ def, size, dur, delay, clickable }) {
   const active = bump || tip;
   return (
     <div style={{ position:'relative' }}>
-      <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite`, opacity: active ? 0.9 : 0.16, transition:'opacity 200ms ease' }}>
+      <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite`, opacity: active ? 0.85 : 0.12, transition:'opacity 200ms ease' }}>
         <div
           data-badge-hit={def.id}
           onClick={clickable ? tap : undefined}
@@ -427,7 +427,12 @@ function _BadgeHit({ def, size, dur, delay, clickable }) {
             touchAction: clickable ? 'manipulation' : undefined,
             animation: bump ? 'badgeNudge 520ms cubic-bezier(.3,1.8,.4,1)' : 'none',
           }}>
-          <def.Icon s={size} c={C.sage}/>
+          {/* C.brown (Sprig's own watermark tone), not C.sage — sage at
+              this stroke weight/size reads as one of the app's own live
+              UI icons (search, sync, garden) sitting inline in a settings
+              row, not decoration. Brown is already the established
+              "this is background texture" signal in both themes. */}
+          <def.Icon s={size} c={C.brown}/>
         </div>
       </div>
       {tip && (
@@ -546,10 +551,13 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop, screenKey }) {
         const def = BADGE_BY_ID[b.id];
         if (!def) return null;
         const h = _hash(b.id + i);
-        const left = 6 + (h % 88);
+        // 10-88% (not 6-94%) keeps the icon's own radius from clipping the
+        // viewport edge on narrow phones — a badge was rendering half cut
+        // off at the left edge on a 414px viewport before this margin
+        const left = 10 + (h % 78);
         const top = 8 + ((h >> 4) % (bandH - 60));
         const rot = ((h >> 8) % 30) - 15;
-        const size = 26 + (h % 3) * 6;
+        const size = 22 + (h % 3) * 5;
         const delay = (h % 40) / 10;
         const dur = 6 + (h % 30) / 10;
         return (

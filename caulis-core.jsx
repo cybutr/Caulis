@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '159'; // keep in sync with sw.js CACHE
+const APP_VERSION = '160'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -426,13 +426,17 @@ function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2, onT
   // one more tendril/bud/bloom element so a returning user with a bigger,
   // busier garden sees a visibly fuller corner watermark than they did on day one
   const stage = Math.max(0, Math.min(6, growth == null ? gardenGrowthStage() : growth));
+  // every addition grows OFF the main stem via its own short connecting
+  // tendril — never a bare floating leaf/bud/bloom — so each stage reads as
+  // the same plant putting out one more shoot, not unrelated marks added
+  // near it (a stray disconnected bud was the exact critique this fixes)
   const stages = [
     () => <g key="g1"><path d="M132 96 C 110 108, 96 128, 92 152" fill="none" stroke={C.brown} strokeWidth="1.1" strokeLinecap="round" opacity="0.85"/>{leaf(94,146,-40,0.85)}</g>,
-    () => <g key="g2">{leaf(178,60,26,0.8)}</g>,
-    () => <g key="g3">{bud(112,120,3.4)}</g>,
-    () => <g key="g4">{bloom(184,22,-8)}</g>,
+    () => <g key="g2"><path d="M154 42 C 168 46, 178 52, 178 60" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{leaf(178,60,26,0.8)}</g>,
+    () => <g key="g3"><path d="M126 150 C 118 142, 112 132, 112 122" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{bud(112,120,3.4)}</g>,
+    () => <g key="g4"><path d="M196 14 C 190 18, 185 22, 184 26" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{bloom(184,22,-8)}</g>,
     () => <g key="g5"><path d="M146 76 C 160 92, 168 112, 162 134" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{leaf(163,132,50,0.75)}</g>,
-    () => <g key="g6">{bloom(108,148,14)}{bud(150,32,3)}</g>,
+    () => <g key="g6"><path d="M122 130 C 116 136, 110 142, 108 148" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{bloom(108,148,14)}<path d="M158 30 C 154 32, 151 32, 150 32" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{bud(150,32,3)}</g>,
   ];
   const sway = !onTap && stage > 0;
   return (
