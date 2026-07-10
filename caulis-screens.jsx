@@ -1804,18 +1804,20 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Layout</span>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px' }}>
-              <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Card density</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Garden grid column count</div>
+            {!isDesktop && (
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px' }}>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Card density</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Default 2 or 3 columns — ignored once Garden columns below is set</div>
+                </div>
+                <Segmented value={cardDensity} onSelect={onSetDensity} options={[['comfy','Comfy'],['compact','Compact']]}/>
               </div>
-              <Segmented value={cardDensity} onSelect={onSetDensity} options={[['comfy','Comfy'],['compact','Compact']]}/>
-            </div>
+            )}
             {!isDesktop && (
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px' }}>
                 <div>
                   <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden columns</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Override the grid width</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Force a fixed column count, overriding Card density</div>
                 </div>
                 <Segmented value={gridCols || 0} onSelect={onSetGridCols} options={[[0,'Auto'],[2,'2'],[3,'3'],[4,'4']]}/>
               </div>
@@ -2947,6 +2949,7 @@ function DesktopSettingsAside({
     padding:'8px 10px', borderRadius:rad(999), cursor: busy?'default':'pointer',
     fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest,
     background:'rgba(122,158,78,0.14)', opacity: busy?0.6:1, userSelect:'none',
+    whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
   });
 
   return (
@@ -2969,9 +2972,9 @@ function DesktopSettingsAside({
 
       {!adminUnlocked ? (
         <div style={cardStyle}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
             <div style={eyebrow}>Admin at a glance</div>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke={C.brown} strokeWidth="1.8" opacity="0.6"/><path d="M8 11V8a4 4 0 018 0v3" stroke={C.brown} strokeWidth="1.8" opacity="0.6"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0 }}><rect x="5" y="11" width="14" height="9" rx="2" stroke={C.brown} strokeWidth="1.8" opacity="0.6"/><path d="M8 11V8a4 4 0 018 0v3" stroke={C.brown} strokeWidth="1.8" opacity="0.6"/></svg>
           </div>
           {!unlockOpen ? (
             <div onClick={()=>setUnlockOpen(true)} style={{ ...pill(false), padding:'9px 10px' }}>

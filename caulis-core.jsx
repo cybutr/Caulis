@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '154'; // keep in sync with sw.js CACHE
+const APP_VERSION = '155'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -160,7 +160,15 @@ let activeBgTexture = 'none';
 function applyBgTexture(v) { if (BG_TEXTURES[v]) activeBgTexture = v; }
 function bgTextureStyle() {
   if (activeBgTexture === 'dot') return { backgroundImage:`radial-gradient(${C.line} 1px, transparent 1px)`, backgroundSize:'22px 22px' };
-  if (activeBgTexture === 'paper') return { backgroundImage:`repeating-linear-gradient(135deg, ${C.line} 0 1px, transparent 1px 8px)` };
+  // "grain" needs irregularity, not a single repeating direction — a
+  // repeating-linear-gradient reads as visible pinstripes at any spacing.
+  // Two dot layers offset from each other at a tiny pitch break up any
+  // sense of a repeating line and read as fine paper grain instead.
+  if (activeBgTexture === 'paper') return {
+    backgroundImage: `radial-gradient(${C.line} 0.6px, transparent 0.6px), radial-gradient(${C.line} 0.6px, transparent 0.6px)`,
+    backgroundSize: '3px 3px, 3px 3px',
+    backgroundPosition: '0 0, 1.5px 1.5px',
+  };
   return {};
 }
 
