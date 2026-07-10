@@ -86,12 +86,17 @@ function SwatchRow({ options, value, onSelect, size = 32 }) {
 // a pill-style segmented picker — shared by every 2-4 option Appearance
 // control (card density, radius density, image treatment, spacing, texture)
 function Segmented({ options, value, onSelect }) {
+  const [pressed, setPressed] = useState(null);
   return (
     <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3, flexWrap:'wrap', gap:0 }}>
       {options.map(([val,label]) => {
         const on = value === val;
+        const down = pressed === val;
         return (
-          <div key={String(val)} onClick={()=>onSelect(val)} style={{ cursor:'pointer', padding:'5px 12px', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, opacity:on?1:0.5, transition:'all 140ms ease', whiteSpace:'nowrap' }}>{label}</div>
+          <div key={String(val)}
+            onPointerDown={()=>setPressed(val)} onPointerUp={()=>setPressed(null)} onPointerLeave={()=>setPressed(null)} onPointerCancel={()=>setPressed(null)}
+            onClick={()=>onSelect(val)}
+            style={{ cursor:'pointer', padding:'5px 12px', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, opacity:on?1:0.5, transform:`scale(${down?0.92:1})`, transition:'transform 140ms cubic-bezier(.2,.8,.2,1), background 140ms ease, color 140ms ease, opacity 140ms ease', whiteSpace:'nowrap' }}>{label}</div>
         );
       })}
     </div>
@@ -1776,17 +1781,23 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Shape &amp; photos</span>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px' }}>
-              <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Corner roundness</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Scales every card, button &amp; sheet corner</div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px', gap:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11, minWidth:0 }}>
+                <div style={{ flexShrink:0, width:30, height:30, borderRadius:rad(16), background:'rgba(122,158,78,0.22)', border:`1.5px solid ${C.sage}`, transition:'border-radius 160ms ease' }}/>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Corner roundness</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Scales every card, button &amp; sheet corner</div>
+                </div>
               </div>
               <Segmented value={radiusDensity} onSelect={onSetRadiusDensity} options={RADIUS_ORDER.map(k=>[k, RADIUS_DENSITY[k].label])}/>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px' }}>
-              <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Photo treatment</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How plant photos render everywhere</div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px', gap:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11, minWidth:0 }}>
+                <div style={{ flexShrink:0, width:30, height:30, borderRadius:rad(8), background:'linear-gradient(135deg, #8FBB5E 0%, #2D5016 100%)', filter:IMAGE_TREATMENTS[imageTreatment].filter, transition:'filter 200ms ease' }}/>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Photo treatment</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How plant photos render everywhere</div>
+                </div>
               </div>
               <Segmented value={imageTreatment} onSelect={onSetImageTreatment} options={IMAGE_TREATMENT_ORDER.map(k=>[k, IMAGE_TREATMENTS[k].label])}/>
             </div>
