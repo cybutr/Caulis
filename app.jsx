@@ -1326,7 +1326,13 @@ window.onload=()=>{
   const removePlant = (id) => {
     haptic('heavy');
     const p = plants.find(x => x.id === id);
-    setPlants(ps => ps.filter(x => x.id !== id));
+    // new plant ids are just `max(existing ids) + 1` (see addPlant below),
+    // so a deleted id gets reissued the moment the count drops and someone
+    // adds again — any surviving plant still holding `propagatedFrom: id`
+    // would silently start pointing at that brand-new, unrelated plant as
+    // its "parent" with no error, just a permanently wrong lineage pill.
+    // Clearing it here means a freed id never has anything left pointing at it.
+    setPlants(ps => ps.filter(x => x.id !== id).map(x => x.propagatedFrom === id ? { ...x, propagatedFrom: null } : x));
     setQueue(q => q.filter(x => x !== id));
     if (p) setUndoDelete({ plants: [p], queuedIds: queue.includes(id) ? [id] : [] });
     idbDel(id);
@@ -1481,8 +1487,9 @@ window.onload=()=>{
     haptic('warning');
     const removed = plants.filter(p => ids.includes(p.id));
     const queuedIds = queue.filter(id => ids.includes(id));
-    setPlants(ps => ps.filter(p => !ids.includes(p.id)));
-    setQueue(q => q.filter(id => !ids.includes(id)));
+    const idSet = new Set(ids);
+    setPlants(ps => ps.filter(p => !idSet.has(p.id)).map(p => idSet.has(p.propagatedFrom) ? { ...p, propagatedFrom: null } : p));
+    setQueue(q => q.filter(id => !idSet.has(id)));
     ids.forEach(id => idbDel(id));
     if (removed.length) setUndoDelete({ plants: removed, queuedIds });
     setBulkRemoveIds(null);
@@ -1621,7 +1628,15 @@ window.onload=()=>{
       existing.add(id);
       return { ...p, id };
     });
-    setPlants([...plants, ...added]);
+    // a parent/child pair inside the SAME import can each get a fresh id on
+    // collision — without this, a child's propagatedFrom still points at
+    // the parent's OLD id, which by now either doesn't exist or (worse)
+    // silently resolves to some unrelated existing plant that happens to
+    // hold that id already.
+    const remapped = added.map(p => p.propagatedFrom != null && remap[p.propagatedFrom] != null
+      ? { ...p, propagatedFrom: remap[p.propagatedFrom] }
+      : p);
+    setPlants([...plants, ...remapped]);
     if (gardenNode) {
        added.forEach(p => {
            if (p.photos && p.photos.length) pushPhoto(gardenNode, p.id, p.photos);
@@ -1670,7 +1685,7 @@ window.onload=()=>{
     }));
   };
   const doctorEl = doctor && (
-    <DoctorOverlay plant={doctor.plant ? plants.find(p => p.id === doctor.plant.id) || doctor.plant : null} plants={plants} anthropicKey={anthropicKey} model={doctorModel} onApplyCorrection={applyCorrection} onBack={()=>setDoctor(null)} isDesktop={isDesktop}/>
+    <DoctorOverlay plant={doctor.plant ? plants.find(p => p.id === doctor.plant.id) || null : null} plants={plants} anthropicKey={anthropicKey} model={doctorModel} onApplyCorrection={applyCorrection} onBack={()=>setDoctor(null)} isDesktop={isDesktop}/>
   );
   const digestEl = digestOpen && (
     <WeeklyDigest plants={plants} onBack={()=>setDigestOpen(false)} isDesktop={isDesktop} czechMode={identifyLang === 'cs'}/>

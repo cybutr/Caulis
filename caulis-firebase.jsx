@@ -86,12 +86,17 @@ function mergeArray(base, local, remote) {
 
 // badges earned by the automatic unlock detector are append-only and never
 // contradict each other, but the admin panel can also manually revoke one —
-// so a plain union-by-id would resurrect an admin revoke the next time the
-// owning device's push conflicts and merges against that revoked remote copy.
-// Mirrors mergeArray's rule: an id present in base is dropped only if BOTH
-// sides still agree on dropping it being wrong — i.e. kept only if neither
-// side removed it; an id not in base (newly earned on one or both sides) is
-// always kept.
+// stored as a `revoked:true` flag on the existing entry (never removed
+// outright — see toggleAdminBadge in caulis-screens.jsx), so a revoke is a
+// field-level edit to an id that's present on both sides, same shape as an
+// edit-vs-edit conflict on a plant. This used to just take `l` whenever both
+// sides still had the id ("present in base and untouched/agreed on both
+// sides") without ever checking whether either side had actually *changed*
+// it — so a device that hadn't yet synced an admin's revoke would push its
+// stale unrevoked copy right back over the real revoke on its very next
+// unrelated conflict, silently un-revoking it. Diffs against base like
+// mergePlants does, and — since a revoke must never lose to a re-grant on a
+// genuine double-edit — a revoked copy always wins a real conflict.
 function mergeBadges(base, local, remote) {
   const B = new Map((base || []).filter(b => b && b.id != null).map(b => [b.id, b]));
   const L = new Map((local || []).filter(b => b && b.id != null).map(b => [b.id, b]));
@@ -105,8 +110,15 @@ function mergeBadges(base, local, remote) {
       else out.push(l || r);
       return;
     }
-    if (l && r) out.push(l); // present in base and untouched/agreed on both sides
-    // else: one side dropped an id that was in base — an intentional revoke wins
+    if (!l || !r) return; // one side dropped an id that was in base — an intentional revoke wins
+    const lChanged = !sameJSON(l, b), rChanged = !sameJSON(r, b);
+    if (!lChanged) { out.push(r); return; } // local untouched since base — take whatever remote did (incl. a revoke)
+    if (!rChanged) { out.push(l); return; } // remote untouched since base — take whatever local did
+    if (sameJSON(l, r)) { out.push(l); return; } // both changed identically, no real conflict
+    // both sides edited this badge differently — a revoke wins outright
+    if (l.revoked && !r.revoked) out.push(l);
+    else if (r.revoked && !l.revoked) out.push(r);
+    else out.push(r);
   });
   return out.sort((a, b) => a.earnedAt - b.earnedAt);
 }
