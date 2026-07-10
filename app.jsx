@@ -415,6 +415,16 @@ function App() {
   const [monochromePrint, setMonochromePrintRaw] = useState(() => lsGet('caulis_print_mono', false));
   const [gardenPassword, setGardenPassword] = useState(() => { try { return localStorage.getItem('caulis_garden_pw') || ''; } catch(e) { return ''; } });
   const [gardenNode, setGardenNode] = useState(null);
+  // the push effect below closes over `gardenNode` at debounce-fire time; if
+  // the actual pushGarden(...) request is still in flight when the user
+  // switches gardens, its eventual onMerge/.then() callbacks would otherwise
+  // apply garden A's merged plants/queue/badges on top of garden B's
+  // already-loaded state (setPlants etc. are global, not scoped to a
+  // garden). This ref always reflects the *current* garden so those
+  // callbacks can check "is this response still for the garden we're
+  // looking at" before touching state.
+  const gardenNodeRef = useRef(null);
+  useEffect(() => { gardenNodeRef.current = gardenNode; }, [gardenNode]);
   const [gardenHistory, setGardenHistory] = useState(() => {
     const hist = lsGet('caulis_gardens', []);
     const currentKey = localStorage.getItem('caulis_garden_key');
@@ -436,6 +446,14 @@ function App() {
   const [identifyLang, setIdentifyLangState] = useState(() => { try { return localStorage.getItem('caulis_identify_lang') || 'en'; } catch(e) { return 'en'; } });
   const [googleClientId, setGoogleClientIdState] = useState(() => { try { return localStorage.getItem('caulis_gcal_cid') || ''; } catch(e) { return ''; } });
   const [googleToken, setGoogleToken] = useState(null);
+  // syncAllToCalendar's loop checks this instead of the closed-over
+  // `googleToken` param — a 401 mid-loop calls setGoogleToken(null), but
+  // that only schedules a re-render; the already-running loop's own
+  // `googleToken` binding never changes, so `if (!googleToken)` guards
+  // inside it were always false and never actually stopped the loop after
+  // a token died. This ref is always current.
+  const googleTokenRef = useRef(null);
+  useEffect(() => { googleTokenRef.current = googleToken; }, [googleToken]);
   const [googleEventIds, setGoogleEventIds] = useState(() => lsGet('caulis_gcal_eids', {}));
   const [googleSyncMode, setGoogleSyncModeState] = useState(() => { try { return localStorage.getItem('caulis_gsync_mode') || 'tasks'; } catch(e) { return 'tasks'; } });
   const saveGoogleClientId = (id) => { try { localStorage.setItem('caulis_gcal_cid', id); } catch(e) {} setGoogleClientIdState(id); };
@@ -637,9 +655,19 @@ function App() {
   const syncAllToCalendar = async () => {
     if (!googleToken || !plants.length) return;
     const targetId = await getSyncTargetId(googleToken);
-    if (!googleToken) return;
+    if (!googleTokenRef.current) return;
     const byDate = {};
     plants.forEach(p => { const ds = dueDateStr(p); (byDate[ds] = byDate[ds] || []).push(p); });
+
+    // start from the current map and only ever mutate the keys we actually
+    // touch — a transient upsert failure (rate limit, brief 500, a token
+    // that dies mid-loop) used to fall out of a freshly-built `ids` object
+    // that then unconditionally replaced the whole map, silently forgetting
+    // that date's real event/task id even though it still exists on Google.
+    // The next successful sync would then have no id to PATCH against and
+    // create a duplicate instead of updating it — permanent, ever-growing
+    // duplicate reminders on every partial failure.
+    const ids = { ...googleEventIds };
 
     // dates that used to have a bundled item but no longer have any plant
     // due — the old per-plant model just let a stale item sit there since
@@ -649,14 +677,14 @@ function App() {
     const staleDates = Object.keys(googleEventIds).filter(ds => !byDate[ds]);
     for (const ds of staleDates) {
       await deleteItem(googleEventIds[ds], googleToken, targetId);
-      if (!googleToken) return;
+      delete ids[ds];
+      if (!googleTokenRef.current) { setGoogleEventIds(ids); return; }
     }
 
-    const ids = {};
     for (const ds of Object.keys(byDate)) {
       const itemId = await upsertItem(byDate[ds], ds, googleToken, googleEventIds[ds], targetId);
-      if (itemId) ids[ds] = itemId;
-      if (!googleToken) break;
+      if (itemId) ids[ds] = itemId; // else: leave whatever id was already there — don't orphan it
+      if (!googleTokenRef.current) break;
     }
     setGoogleEventIds(ids);
   };
@@ -988,7 +1016,16 @@ function App() {
     const timer = setTimeout(() => {
       markPushActivity();
       const cleanPlants = plants.map(({ photos, ...rest }) => rest);
+      const nodeAtPushTime = gardenNode;
       pushGarden(gardenNode, { plants: cleanPlants, locations, queue, badges, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null}, (merged) => {
+        // the request that led to this merge could still be in flight after
+        // the user switched to a different garden — applying it now would
+        // stamp garden A's merged plants/queue/badges over garden B's
+        // already-loaded state, since setPlants/setQueue/setBadges aren't
+        // scoped to a garden. gardenNodeRef always holds the *current*
+        // garden, so this is the one check that actually catches it (the
+        // `gardenNode` in this closure never changes once captured).
+        if (gardenNodeRef.current !== nodeAtPushTime) return;
         // the server rejected our rev (someone else wrote first) and
         // pushGarden already retried with a 3-way merge — reconcile local
         // state to the merged truth so the next debounced push sends that,

@@ -381,7 +381,7 @@ function BadgeShelf({ badges, curatedIds, isDesktop }) {
   const earnedIds = new Set(badges.map(b => b.id));
   const shownIds = Array.isArray(curatedIds) && curatedIds.length ? curatedIds.filter(id => earnedIds.has(id)) : [...earnedIds];
   const shownEarned = shownIds.map(id => badges.find(b => b.id === id)).filter(Boolean).sort((a, b) => a.earnedAt - b.earnedAt);
-  const locked = BADGE_DEFS.filter(d => !earnedIds.has(d.id));
+  const locked = BADGE_DEFS.filter(d => !earnedIds.has(d.id) && !d.adminOnly);
   if (!badges.length) return null;
   return (
     <div style={{ background:C.panel, borderRadius:20, border:C.hair, boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)', overflow:'hidden' }}>
@@ -424,7 +424,13 @@ function BadgesView({ badges, onBack, isDesktop }) {
   const earnedByDef = BADGE_DEFS.filter(d => earnedIds.has(d.id))
     .map(d => ({ def: d, at: earned.find(b => b.id === d.id).earnedAt }))
     .sort((a, b) => b.at - a.at);
-  const locked = BADGE_DEFS.filter(d => !earnedIds.has(d.id));
+  // adminOnly badges are never earnable through play (check() always
+  // false) — they don't belong in a "here's what you could still earn"
+  // list at all, admin-granted or not. Hiding them here (not just as a "?"
+  // secret placeholder) is what actually matches the adminOnly intent;
+  // leaving them in `locked` was showing their real name/icon/text to
+  // every user who hadn't been personally granted one.
+  const locked = BADGE_DEFS.filter(d => !earnedIds.has(d.id) && !d.adminOnly);
   return (
     <div style={{ position:'fixed', inset:0, zIndex:52, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
       <div style={{ flexShrink:0, padding:'calc(18px + env(safe-area-inset-top)) 18px 14px', display:'flex', alignItems:'center', gap:12 }}>
