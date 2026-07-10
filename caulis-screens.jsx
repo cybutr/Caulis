@@ -1640,7 +1640,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
       <Sprig opacity={0.14}/>
       <ScreenHead eyebrow="Preferences" title="Settings" isDesktop={isDesktop}/>
       <div style={{ padding:`22px ${sp}px 0`, position:'relative', zIndex:2, display:'flex', gap:28, alignItems:'flex-start' }}>
-      <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? 680 : undefined }}>
+      <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? (adminUnlocked && isOpen('dev') ? 1040 : 680) : undefined, transition:'max-width 260ms ease' }}>
         <div style={{ position:'relative' }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', opacity:0.4, pointerEvents:'none' }}><circle cx="11" cy="11" r="6.5" stroke={C.brown} strokeWidth="1.8"/><path d="M20 20l-4.5-4.5" stroke={C.brown} strokeWidth="1.8" strokeLinecap="round"/></svg>
           <input
@@ -2575,7 +2575,11 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                         {adminErr && <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:STATUS.needs.dot }}>Wrong secret or request failed</span>}
                       </>
                     ) : (
-                      <div style={{ display:'flex', flexDirection:'column', gap:10, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)' }}>
+                      <div style={{
+                        display: isDesktop ? 'grid' : 'flex', flexDirection: isDesktop ? undefined : 'column',
+                        gridTemplateColumns: isDesktop ? '1fr 1fr' : undefined, alignItems:'start',
+                        gap:10, animation:'popUp 240ms cubic-bezier(.2,.8,.2,1)',
+                      }}>
                         <AdminSub id="overview" title="Overview">
                         {adminStats && (() => {
                           const claimedPct = adminStats.totalGardens > 0 ? 1 - (adminStats.unclaimedCount / adminStats.totalGardens) : 0;
