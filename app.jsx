@@ -60,27 +60,6 @@ async function idbSet(key, val) { const db = await _idb(); return new Promise((r
 async function idbDel(key) { try { const db = await _idb(); return await new Promise((res) => { const tx = db.transaction(_IDB_STORE, 'readwrite'); tx.objectStore(_IDB_STORE).delete(key); tx.oncomplete = () => res(); tx.onerror = () => res(); }); } catch (e) {} }
 async function idbGetAll() { const db = await _idb(); return new Promise((res) => { const tx = db.transaction(_IDB_STORE, 'readonly'); const store = tx.objectStore(_IDB_STORE); const kq = store.getAllKeys(), vq = store.getAll(); const out = {}; tx.oncomplete = () => { const ks = kq.result || [], vs = vq.result || []; ks.forEach((k, i) => { out[k] = vs[i]; }); res(out); }; tx.onerror = () => res({}); }); }
 
-function scheduleWatering(plants) {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const tally = {}, result = {};
-  const sorted = [...plants].sort((a,b) => (b.days/b.every) - (a.days/a.every));
-  for (const p of sorted) {
-    const due = new Date(today);
-    due.setDate(due.getDate() + Math.max(0, p.every - p.days));
-    let best = null, bestScore = -Infinity;
-    for (let i = -1; i <= 4; i++) {
-      const d = new Date(due); d.setDate(d.getDate() + i);
-      if (d < today) continue;
-      const ds = fmtLocalDate(d);
-      const dow = d.getDay();
-      const score = ((dow===0||dow===6)?2:0) - Math.abs(i)*0.5 - (tally[ds]||0)*1.5 - (i<0?0.5:0);
-      if (score > bestScore) { bestScore = score; best = d; }
-    }
-    if (best) { const ds = fmtLocalDate(best); tally[ds]=(tally[ds]||0)+1; result[p.id]=ds; }
-  }
-  return result;
-}
-
 function App() {
   const vw = useWindowWidth();
   const isDesktop = vw >= DESKTOP_BP;
@@ -510,12 +489,25 @@ function App() {
     } catch(e) { return null; }
   };
 
-  const upsertTask = async (plant, dateStr, token, existingId, listId) => {
+  // one bundled title/body per due date, shared by both the Calendar and
+  // Tasks backends below — plants due the same day become one line each
+  // rather than one event/task each, which is the whole point of bundling.
+  // Google's practical limits (event summary / task title ~1024 chars,
+  // description/notes ~8192 chars) are nowhere close for a home garden, but
+  // the title still gets capped so it stays readable in a day cell instead
+  // of running the full plant list into the calendar grid.
+  const bundleTitle = (names) => {
+    if (names.length <= 3) return `💧 Water: ${names.join(', ')}`;
+    return `💧 Water: ${names.slice(0, 2).join(', ')} + ${names.length - 2} more`;
+  };
+  const bundleBody = (groupPlants) => groupPlants.map(p => `• ${p.name}${p.location ? ' — ' + p.location : ''} (every ${Math.max(1, Math.round(p.every || 7))}d)`).join('\n');
+
+  const upsertTask = async (groupPlants, dateStr, token, existingId, listId) => {
     if (!listId) return null;
-    const every = Math.max(1, Math.round(plant.every || 7));
+    const names = groupPlants.map(p => p.name);
     const task = {
-      title: `💧 ${plant.name}`,
-      notes: `Water every ${every} days\n${plant.latin||''}\n${plant.location}`,
+      title: bundleTitle(names),
+      notes: bundleBody(groupPlants),
       due: `${dateStr}T00:00:00.000Z`,
       status: 'needsAction',
       completed: null,
@@ -533,6 +525,11 @@ function App() {
     if (res.status === 401) { setGoogleToken(null); return null; }
     if (!res.ok) return null;
     return (await res.json()).id;
+  };
+
+  const deleteTask = async (existingId, token, listId) => {
+    if (!listId || !existingId) return;
+    try { await fetch(`${TASKS_API}/lists/${listId}/tasks/${existingId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch(e) {}
   };
 
   // ── Calendar backend (dedicated, togglable "Caulis Plants" calendar) ──
@@ -557,20 +554,27 @@ function App() {
     } catch(e) { return null; }
   };
 
-  const upsertCalendarEvent = async (plant, dateStr, token, existingId, calId) => {
+  // one non-recurring event per due date, covering every plant due that day.
+  // No RRULE any more: a bundled day's roster of plants (and their individual
+  // intervals) shifts every time one of them gets watered early/late, so a
+  // fixed recurrence would drift out of sync with reality within days. The
+  // resync effect (and the water() touchpoint below) recreates the event for
+  // whatever the next due date turns out to be instead — the same "always
+  // reflects current reality" approach the old per-plant events already
+  // needed for the same reason (their own PUT-or-recreate fallback).
+  const upsertCalendarEvent = async (groupPlants, dateStr, token, existingId, calId) => {
     if (!calId) return null;
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const every = Math.max(1, Math.round(plant.every || 7));
     const [h, m] = (reminderTime || '09:00').split(':').map(Number);
     const pad = n => String(n).padStart(2, '0');
     const endH = (h + (m + 30 >= 60 ? 1 : 0)) % 24;
     const endM = (m + 30) % 60;
+    const names = groupPlants.map(p => p.name);
     const event = {
-      summary: `💧 ${plant.name}`,
-      description: `Water every ${every} days\n${plant.latin||''}\n${plant.location}`,
+      summary: bundleTitle(names),
+      description: bundleBody(groupPlants),
       start: { dateTime: `${dateStr}T${pad(h)}:${pad(m)}:00`, timeZone: tz },
       end:   { dateTime: `${dateStr}T${pad(endH)}:${pad(endM)}:00`, timeZone: tz },
-      recurrence: [`RRULE:FREQ=DAILY;INTERVAL=${every}`],
       reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 0 }] },
     };
     const base = `${CAL_API}/calendars/${encodeURIComponent(calId)}/events`;
@@ -591,12 +595,19 @@ function App() {
     return (await res.json()).id;
   };
 
-  // ── mode dispatch ──
+  const deleteCalendarEvent = async (existingId, token, calId) => {
+    if (!calId || !existingId) return;
+    try { await fetch(`${CAL_API}/calendars/${encodeURIComponent(calId)}/events/${existingId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }); } catch(e) {}
+  };
+
+  // ── mode dispatch ── (groupPlants: every plant due on the same dateStr)
   const getSyncTargetId = (token, mode = googleSyncMode) => mode === 'calendar' ? getCalendarId(token) : getTaskListId(token);
-  const upsertItem = (plant, dateStr, token, existingId, targetId, mode = googleSyncMode) =>
+  const upsertItem = (groupPlants, dateStr, token, existingId, targetId, mode = googleSyncMode) =>
     mode === 'calendar'
-      ? upsertCalendarEvent(plant, dateStr, token, existingId, targetId)
-      : upsertTask(plant, dateStr, token, existingId, targetId);
+      ? upsertCalendarEvent(groupPlants, dateStr, token, existingId, targetId)
+      : upsertTask(groupPlants, dateStr, token, existingId, targetId);
+  const deleteItem = (existingId, token, targetId, mode = googleSyncMode) =>
+    mode === 'calendar' ? deleteCalendarEvent(existingId, token, targetId) : deleteTask(existingId, token, targetId);
 
   // delete the remote container (calendar or task list) for a given mode, keep token
   const purgeRemote = async (token, mode) => {
@@ -612,17 +623,39 @@ function App() {
     }
   };
 
+  // groups every plant by its real due date (today + max(0, every-days)) —
+  // deliberately the actual due date, not scheduleWatering's weekend-biased
+  // spread: that spread existed to keep one-event-per-plant calendars from
+  // clumping, which bundling now does on purpose instead.
+  const dueDateStr = (p) => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const d = new Date(today);
+    d.setDate(d.getDate() + Math.max(0, (p.every || 7) - (p.days || 0)));
+    return fmtLocalDate(d);
+  };
+
   const syncAllToCalendar = async () => {
     if (!googleToken || !plants.length) return;
     const targetId = await getSyncTargetId(googleToken);
     if (!googleToken) return;
-    const schedule = scheduleWatering(plants);
-    const ids = { ...googleEventIds };
-    for (const plant of plants) {
-      const dateStr = schedule[plant.id];
-      if (!dateStr) continue;
-      const itemId = await upsertItem(plant, dateStr, googleToken, ids[plant.id], targetId);
-      if (itemId) ids[plant.id] = itemId;
+    const byDate = {};
+    plants.forEach(p => { const ds = dueDateStr(p); (byDate[ds] = byDate[ds] || []).push(p); });
+
+    // dates that used to have a bundled item but no longer have any plant
+    // due — the old per-plant model just let a stale item sit there since
+    // every plant kept its own event; a bundled item has to be torn down
+    // once its whole roster is gone, or Google keeps showing a watering
+    // reminder for plants that already got watered.
+    const staleDates = Object.keys(googleEventIds).filter(ds => !byDate[ds]);
+    for (const ds of staleDates) {
+      await deleteItem(googleEventIds[ds], googleToken, targetId);
+      if (!googleToken) return;
+    }
+
+    const ids = {};
+    for (const ds of Object.keys(byDate)) {
+      const itemId = await upsertItem(byDate[ds], ds, googleToken, googleEventIds[ds], targetId);
+      if (itemId) ids[ds] = itemId;
       if (!googleToken) break;
     }
     setGoogleEventIds(ids);
@@ -868,7 +901,16 @@ function App() {
   useEffect(() => { lsSet('caulis_gcal_eids', googleEventIds); }, [googleEventIds]);
   // re-sync whenever the calendar connects — recreates anything deleted/crossed
   // off in Google and re-anchors every reminder to its next due date
-  useEffect(() => { if (googleToken) syncAllToCalendar(); }, [googleToken, googleSyncMode, reminderTime]);
+  // debounced so a burst of waterings (waterAll, rapid taps) collapses into
+  // one grouped resync instead of one per plant — and always reads the
+  // freshest `plants` at the moment it actually fires, since this effect
+  // closure is rebuilt every render rather than captured once inside an
+  // action handler.
+  useEffect(() => {
+    if (!googleToken) return;
+    const t = setTimeout(() => syncAllToCalendar(), 1200);
+    return () => clearTimeout(t);
+  }, [plants, googleToken, googleSyncMode, reminderTime]);
   // silently re-acquire a token on start if access was granted before — no clicks
   useEffect(() => {
     if (!googleClientId) return;
@@ -1117,16 +1159,11 @@ function App() {
     const when = new Date(); when.setHours(0,0,0,0); when.setDate(when.getDate() - d);
     const stamp = fmtLocalDate(when);
     setPlants(ps => ps.map(p => p.id === id ? { ...p, wateredAt: when.getTime(), wv: WATER_SCHEMA, days: d, history: [...(p.history||[]), stamp].slice(-60) } : p));
-    if (googleToken) {
-      const plant = plants.find(p => p.id === id);
-      if (plant) {
-        const updated = { ...plant, days: d };
-        const ds = scheduleWatering([updated])[id];
-        if (ds) getSyncTargetId(googleToken)
-          .then(targetId => upsertItem(updated, ds, googleToken, googleEventIds[id], targetId))
-          .then(itemId => { if (itemId) setGoogleEventIds(prev => ({ ...prev, [id]: itemId })); });
-      }
-    }
+    // Google resync now happens from the debounced [plants, googleToken, ...]
+    // effect below — bundling means one watering can shift a plant into a
+    // different day's bucket (and empty out its old bucket), which needs the
+    // full grouped resync against fresh state, not a stale closure over the
+    // plants array captured when this function was created.
   };
   const undoWater = (id, prevDays) => setPlants(ps => ps.map(p => p.id === id ? { ...p, wateredAt: todayMidnight() - prevDays * 86400000, wv: WATER_SCHEMA, days: prevDays, history: (p.history||[]).slice(0, -1) } : p));
   // snooze suppresses the "needs water"/"water soon" status for n days without
