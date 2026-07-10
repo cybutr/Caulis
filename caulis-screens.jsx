@@ -211,7 +211,7 @@ function ScreenHead({ eyebrow, title, isDesktop }) {
 //  GARDEN
 // ════════════════════════════════════════════════════════════
 function GardenFilterBar({ sort, setSort, sidePad = 22, filterOpen, onToggleFilter, filterActive }) {
-  const filters = [['all','All'],['urgent','Needs water'],['location','Location']];
+  const filters = [['all','All'],['urgent','Most urgent first'],['location','Location']];
   return (
     <div data-noswipe="1" style={{ display:'flex', alignItems:'center', gap:8, overflowX:'auto', padding:`14px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
       {filters.map(([key,label]) => {
@@ -422,7 +422,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
               </div>
             )}
             {!empty && (
-              <div onClick={()=>{ if (selMode) exitSel(); else setSelMode(true); }} style={{ width:38, height:38, borderRadius:999, background: selMode?C.forest:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+              <div onClick={()=>{ if (selMode) exitSel(); else setSelMode(true); }} title="Select plants" style={{ width:38, height:38, borderRadius:999, background: selMode?C.forest:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L20 4" stroke={selMode?'#fff':C.forest} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9" stroke={selMode?'#fff':C.forest} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </div>
             )}
@@ -525,7 +525,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         <div data-noswipe="1" style={{ position:'fixed', left:0, right:0, bottom: isDesktop?16:'calc(78px + env(safe-area-inset-bottom))', zIndex:40, display:'flex', justifyContent:'center', padding:'0 12px', pointerEvents:'none' }}>
           <div style={{ pointerEvents:'auto', display:'flex', alignItems:'center', gap:2, background:C.panel, borderRadius:999, padding:'5px 6px 5px 14px', boxShadow:'0 10px 30px rgba(45,80,22,0.2)', border:C.hair }}>
             <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink, marginRight:4, whiteSpace:'nowrap' }}>{sel.size}</span>
-            {[['Water', onBulkWater], ['Queue', onBulkQueue], ['Move', onBulkMove]].map(([label, fn]) => (
+            {[['Water', onBulkWater], ['Add to queue', onBulkQueue], ['Move', onBulkMove]].map(([label, fn]) => (
               <div key={label} onClick={sel.size ? ()=>runBulk(fn) : undefined} style={{ cursor: sel.size?'pointer':'default', opacity: sel.size?1:0.4, padding:'8px 11px', borderRadius:999, fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:C.forest, whiteSpace:'nowrap' }}>{label}</div>
             ))}
             <div onClick={sel.size ? ()=>runBulk(onBulkRemove) : undefined} style={{ cursor: sel.size?'pointer':'default', opacity: sel.size?1:0.4, padding:'8px 11px', borderRadius:999, fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:'#B4472E' }}>Delete</div>
