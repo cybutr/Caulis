@@ -413,9 +413,16 @@ function _BadgeHit({ def, size, dur, delay, clickable }) {
     if (bumpTimer.current) clearTimeout(bumpTimer.current);
   }, []);
   const active = bump || tip;
+  // C.brown carries far more contrast against near-black dark backgrounds
+  // than against the cream light one at the same alpha — matching the
+  // number made dark mode read noticeably busier than light mode at
+  // identical config. Same signature check as the theme-color meta tag
+  // update in app.jsx (C.bg === '#111610' <=> dark).
+  const isDark = C.bg === '#111610';
+  const idleOp = isDark ? 0.07 : 0.12, activeOp = isDark ? 0.55 : 0.85;
   return (
     <div style={{ position:'relative' }}>
-      <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite`, opacity: active ? 0.85 : 0.12, transition:'opacity 200ms ease' }}>
+      <div style={{ animation:`badgeDrift ${dur}s ease-in-out ${delay}s infinite`, opacity: active ? activeOp : idleOp, transition:'opacity 200ms ease' }}>
         <div
           data-badge-hit={def.id}
           onClick={clickable ? tap : undefined}
@@ -479,8 +486,17 @@ function _looksClickable(el, layerEl) {
   return false;
 }
 
+// a handful of badge icons are literal functional glyphs elsewhere in the
+// app's own UI language (a clock face next to a "watered N days ago" row, a
+// camera/photo-frame icon) — faithful in the Badges shelf, but read as a
+// false affordance drifting near a real timestamp in the ambient layer.
+// Excluded from ambient rotation only; still fully visible/earnable in the
+// Badges view.
+const AMBIENT_EXCLUDE_ICONS = new Set([BadgeIconSteady, BadgeIconPortrait, BadgeIconCalendar]);
+
 function AmbientBadgeLayer({ badges, enabled, density, isDesktop, screenKey }) {
-  const held = badges ? badges.filter(b => !b.revoked) : [];
+  const held0 = badges ? badges.filter(b => !b.revoked) : [];
+  const held = held0.filter(b => { const def = BADGE_BY_ID[b.id]; return def && !AMBIENT_EXCLUDE_ICONS.has(def.Icon); });
   const wantVisible = !!enabled && held.length > 0;
   const [mounted, setMounted] = useState(wantVisible);
   const [shown_, setShown_] = useState(wantVisible);
@@ -555,7 +571,12 @@ function AmbientBadgeLayer({ badges, enabled, density, isDesktop, screenKey }) {
         // viewport edge on narrow phones — a badge was rendering half cut
         // off at the left edge on a 414px viewport before this margin
         const left = 10 + (h % 78);
-        const top = 8 + ((h >> 4) % (bandH - 60));
+        // starts below the header/logo band (every screen's title + eyebrow
+        // sits in roughly this space) — that's the single highest-scrutiny
+        // pixel region in the app, the wrong place for even a faint mark
+        // to drift near the wordmark, doubly so for one that's tappable
+        const headerMargin = isDesktop ? 100 : 130;
+        const top = headerMargin + ((h >> 4) % Math.max(60, bandH - headerMargin - 60));
         const rot = ((h >> 8) % 30) - 15;
         const size = 22 + (h % 3) * 5;
         const delay = (h % 40) / 10;
