@@ -252,6 +252,36 @@ async function pushGarden(key, data, onMerge) {
     }
   };
 
+  // session.rev is only populated by a completed fetch/poll/prior push. A
+  // fresh session that has a token (login resolved) but hasn't fetched yet
+  // has session.rev === undefined — JSON.stringify would drop that key
+  // entirely from the PUT body, and the server treats a missing `rev` as
+  // "legacy client, no known rev" and skips its conflict check altogether
+  // (see /api/garden PUT: `rev != null && ...`), performing an UNCONDITIONAL
+  // overwrite. app.jsx's boot sequence races the debounced push effect
+  // (armed the instant `gardenNode` is set, using whatever `plants` came
+  // from localStorage) against listenGarden's fire-and-forget initial GET;
+  // if the GET hasn't landed by the 800ms debounce (any slow network, or
+  // just unlucky timing), this exact path used to fire — silently clobbering
+  // the server's current data, including a fix from another device/session
+  // this client hasn't seen yet, with zero conflict detection. Route an
+  // unknown rev through the same conflict/merge path a real 409 uses instead
+  // of ever sending an ambiguous rev: rev:-1 can't match any real server
+  // rev (revs start at 1 and only increase), so it always 409s and hands
+  // back the server's current copy to merge against.
+  if (session.rev == null) {
+    const probe = await put({ ...clean, rev: -1 });
+    if (probe.status !== 409 || !probe.resp) return false;
+    const remote = probe.resp;
+    const merged = mergeGarden(session.base, clean, remote);
+    const retry = await put({ ...clean, plants: merged.plants, locations: merged.locations, queue: merged.queue, badges: merged.badges, rev: remote.rev });
+    if (!retry.ok) return false;
+    session.rev = retry.resp?.rev ?? remote.rev + 1;
+    session.base = { plants: merged.plants, locations: merged.locations, queue: merged.queue, badges: merged.badges };
+    if (onMerge) onMerge({ plants: merged.plants, locations: merged.locations, queue: merged.queue, badges: merged.badges, conflict: merged.conflict });
+    return true;
+  }
+
   const rev = session.rev;
   const first = await put({ ...clean, rev });
   if (first.ok) {
@@ -495,9 +525,21 @@ async function forcePushGarden(key, data) {
   return true;
 }
 
+// fetches the garden-level keys stored server-side (via /api/garden/keys PUT
+// from every device's own save) so a second device joining the same garden
+// can adopt keys it never typed in itself. Returns null on any failure so
+// callers can just no-op — never wired to clobber a device's own local key.
+async function pullGardenKeys(key) {
+  const session = _sessions[key];
+  if (!session?.token) return null;
+  const { ok, data } = await _api('/api/garden/keys', {}, session.token);
+  if (!ok || !data) return null;
+  return data;
+}
+
 Object.assign(window, {
   listenGarden, pushGarden, gardenExists, renameGarden, fetchGardenOnce, gardenNodeId, changeGardenPassword, verifyGardenPassword,
-  SYNC_READY, pushPhoto, fetchPhotos, deletePhotos, setActiveGarden, getActiveToken, BACKEND_URL,
+  SYNC_READY, pushPhoto, fetchPhotos, deletePhotos, setActiveGarden, getActiveToken, BACKEND_URL, pullGardenKeys,
   adminListGardens, adminGetGarden, adminPushGarden, adminDeleteGarden, adminBulkDelete, adminGetStats,
   adminGetSettings, adminSaveSettings, adminRunBackup, adminListBackups, adminDownloadBackup, adminGetSystem,
   pushVapidKey, pushSubscribe, pushSetPrefs, pushUnsubscribe, pushSendTest,
