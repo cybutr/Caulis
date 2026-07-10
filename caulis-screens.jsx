@@ -210,10 +210,10 @@ function ScreenHead({ eyebrow, title, isDesktop }) {
 // ════════════════════════════════════════════════════════════
 //  GARDEN
 // ════════════════════════════════════════════════════════════
-function GardenFilterBar({ sort, setSort, sidePad = 22 }) {
+function GardenFilterBar({ sort, setSort, sidePad = 22, filterOpen, onToggleFilter, filterActive }) {
   const filters = [['all','All'],['urgent','Needs water'],['location','Location']];
   return (
-    <div data-noswipe="1" style={{ display:'flex', gap:8, overflowX:'auto', padding:`14px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
+    <div data-noswipe="1" style={{ display:'flex', alignItems:'center', gap:8, overflowX:'auto', padding:`14px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
       {filters.map(([key,label]) => {
         const on = sort === key;
         return (
@@ -228,6 +228,18 @@ function GardenFilterBar({ sort, setSort, sidePad = 22 }) {
           }}>{label}</div>
         );
       })}
+      {onToggleFilter && (
+        <div onClick={onToggleFilter} title="Filter" style={{
+          flexShrink:0, marginLeft:'auto', width:34, height:34, borderRadius:999, cursor:'pointer',
+          display:'flex', alignItems:'center', justifyContent:'center', position:'relative',
+          background: filterOpen ? C.forest : C.panel,
+          border: filterOpen ? '1px solid '+C.forest : '0.5px solid rgba(45,80,22,0.14)',
+          transition:'all 160ms ease',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z" stroke={filterOpen?'#fff':C.brown} strokeWidth="1.8" strokeLinejoin="round"/></svg>
+          {filterActive && !filterOpen && <div style={{ position:'absolute', top:5, right:5, width:7, height:7, borderRadius:999, background:C.sage, border:'1.5px solid '+C.panel }}/>}
+        </div>
+      )}
     </div>
   );
 }
@@ -288,13 +300,14 @@ function EmptyGarden({ onAdd }) {
   );
 }
 
-function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, badgeShelfCurated }) {
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges }) {
   const [healthOpen, setHealthOpen] = useState(false);
   const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
   const [q, setQ] = useState('');
   const [fStatus, setFStatus] = useState(() => GS.get('caulis_g_status', 'all'));
   const [fLoc, setFLoc] = useState(() => GS.get('caulis_g_loc', null));
+  const [filterOpen, setFilterOpen] = useState(false);
   useEffect(() => { GS.set('caulis_g_sort', sort); }, [sort]);
   useEffect(() => { GS.set('caulis_g_status', fStatus); }, [fStatus]);
   useEffect(() => { GS.set('caulis_g_loc', fLoc); }, [fLoc]);
@@ -398,6 +411,12 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
             )}
           </div>
           <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8 }}>
+            {!empty && badges && badges.length > 0 && (
+              <div onClick={onOpenBadges} title="Badges" style={{ height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', gap:6, padding:'0 12px', cursor:'pointer' }}>
+                <BadgeIconSprout s={16} c={C.forest}/>
+                <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink }}>{badges.length}/{BADGE_DEFS.length}</span>
+              </div>
+            )}
             {!empty && (
               <div onClick={()=>{ if (selMode) exitSel(); else setSelMode(true); }} style={{ width:38, height:38, borderRadius:999, background: selMode?C.forest:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L20 4" stroke={selMode?'#fff':C.forest} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9" stroke={selMode?'#fff':C.forest} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -412,12 +431,6 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
 
       {empty && <EmptyGarden onAdd={onAdd}/>}
 
-      {!empty && badges && badges.length > 0 && (
-        <div style={{ padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
-          <BadgeShelf badges={badges} curatedIds={badgeShelfCurated} isDesktop={isDesktop}/>
-        </div>
-      )}
-
       {!empty && (
         <div style={{ padding:`12px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, height:42, borderRadius:12, background:C.panel, border:C.hair, padding:'0 12px' }}>
@@ -428,36 +441,45 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         </div>
       )}
 
-      {!empty && <GardenFilterBar sort={sort} setSort={setSort} sidePad={sidePad}/>}
+      {!empty && (
+        <GardenFilterBar
+          sort={sort} setSort={setSort} sidePad={sidePad}
+          filterOpen={filterOpen} onToggleFilter={()=>setFilterOpen(o=>!o)}
+          filterActive={fStatus !== 'all' || !!fLoc}
+        />
+      )}
 
       {!empty && (
-        <div data-noswipe="1" style={{ display:'flex', alignItems:'center', gap:8, overflowX:'auto', padding:`10px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink:0, opacity:0.55 }}><path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z" stroke={C.brown} strokeWidth="1.7" strokeLinejoin="round"/></svg>
-          {[['all','All'],['needs','Needs'],['soon','Soon'],['ok','Healthy']].map(([k,l]) => {
-            const on = fStatus === k;
-            const col = k === 'all' ? C.forest : STATUS[k].dot;
-            return (
-              <div key={k} onClick={()=>setFStatus(k)} style={{
-                flexShrink:0, cursor:'pointer', whiteSpace:'nowrap', borderRadius:999, padding:'6px 13px',
-                background: on ? (k==='all' ? C.forest : STATUS[k].soft) : C.panel,
-                border: on ? `1px solid ${col}` : '0.5px solid rgba(45,80,22,0.14)',
-                color: on ? (k==='all' ? '#fff' : col) : C.ink,
-                fontFamily:FONT_SANS, fontSize:12, fontWeight: on?600:500, transition:'all 140ms ease',
-              }}>{l}</div>
-            );
-          })}
-          {rooms.length > 0 && <div style={{ flexShrink:0, width:'0.5px', height:20, background:'rgba(45,80,22,0.14)', margin:'0 2px' }}/>}
-          {rooms.map(r => {
-            const on = fLoc === r;
-            return (
-              <div key={r} onClick={()=>setFLoc(on ? null : r)} style={{
-                flexShrink:0, cursor:'pointer', whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'6px 12px',
-                background: on ? 'rgba(122,158,78,0.16)' : C.panel,
-                border: on ? '1px solid rgba(110,154,62,0.5)' : '0.5px solid rgba(45,80,22,0.14)',
-                color: on ? C.forest : C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight: on?600:500, transition:'all 140ms ease',
-              }}><IconPin s={11} c={on?C.forest:C.brown}/> {r}</div>
-            );
-          })}
+        <div style={{ display:'grid', gridTemplateRows: filterOpen ? '1fr' : '0fr', transition:'grid-template-rows 260ms ease' }}>
+          <div style={{ overflow:'hidden', minHeight:0 }}>
+            <div data-noswipe="1" style={{ display:'flex', alignItems:'center', gap:8, overflowX:'auto', padding:`10px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
+              {[['all','All'],['needs','Needs'],['soon','Soon'],['ok','Healthy']].map(([k,l]) => {
+                const on = fStatus === k;
+                const col = k === 'all' ? C.forest : STATUS[k].dot;
+                return (
+                  <div key={k} onClick={()=>setFStatus(k)} style={{
+                    flexShrink:0, cursor:'pointer', whiteSpace:'nowrap', borderRadius:999, padding:'6px 13px',
+                    background: on ? (k==='all' ? C.forest : STATUS[k].soft) : C.panel,
+                    border: on ? `1px solid ${col}` : '0.5px solid rgba(45,80,22,0.14)',
+                    color: on ? (k==='all' ? '#fff' : col) : C.ink,
+                    fontFamily:FONT_SANS, fontSize:12, fontWeight: on?600:500, transition:'all 140ms ease',
+                  }}>{l}</div>
+                );
+              })}
+              {rooms.length > 0 && <div style={{ flexShrink:0, width:'0.5px', height:20, background:'rgba(45,80,22,0.14)', margin:'0 2px' }}/>}
+              {rooms.map(r => {
+                const on = fLoc === r;
+                return (
+                  <div key={r} onClick={()=>setFLoc(on ? null : r)} style={{
+                    flexShrink:0, cursor:'pointer', whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'6px 12px',
+                    background: on ? 'rgba(122,158,78,0.16)' : C.panel,
+                    border: on ? '1px solid rgba(110,154,62,0.5)' : '0.5px solid rgba(45,80,22,0.14)',
+                    color: on ? C.forest : C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight: on?600:500, transition:'all 140ms ease',
+                  }}><IconPin s={11} c={on?C.forest:C.brown}/> {r}</div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -645,7 +667,11 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode }) {
   });
   recentlyWatered.sort((a, b) => midnightFromStamp(b.last) - midnightFromStamp(a.last));
   const needsNow = plants.filter(p => statusOf(p.days, p.every) === 'needs');
-  const highlight = recentlyWatered.find(r => r.plant.userImage || r.plant.image);
+  // real user photo only — never the Perenual/species stock image, which
+  // reads as a generic placeholder in a "your garden" recap
+  const userPhoto = p => (p.photos && p.photos.length ? p.photos[0] : p.userImage) || null;
+  const fallbackPlant = plants.find(p => userPhoto(p));
+  const highlight = recentlyWatered.find(r => userPhoto(r.plant)) || (fallbackPlant ? { plant: fallbackPlant } : null);
   const name = p => czechMode && p.czech ? p.czech : p.name;
   return (
     <div style={{ position:'fixed', inset:0, zIndex:52, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
@@ -656,10 +682,10 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode }) {
       <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', display:'flex', flexDirection:'column', gap:18 }}>
         {highlight && (
           <div style={{ borderRadius:20, overflow:'hidden', position:'relative', height:180, flexShrink:0 }}>
-            <img src={highlight.plant.userImage || highlight.plant.image} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+            <img src={userPhoto(highlight.plant)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
             <div style={{ position:'absolute', left:0, right:0, bottom:0, padding:'28px 16px 12px', background:'linear-gradient(transparent, rgba(0,0,0,0.55))' }}>
               <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, color:'#fff' }}>{name(highlight.plant)}</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'rgba(255,255,255,0.8)' }}>most recently watered</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'rgba(255,255,255,0.8)' }}>{recentlyWatered.some(r => r.plant.id === highlight.plant.id) ? 'most recently watered' : 'from your garden'}</div>
             </div>
           </div>
         )}
@@ -1087,7 +1113,7 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLi
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity, badgeShelfCurated, onSetBadgeShelfCurated }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1742,30 +1768,6 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 })}
               </div>
             </div>
-            {badges && badges.length > 0 && (
-              <div style={{ padding:'12px 16px', borderTop:C.hair }}>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Shelf badges</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:9 }}>Curate which earned badges appear in the Garden shelf</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:1, borderRadius:12, overflow:'hidden', border:C.hair }}>
-                  {[...badges].sort((a,b)=>a.earnedAt-b.earnedAt).map(b => {
-                    const def = BADGE_BY_ID[b.id]; if (!def) return null;
-                    const on = !Array.isArray(badgeShelfCurated) || badgeShelfCurated.includes(b.id);
-                    const toggle = () => {
-                      const all = badges.map(x=>x.id);
-                      const base = Array.isArray(badgeShelfCurated) ? badgeShelfCurated : all;
-                      onSetBadgeShelfCurated(on ? base.filter(id=>id!==b.id) : [...new Set([...base, b.id])]);
-                    };
-                    return (
-                      <div key={b.id} onClick={toggle} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px', background:C.panel, borderBottom:C.hair, cursor:'pointer' }}>
-                        <def.Icon s={18} c={C.forest}/>
-                        <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{def.name}</span>
-                        <Toggle on={on}/>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </SettingsSection>
         <SettingsSection title="Behavior" open={isOpen('behavior')} onToggle={()=>toggleSec('behavior')} id={'sec-'+'behavior'} matched={settingsMatches[settingsMatchIdx] === 'behavior'} query={settingsMatches.includes('behavior') ? settingsQuery : ''} bodyRef={registerSection('behavior')}>

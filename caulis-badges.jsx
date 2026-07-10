@@ -128,17 +128,20 @@ function _hash(str) {
 
 // ════════════════════════════════════════════════════════════
 //  Ambient decorative layer — Sprig-tier watermark texture, never
-//  interactive. Anchored to the top band of the Garden screen (header
-//  through the first grid row) rather than the full scroll height, so it
-//  never needs to track dynamic content height.
+//  interactive (pointer-events:none throughout). Deliberately `fixed` to
+//  the viewport rather than living inside the scrolling content: it reads
+//  as wallpaper behind the garden, not a decoration on any one row, so it
+//  has to stay visible no matter how far the plant grid scrolls — an
+//  absolutely-positioned band anchored to the top of the content used to
+//  scroll away with the first screenful and leave nothing behind it.
 // ════════════════════════════════════════════════════════════
 function AmbientBadgeLayer({ badges, enabled, density, isDesktop }) {
   if (!enabled || !badges || !badges.length) return null;
   const cap = { few: 3, normal: 6, many: 10 }[density] || 6;
   const shown = [...badges].sort((a, b) => b.earnedAt - a.earnedAt).slice(0, cap);
-  const bandH = isDesktop ? 520 : 460;
+  const bandH = (typeof window !== 'undefined' && window.innerHeight) || (isDesktop ? 900 : 700);
   return (
-    <div style={{ position:'absolute', top:0, left:0, right:0, height:bandH, overflow:'hidden', pointerEvents:'none', zIndex:1 }} aria-hidden="true">
+    <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, overflow:'hidden', pointerEvents:'none', zIndex:0 }} aria-hidden="true">
       {shown.map((b, i) => {
         const def = BADGE_BY_ID[b.id];
         if (!def) return null;
@@ -308,7 +311,71 @@ function computeSatisfiedBadgeIds(state) {
   return BADGE_DEFS.filter(d => { try { return d.check(state); } catch (e) { return false; } }).map(d => d.id);
 }
 
+// ════════════════════════════════════════════════════════════
+//  Dedicated badges view — mirrors WeeklyDigest's pattern exactly: a
+//  full-screen slide-up overlay reached from a small entry point, rather
+//  than a card living permanently in the Garden screen.
+// ════════════════════════════════════════════════════════════
+function BadgesView({ badges, onBack, isDesktop }) {
+  const earned = badges || [];
+  const earnedIds = new Set(earned.map(b => b.id));
+  const earnedByDef = BADGE_DEFS.filter(d => earnedIds.has(d.id))
+    .map(d => ({ def: d, at: earned.find(b => b.id === d.id).earnedAt }))
+    .sort((a, b) => b.at - a.at);
+  const locked = BADGE_DEFS.filter(d => !earnedIds.has(d.id));
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:52, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
+      <div style={{ flexShrink:0, padding:'calc(18px + env(safe-area-inset-top)) 18px 14px', display:'flex', alignItems:'center', gap:12 }}>
+        <div onClick={onBack} role="button" style={{ width:36, height:36, borderRadius:999, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><IconBack/></div>
+        <div>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest, lineHeight:1.1 }}>Badges</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65, marginTop:2 }}>{earned.length} of {BADGE_DEFS.length} earned</div>
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', display:'flex', flexDirection:'column', gap:22 }}>
+        {earnedByDef.length > 0 && (
+          <div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:10 }}>Earned</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {earnedByDef.map(({ def, at }) => (
+                <div key={def.id} style={{ display:'flex', alignItems:'center', gap:13, padding:'12px 14px', borderRadius:16, background:C.panel, border:C.hair }}>
+                  <div style={{ flexShrink:0, width:48, height:48, borderRadius:999, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <def.Icon s={24} c={C.forest}/>
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.forest }}>{def.name}</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.6, marginTop:2 }}>{def.text}</div>
+                  </div>
+                  <div style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.55, textAlign:'right', whiteSpace:'nowrap' }}>{new Date(at).toLocaleDateString('en-US', { month:'short', day:'numeric' })}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {locked.length > 0 && (
+          <div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:10 }}>Locked</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {locked.map(def => (
+                <div key={def.id} style={{ display:'flex', alignItems:'center', gap:13, padding:'12px 14px', borderRadius:16, background:'transparent', border:'1px dashed rgba(45,80,22,0.18)' }}>
+                  <div style={{ flexShrink:0, width:48, height:48, borderRadius:999, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <div style={{ opacity:0.4, display:'flex' }}><def.Icon s={22} c={C.brown}/></div>
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.ink, opacity:0.7 }}>{def.name}</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.ink, opacity:0.5, marginTop:2 }}>{def.text}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 Object.assign(window, {
   BADGE_DEFS, BADGE_BY_ID, computeSatisfiedBadgeIds,
-  AmbientBadgeLayer, BadgeShelf,
+  AmbientBadgeLayer, BadgeShelf, BadgesView,
 });
