@@ -177,6 +177,15 @@ function listenGarden(key, onData, isPushPending) {
   let lastStamp = null;
   let stopped = false;
   const poll = async () => {
+    // stamp *before* the GET goes out — the GET can still be in flight when a
+    // push starts and finishes entirely (debounce fires, PUT round-trips),
+    // in which case this poll's snapshot was read from the server strictly
+    // before that push's write landed, even though this poll's HTTP response
+    // arrives after pushPendingRef has already flipped back to false. Passing
+    // the issue-time lets isPushPending() catch that "pending at the time
+    // this GET was sent, or a push started since" case, not just "pending
+    // right now" — see isPushPending's own comment in app.jsx.
+    const issuedAt = Date.now();
     const { ok, data } = await _api('/api/garden', {}, session.token);
     if (!ok || !data) return;
     // a local edit is debounced or its push is in flight, based on the
@@ -190,7 +199,7 @@ function listenGarden(key, onData, isPushPending) {
     // conflict detection at all. Skip the refresh entirely while pending; the
     // poll right after this device's push resolves (rev advanced for real,
     // or via a genuine 409+merge) will pick up the authoritative state.
-    if (isPushPending && isPushPending()) return;
+    if (isPushPending && isPushPending(issuedAt)) return;
     session.rev = data.rev;
     session.base = { plants: data.plants, locations: data.locations, queue: data.queue, badges: data.badges };
     if (data.updated_at !== lastStamp) {

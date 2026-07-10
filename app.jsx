@@ -687,6 +687,19 @@ function App() {
   // the debounce is about to send, since the poll's own setPlants cancels the
   // pending push timer as a side effect of changing `plants` again.
   const pushPendingRef = useRef(false);
+  // wall-clock stamp of the most recent push activity (debounce armed, retry
+  // after a 409 merge, or completion) — a poll's GET can still be in flight
+  // when a push starts and fully lands before that GET resolves, so
+  // pushPendingRef alone (checked only at resolve time) isn't enough: the
+  // poll has to also know whether a push happened *after* its GET was
+  // issued, or it can apply a snapshot the server read before that push's
+  // write committed, silently reverting it. See isPushPending below.
+  const lastPushActivityRef = useRef(0);
+  const markPushActivity = () => { lastPushActivityRef.current = Date.now(); };
+  // true if a push is pending right now, OR any push activity happened at or
+  // after `issuedAt` (the moment the poll's GET was sent) — either means this
+  // poll's snapshot can't be trusted as newer than local state.
+  const isPushPending = (issuedAt) => pushPendingRef.current || lastPushActivityRef.current >= issuedAt;
   const [plantNotFound, setPlantNotFound] = useState(false);
   const [guestView, setGuestView] = useState(null);
 
@@ -917,7 +930,7 @@ function App() {
       if (data.plantIdKey) { setPlantIdKey(data.plantIdKey); setPlantIdKeyState(data.plantIdKey); }
       if (data.housePlantsKey) { setHousePlantsKey(data.housePlantsKey); setHousePlantsKeyState(data.housePlantsKey); }
       if (data.anthropicKey) { setAnthropicKey(data.anthropicKey); setAnthropicKeyState(data.anthropicKey); }
-    }, () => pushPendingRef.current);
+    }, isPushPending);
     return unsubscribe;
   }, [gardenNode]);
 
@@ -927,7 +940,9 @@ function App() {
     if (fromRemoteRef.current) { fromRemoteRef.current = false; return; }
     if (switchingGardenRef.current) { switchingGardenRef.current = false; return; }
     pushPendingRef.current = true;
+    markPushActivity();
     const timer = setTimeout(() => {
+      markPushActivity();
       const cleanPlants = plants.map(({ photos, ...rest }) => rest);
       pushGarden(gardenNode, { plants: cleanPlants, locations, queue, badges, perenualKey: perenualKey || null, plantIdKey: plantIdKey || null, housePlantsKey: housePlantsKey || null, anthropicKey: anthropicKey || null}, (merged) => {
         // the server rejected our rev (someone else wrote first) and
@@ -953,7 +968,7 @@ function App() {
         setQueue(merged.queue);
         if (merged.badges) setBadges(merged.badges);
         if (merged.conflict) setSyncMerged(true);
-      }).then(ok => { pushPendingRef.current = false; setSyncError(!ok); });
+      }).then(ok => { pushPendingRef.current = false; markPushActivity(); setSyncError(!ok); });
     }, 800);
     return () => clearTimeout(timer);
   }, [plants, locations, queue, badges, gardenNode, perenualKey, plantIdKey, housePlantsKey, anthropicKey]);
