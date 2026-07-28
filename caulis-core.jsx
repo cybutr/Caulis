@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '172'; // keep in sync with sw.js CACHE
+const APP_VERSION = '173'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -296,16 +296,60 @@ let activeBgTexture = 'none';
 function applyBgTexture(v) { if (BG_TEXTURES[v]) activeBgTexture = v; }
 function bgTextureStyle() {
   if (activeBgTexture === 'dot') return { backgroundImage:`radial-gradient(${C.line} 1px, transparent 1px)`, backgroundSize:'22px 22px' };
-  // "grain" needs irregularity, not a single repeating direction — a
-  // repeating-linear-gradient reads as visible pinstripes at any spacing.
-  // Two dot layers offset from each other at a tiny pitch break up any
-  // sense of a repeating line and read as fine paper grain instead.
-  if (activeBgTexture === 'paper') return {
-    backgroundImage: `radial-gradient(${C.line} 0.6px, transparent 0.6px), radial-gradient(${C.line} 0.6px, transparent 0.6px)`,
-    backgroundSize: '3px 3px, 3px 3px',
-    backgroundPosition: '0 0, 1.5px 1.5px',
-  };
+  // real grain (feTurbulence, see index.html's #grainFilter + .grain-overlay)
+  // now carries the "paper" texture as one fixed full-viewport layer — this
+  // background-image trick used to fake it with offset dot layers, no longer
+  // needed once the real overlay is toggled on by applyGrainIntensity().
   return {};
+}
+
+// grain intensity — same apply/read pattern as icon stroke / radius density:
+// a module-level `let`, an apply* fn called every render, a plain reader.
+// Only the blend layer's CSS opacity goes through a custom property; the SVG
+// filter's baseFrequency does NOT reliably take var() across engines, so it's
+// mutated imperatively on the <feTurbulence> node instead.
+const GRAIN_LEVELS = {
+  subtle: { label:'Subtle', freq:0.9, op:0.15 },
+  medium: { label:'Medium', freq:0.7, op:0.3 },
+  bold:   { label:'Bold',   freq:0.5, op:0.45 },
+};
+const GRAIN_ORDER = ['subtle','medium','bold'];
+let grainLevel = 'medium';
+function applyGrainIntensity(level, textureOn) {
+  if (GRAIN_LEVELS[level]) grainLevel = level;
+  const cfg = GRAIN_LEVELS[grainLevel];
+  try {
+    const fe = document.getElementById('grainTurb');
+    if (fe) fe.setAttribute('baseFrequency', String(cfg.freq));
+    document.documentElement.style.setProperty('--grain-opacity', textureOn ? cfg.op : 0);
+  } catch (e) {}
+}
+function grain() { return GRAIN_LEVELS[grainLevel] || GRAIN_LEVELS.medium; }
+
+// ── shared "cozy depth" touches — one small vocabulary reused across every
+// screen instead of a one-off treatment per surface. Warmth always comes
+// from C.brown/palette at a low, consistent opacity ceiling (matching
+// C.line's own rgba(...,0.08)), never from the grain layer itself.
+function warmEdgeStyle(strength = 1) {
+  const a = Math.round(7 * strength);
+  return {
+    position:'absolute', inset:0, pointerEvents:'none',
+    background:`linear-gradient(180deg, rgba(107,76,42,${(a/100).toFixed(2)}), transparent 42%)`,
+  };
+}
+const PHOTO_FRAME_SHADOW = 'inset 0 0 24px rgba(0,0,0,0.05)';
+// staggered fade+rise for grid entrances — capped so a big garden doesn't
+// stagger 40 cards one by one; beyond the cap everything just mounts at once
+const CARD_STAGGER_CAP = 10;
+function cardEntranceStyle(idx) {
+  if (idx >= CARD_STAGGER_CAP) return {};
+  return { animation:`cardIn ${MOTION.base}ms ${MOTION.out} both`, animationDelay:`${idx * 28}ms` };
+}
+function shimmerStyle() {
+  return {
+    backgroundImage:`linear-gradient(90deg, ${C.line}, rgba(255,255,255,0.5), ${C.line})`,
+    backgroundSize:'200% 100%', animation:'shimmerSweep 1.4s linear infinite',
+  };
 }
 
 function applyTheme(dark, palette, accent) {
@@ -857,6 +901,8 @@ Object.assign(window, {
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,
   BG_TEXTURES, BG_TEXTURE_ORDER, applyBgTexture, bgTextureStyle,
+  GRAIN_LEVELS, GRAIN_ORDER, applyGrainIntensity, grain,
+  warmEdgeStyle, PHOTO_FRAME_SHADOW, cardEntranceStyle, CARD_STAGGER_CAP, shimmerStyle,
   STATUS_STYLES, STATUS_STYLE_ORDER, applyStatusStyle, getStatusStyle,
   ICON_STROKE_LEVELS, ICON_STROKE_ORDER, applyIconStroke,
   FONT_PAIRINGS, FONT_PAIRING_ORDER, applyFontPairing,

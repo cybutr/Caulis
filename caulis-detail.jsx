@@ -168,7 +168,7 @@ function PhotoCarousel({ images, tint, height = 196, radius = 22 }) {
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
-function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, onOpenPlant, onCareCheck, plants, roomLight, isDesktop, readonly = false, czechMode = false, confirmDelete = false, onAddSchedule, onEditSchedule, onRemoveSchedule, onMarkScheduleDone }) {
+function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, onOpenPlant, onCareCheck, plants, roomLight, isDesktop, readonly = false, czechMode = false, confirmDelete = false, onAddSchedule, onEditSchedule, onRemoveSchedule, onMarkScheduleDone, reduceMotion }) {
   const [justWatered, setJustWatered] = useState(false);
   const [waterOffset, setWaterOffset] = useState(0); // days ago
   const prevRef = useRef(null);
@@ -213,8 +213,14 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
         </div>
 
         <div style={{ padding:'0 18px', position:'relative', zIndex:2 }}>
-          {/* hero */}
-          <PhotoCarousel images={gallery} tint={tint}/>
+          {/* hero — same warm-edge/photo-frame treatment as the Garden hero
+              banner, so the two read as one cohesive "cozy depth" system
+              rather than a one-off Garden-only effect */}
+          <div style={{ position:'relative', borderRadius:rad(22), overflow:'hidden' }}>
+            <PhotoCarousel images={gallery} tint={tint}/>
+            <div style={{ position:'absolute', inset:0, pointerEvents:'none', ...warmEdgeStyle(0.8) }}/>
+            <div style={{ position:'absolute', inset:0, pointerEvents:'none', boxShadow:PHOTO_FRAME_SHADOW, borderRadius:rad(22) }}/>
+          </div>
 
           {/* name block */}
           <div style={{ marginTop:16 }}>
@@ -307,8 +313,10 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
             </div>
           )}
 
-          {/* info tiles */}
-          <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:18 }}>
+          {/* info tiles — a single considered reveal (not a per-tile stagger,
+              which would fight the overlay's own slideUp) so this doesn't
+              mount as flat, static chrome under the new hero treatment */}
+          <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:18, animation: reduceMotion ? undefined : 'cardIn 380ms cubic-bezier(.2,.8,.2,1) both', animationDelay: reduceMotion ? undefined : '90ms' }}>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
               <InfoTile icon={<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill={C.sage}/><path d="M12 2.5v2.4M12 19.1v2.4M21.5 12h-2.4M4.9 12H2.5M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7M18.4 18.4l-1.7-1.7M7.3 7.3 5.6 5.6" stroke={C.sage} strokeWidth="1.8" strokeLinecap="round"/></svg>} label="Light">{plant.light || '—'}</InfoTile>
               <InfoTile icon={<IconDrop s={14} c={C.sage}/>} label="Watering">
@@ -320,24 +328,20 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 a custom schedule" was a placement problem, not a wiring bug:
                 this card was fully functional but buried after four other
                 tiles, with a plain text "+ Add" that didn't read as a button */}
-            {!readonly && (
+            {/* view mode only ever shows this once a reminder exists — adding a
+                new one is an edit-mode action now (see AddPlant's own Reminders
+                sub-section); no empty-state prompt cluttering the normal view */}
+            {!readonly && (plant.schedules || []).length > 0 && (
               <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:'14px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)' }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: (plant.schedules||[]).length ? 4 : 0 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ width:24, height:24, borderRadius:7, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 6v6l4 2" stroke={C.forest} strokeWidth="1.8" strokeLinecap="round"/><circle cx="12" cy="12" r="8.5" stroke={C.forest} strokeWidth="1.8"/></svg>
-                    </div>
-                    <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.forest, letterSpacing:0.5, textTransform:'uppercase' }}>Custom reminders</span>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                  <div style={{ width:24, height:24, borderRadius:7, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 6v6l4 2" stroke={C.forest} strokeWidth="1.8" strokeLinecap="round"/><circle cx="12" cy="12" r="8.5" stroke={C.forest} strokeWidth="1.8"/></svg>
                   </div>
-                  <div onClick={()=>setScheduleForm({})} style={{ cursor:'pointer', display:'flex', alignItems:'center', gap:5, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:'#fff', background:C.forest, borderRadius:999, padding:'6px 12px' }}>
-                    <IconPlus s={11} c="#fff" w={2}/> Add
-                  </div>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.forest, letterSpacing:0.5, textTransform:'uppercase' }}>Reminders</span>
                 </div>
-                {(plant.schedules || []).length ? (plant.schedules.map(s => (
+                {plant.schedules.map(s => (
                   <ScheduleRow key={s.id} schedule={s} onMarkDone={onMarkScheduleDone ? id=>onMarkScheduleDone(plant.id, id) : ()=>{}} onEdit={setScheduleForm}/>
-                ))) : (
-                  <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.55 }}>Misting, fertilizing, rotating — anything on its own schedule, with its own push toggle.</div>
-                )}
+                ))}
               </div>
             )}
             {(() => {
@@ -495,7 +499,8 @@ function SparkIcon({ s = 20, c = C.forest }) {
   </svg>);
 }
 
-function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, isDesktop, czechMode }) {
+function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, onAddSchedule, onEditSchedule, onRemoveSchedule, onMarkScheduleDone, isDesktop, czechMode }) {
+  const [scheduleForm, setScheduleForm] = useState(null); // null | {} (new) | schedule (editing) — reminders can only be added/edited here, in edit mode
   const [name, setName] = useState(editing ? editing.name : '');
   const [czech, setCzech] = useState(editing ? (editing.czech || '') : '');
   const [latin, setLatin] = useState(editing && editing.latin !== '\u2014' ? editing.latin : '');
@@ -907,6 +912,31 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
             </div>
           </Field>
 
+          {/* reminders can only be added/edited/removed here, in edit mode —
+              view mode (PlantDetail) only ever shows existing ones with a
+              mark-done action, never an "add" prompt. Looked up fresh from
+              `plants` each render (not the `editing` snapshot captured when
+              the form opened) so a just-added reminder shows immediately
+              instead of waiting for the form to reopen. */}
+          {editing && (() => {
+            const live = (plants || []).find(p => p.id === editing.id) || editing;
+            const schedules = live.schedules || [];
+            return (
+              <Field label="Reminders">
+                <div style={{ background:C.panel, borderRadius:rad(14), border:C.hair, padding:'10px 12px' }}>
+                  {schedules.length > 0 ? schedules.map(s => (
+                    <ScheduleRow key={s.id} schedule={s} onMarkDone={onMarkScheduleDone ? id=>onMarkScheduleDone(live.id, id) : ()=>{}} onEdit={setScheduleForm}/>
+                  )) : (
+                    <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, padding:'4px 0' }}>Misting, fertilizing, rotating — anything on its own schedule, with its own push toggle.</div>
+                  )}
+                  <div onClick={()=>setScheduleForm({})} style={{ marginTop: schedules.length ? 8 : 10, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:'#fff', background:C.forest, borderRadius:999, padding:'6px 12px' }}>
+                    <IconPlus s={11} c="#fff" w={2}/> Add reminder
+                  </div>
+                </div>
+              </Field>
+            );
+          })()}
+
           {editing && editing.species_id && (
             <div onClick={refreshFromSpecies} style={{
               marginTop: 10,
@@ -992,6 +1022,22 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, i
             </div>
           </div>
         </div>
+      )}
+
+      {scheduleForm && editing && (
+        <ScheduleForm
+          initial={scheduleForm.id ? scheduleForm : null}
+          onSave={(data) => {
+            if (scheduleForm.id) onEditSchedule && onEditSchedule(editing.id, scheduleForm.id, data);
+            else onAddSchedule && onAddSchedule(editing.id, data);
+            setScheduleForm(null);
+          }}
+          onCancel={()=>setScheduleForm(null)}
+          onDelete={() => {
+            if (scheduleForm.id) onRemoveSchedule && onRemoveSchedule(editing.id, scheduleForm.id);
+            setScheduleForm(null);
+          }}
+        />
       )}
     </div>
   );

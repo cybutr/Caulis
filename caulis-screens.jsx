@@ -146,6 +146,18 @@ function CustomColorPicker({ hex, onChange }) {
   );
 }
 
+// toggle switch with a brief confirming ring-flash on change — small
+// considered feedback beyond an instant state flip, same MOTION/keyframe
+// vocabulary as everywhere else (gated for free by the global reduceMotion
+// CSS override, since it's a pure keyframe with no JS branch of its own)
+function ToggleKnob({ on, color }) {
+  return (
+    <div key={on} style={{ width:44, height:26, borderRadius:999, background: on ? (color||C.forest) : 'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0, animation:'toggleFlash 500ms ease-out' }}>
+      <div style={{ position:'absolute', top:3, left:on?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
+    </div>
+  );
+}
+
 // a pill-style segmented picker — shared by every 2-4 option Appearance
 // control (card density, radius density, image treatment, spacing, texture)
 function Segmented({ options, value, onSelect }) {
@@ -245,7 +257,7 @@ function GripIcon({ c = C.brown }) {
 }
 
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion }) {
   const [press, setPress] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
@@ -257,8 +269,9 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
   };
   const end = () => { setPress(false); if (timer.current) clearTimeout(timer.current); };
   const click = () => { if (selectable) { onToggleSelect(plant.id); return; } if (longed.current) { longed.current = false; return; } onOpen(plant.id); };
+  const entrance = (!reduceMotion && entranceIdx != null) ? cardEntranceStyle(entranceIdx) : {};
   return (
-    <div data-noswipe="1" style={{ position:'relative', borderRadius: compact ? rad(16) : rad(22), overflow:'hidden' }}>
+    <div data-noswipe="1" style={{ position:'relative', borderRadius: compact ? rad(16) : rad(22), overflow:'hidden', ...entrance }}>
       <div
         onPointerDown={start} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} onClick={click}
         style={{
@@ -396,10 +409,10 @@ function ContextMenu({ plant, onClose, onEdit, onMove, onRemove, isDesktop }) {
   );
 }
 
-function EmptyGarden({ onAdd }) {
+function EmptyGarden({ onAdd, reduceMotion }) {
   return (
     <div style={{ position:'relative', display:'flex', flexDirection:'column', alignItems:'center', textAlign:'center', padding:'52px 40px 0', zIndex:2 }}>
-      <div style={{ position:'relative', width:128, height:128, borderRadius:999, background:'rgba(122,158,78,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ position:'relative', width:128, height:128, borderRadius:999, background:'rgba(122,158,78,0.1)', display:'flex', alignItems:'center', justifyContent:'center', animation: reduceMotion ? undefined : 'sproutBob 5s ease-in-out infinite' }}>
         <div style={{ position:'absolute', inset:0, borderRadius:999, border:'1px dashed rgba(45,80,22,0.22)' }}/>
         <LeafOutline size={58} color={C.sage} sw={1.3}/>
       </div>
@@ -414,7 +427,147 @@ function EmptyGarden({ onAdd }) {
   );
 }
 
-function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName }) {
+// deterministic-ish hero pick — a companion callout, not a nag: "needs
+// water" is one signal among several, never an override, so the banner
+// doesn't read as guilt-tripping every single day. Recomputed once per
+// GardenScreen mount (i.e. once per tab-visit/day), never per re-render.
+function pickGardenHero(plants) {
+  const withPhoto = p => (p.photos && p.photos[0]) || p.userImage || p.image;
+  const candidates = (plants || []).filter(withPhoto);
+  if (!candidates.length) return null;
+  let lastFeatured = [];
+  try { lastFeatured = JSON.parse(localStorage.getItem('caulis_hero_last') || '[]'); } catch (e) {}
+  const maxId = Math.max(...candidates.map(p => p.id));
+  const scored = candidates.map(p => {
+    let score = Math.random() * 0.5; // tie-break
+    let why = 'featured';
+    if (statusOf(p.days, p.every, p.snoozedUntil) === 'needs') { score += 3; why = 'needs'; }
+    if (maxId - p.id <= 4) { score += 2; if (why === 'featured') why = 'recent'; } // id order proxy for "recently added"
+    if (!lastFeatured.includes(p.id)) score += 1;
+    return { p, score, why };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const pick = scored[0];
+  try { localStorage.setItem('caulis_hero_last', JSON.stringify([pick.p.id, ...lastFeatured.filter(id => id !== pick.p.id)].slice(0, 5))); } catch (e) {}
+  return { plant: pick.p, why: pick.why };
+}
+function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, style, placement, onReposition, labUnlocked, onUnlock }) {
+  const [hero, setHero] = useState(null);
+  // computed once plants actually arrive, not locked to whatever the very
+  // first render happened to have — plants can still be mid-sync (local
+  // cache first, remote snapshot later) when this mounts, and a plain lazy
+  // useState initializer would freeze on an empty/partial list forever
+  useEffect(() => { if (!hero && plants && plants.length) setHero(pickGardenHero(plants)); }, [plants]);
+
+  // secret "Layout Lab" — 7 taps unlocks it (same discovery shape as the
+  // Developer panel's 7-tap version row, no PIN needed since this only
+  // repositions a decorative element). Once unlocked, a long-press enters a
+  // real drag mode: drag the banner up past the header to move it above the
+  // title, or back down to return it below — genuinely repositionable, not
+  // just a settings flip, for whoever finds it.
+  const tapCount = useRef(0);
+  const tapTimer = useRef(null);
+  const [labToast, setLabToast] = useState(null);
+  const [labMode, setLabMode] = useState(false);
+  const [dragDy, setDragDy] = useState(0);
+  const pressTimer = useRef(null);
+  const dragging = useRef(false);
+  const justDragged = useRef(false);
+  const startY = useRef(0);
+
+  const handleTap = () => {
+    if (labUnlocked) return;
+    if (tapTimer.current) clearTimeout(tapTimer.current);
+    tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 1400);
+    tapCount.current += 1;
+    if (tapCount.current >= 7) {
+      tapCount.current = 0;
+      onUnlock && onUnlock();
+      setLabToast('Layout Lab unlocked — long-press me to drag.');
+      setTimeout(() => setLabToast(null), 3200);
+    }
+  };
+  const onDown = (e) => {
+    dragging.current = false;
+    startY.current = e.clientY;
+    if (labUnlocked) {
+      pressTimer.current = setTimeout(() => { dragging.current = true; setLabMode(true); }, 480);
+    }
+  };
+  const onMove = (e) => {
+    if (!dragging.current) return;
+    setDragDy(Math.max(-70, Math.min(70, e.clientY - startY.current)));
+  };
+  const onUp = () => {
+    if (pressTimer.current) clearTimeout(pressTimer.current);
+    if (dragging.current) {
+      if (dragDy < -40 && placement !== 'above') onReposition && onReposition('above');
+      else if (dragDy > 40 && placement !== 'below') onReposition && onReposition('below');
+      setDragDy(0);
+      dragging.current = false;
+      justDragged.current = true;
+      return;
+    }
+    handleTap();
+  };
+  const click = () => {
+    if (justDragged.current) { justDragged.current = false; return; }
+    if (labMode) return;
+    onOpen(hero.plant.id);
+  };
+
+  if (!hero) return null;
+  const { plant, why } = hero;
+  const img = (plant.photos && plant.photos[0]) || plant.userImage || plant.image;
+  const name = czechMode && plant.czech ? plant.czech : plant.name;
+  const caption = why === 'needs' ? `${name} would love a drink today` : why === 'recent' ? 'New in your garden' : `A quiet moment with ${name}`;
+  return (
+    <div style={{ position:'relative' }}>
+      {labToast && (
+        <div style={{ position:'fixed', bottom:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+          <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>{labToast}</div>
+        </div>
+      )}
+      {labMode && (
+        <div style={{ position:'absolute', top:-24, left:18, zIndex:3, display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:700, letterSpacing:0.4, textTransform:'uppercase', color:C.sage, background:'rgba(122,158,78,0.16)', borderRadius:999, padding:'3px 9px' }}>Layout Lab · drag up/down</span>
+          <span onClick={()=>setLabMode(false)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:10.5, fontWeight:700, color:C.brown, opacity:0.7 }}>Done</span>
+        </div>
+      )}
+      <div
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClick={click}
+        style={{
+          margin:'14px 18px 0', height:150, borderRadius:rad(20), overflow:'hidden', position:'relative', cursor:'pointer',
+          boxShadow: labMode ? `0 0 0 2px ${C.sage}, 0 8px 22px rgba(45,80,22,0.14)` : '0 8px 22px rgba(45,80,22,0.1)',
+          transform: dragging.current ? `translateY(${dragDy}px) scale(1.02)` : 'none',
+          transition: dragging.current ? 'none' : 'box-shadow 200ms ease, transform 200ms ease',
+          animation: reduceMotion ? undefined : 'heroIn 420ms cubic-bezier(.2,.8,.2,1) both',
+          touchAction:'none',
+          ...style,
+        }}>
+        <img key={plant.id} src={img} alt="" style={{
+          position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', transformOrigin:'center',
+          animation: reduceMotion ? undefined : 'kenBurns 16s linear both',
+        }}/>
+        <div style={{ position:'absolute', inset:0, ...warmEdgeStyle(1) }}/>
+        <div style={{ position:'absolute', inset:0, boxShadow:PHOTO_FRAME_SHADOW }}/>
+        <div style={{ position:'absolute', inset:0, background:`linear-gradient(180deg, transparent 38%, ${C.bg}F2 94%)` }}/>
+        {/* deliberately asymmetric: the caption reads as a corner note, not a
+            centered banner strip — a small rotated leaf accent breaks the
+            grid's otherwise even rhythm rather than sitting dead-center */}
+        <div style={{ position:'absolute', left:16, right:'26%', bottom:12 }}>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest }}>{name}</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.85, marginTop:2, lineHeight:1.35 }}>{caption}</div>
+        </div>
+        <div style={{ position:'absolute', top:12, right:14, opacity:0.7, transform:'rotate(12deg)', filter:'drop-shadow(0 1px 3px rgba(0,0,0,0.4))' }}>
+          <LeafOutline size={16} color="#fff" sw={1.6}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab }) {
   const [healthOpen, setHealthOpen] = useState(false);
   const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
@@ -462,7 +615,8 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
     flat = [...matched];
   }
 
-  const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact };
+  const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact, reduceMotion };
+  let entranceCounter = 0;
 
   // easter egg: rapid-tapping the corner sprig watermark is a discoverable
   // no-op everywhere else in the app — reward the curiosity with a one-line joke
@@ -481,6 +635,23 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
       try { localStorage.setItem('caulis_egg_sprig', '1'); } catch(e) {}
     }
   };
+  // easter egg: a rare data-state coincidence — rapid-tapping the health pill
+  // only pays off the day it happens to read a perfect 100
+  const healthTaps = useRef(0);
+  const healthTapTimer = useRef(null);
+  const [healthMsg, setHealthMsg] = useState(null);
+  const tapHealth = () => {
+    if (!health || health.score !== 100) return;
+    if (healthTapTimer.current) clearTimeout(healthTapTimer.current);
+    healthTapTimer.current = setTimeout(() => { healthTaps.current = 0; }, 1200);
+    healthTaps.current += 1;
+    if (healthTaps.current >= 5) {
+      healthTaps.current = 0;
+      setHealthMsg('Immaculate. Suspiciously so.');
+      setTimeout(() => setHealthMsg(null), 2400);
+      try { localStorage.setItem('caulis_egg_perfect_health', '1'); } catch(e) {}
+    }
+  };
 
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
@@ -490,6 +661,12 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
           <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)', display:'flex', alignItems:'center', gap:8 }}><Leaf size={14} color="#fff"/> {sprigMsg}</div>
         </div>
       )}
+      {healthMsg && (
+        <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+          <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)', display:'flex', alignItems:'center', gap:8 }}>✦ {healthMsg}</div>
+        </div>
+      )}
+      {!empty && heroBanner === 'above' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} style={{ margin:`${topPad-30}px 18px 0` }} placement="above" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
       <div style={{ padding:`${topPad}px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
         <div style={{ display:'flex', alignItems: isDesktop ? 'flex-end' : 'center', justifyContent:'space-between', gap:12 }}>
           <div>
@@ -506,7 +683,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
               {empty ? <>Welcome to Caulis.</> : needs > 0 ? <>{needs} plants would love a drink.</> : <>Everything looks happy today.</>}
             </div>
             {health && (
-              <div onClick={()=>setHealthOpen(o=>!o)} style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:7, cursor:'pointer' }}>
+              <div onClick={()=>{ setHealthOpen(o=>!o); tapHealth(); }} style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:7, cursor:'pointer' }}>
                 <span style={{ width:8, height:8, borderRadius:999, background:HEALTH_TIERS[health.tier].dot, flexShrink:0 }}/>
                 <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink, opacity:0.75 }}>
                   Garden health {health.score} · {HEALTH_TIERS[health.tier].label}
@@ -547,7 +724,9 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         </div>
       </div>
 
-      {empty && <EmptyGarden onAdd={onAdd}/>}
+      {empty && <EmptyGarden onAdd={onAdd} reduceMotion={reduceMotion}/>}
+
+      {!empty && heroBanner === 'below' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} placement="below" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
 
       {!empty && (
         <div style={{ padding:`12px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
@@ -619,7 +798,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
             <div key={g.room}>
               <RoomHeader room={g.room} count={g.items.length}/>
               <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, marginTop:10 }}>
-                {g.items.map(p => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)}/>)}
+                {g.items.map(p => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} entranceIdx={entranceCounter++}/>)}
               </div>
             </div>
           ))}
@@ -630,7 +809,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         const dragEnabled = sort === 'all' && !nq && fStatus === 'all' && !fLoc && !hideHealthy && !selMode;
         return (
           <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
-            {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i}/>)}
+            {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i} entranceIdx={i}/>)}
           </div>
         );
       })()}
@@ -656,14 +835,23 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
 // ════════════════════════════════════════════════════════════
 //  NEEDS WATER
 // ════════════════════════════════════════════════════════════
-function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMode }) {
+function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMode, reduceMotion }) {
   const [press, setPress] = useState(false);
   const [dx, setDx] = useState(0);
+  const [celebrate, setCelebrate] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
   const startX = useRef(0), startY = useRef(0);
   const swiping = useRef(false), openRef = useRef(false), dxRef = useRef(0), down = useRef(false);
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
+  // a small "grew a little" pulse — distinct from and smaller than the
+  // water-all confetti (which stays reserved for bulk wins). Particles drift
+  // UP and fade, reading as growth rather than the falling-confetti treatment.
+  const fireCelebration = () => {
+    if (reduceMotion) return;
+    setCelebrate(true);
+    setTimeout(() => setCelebrate(false), 700);
+  };
   const OPEN = -84;      // left-swipe (dx negative): swipe-through-to-snooze
   const WATER_MAX = 96;  // right-swipe (dx positive): swipe-through-to-water
   const WATER_THRESH = 72;
@@ -688,7 +876,7 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
     down.current = false; setPress(false); if (timer.current) clearTimeout(timer.current);
     if (swiping.current) {
       swiping.current = false;
-      if (dxRef.current >= WATER_THRESH) { onWater && onWater(plant.id); setX(0); return; }
+      if (dxRef.current >= WATER_THRESH) { onWater && onWater(plant.id); fireCelebration(); setX(0); return; }
       if (dxRef.current <= SNOOZE_THRESH) { onSnooze && onSnooze(plant.id, 2); setX(0); return; }
       setX(0);
     }
@@ -730,7 +918,20 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
           <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.forest, lineHeight:1.1 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
           <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6, marginTop:3 }}>{agoLabel(plant.days)} · {plant.location}</div>
         </div>
-        <StatusTag status={status}/>
+        <div style={{ position:'relative', display:'inline-flex' }}>
+          {celebrate && (
+            <div style={{ position:'absolute', inset:-8, borderRadius:999, background:'radial-gradient(circle, rgba(110,154,62,0.35), transparent 70%)', animation:'waterGlow 700ms ease-out both', pointerEvents:'none' }}/>
+          )}
+          <div style={{ animation: celebrate ? 'waterPulse 240ms cubic-bezier(.34,1.56,.64,1) both' : 'none' }}>
+            <StatusTag status={celebrate ? 'ok' : status}/>
+          </div>
+          {celebrate && [0,1].map(i => (
+            <div key={i} style={{
+              position:'absolute', left: 6 + i*14, top:2, width:4, height:4, borderRadius:999, background:C.sage,
+              animation:`driftUp ${600 + i*100}ms ease-out both`, animationDelay:`${i*70}ms`, pointerEvents:'none',
+            }}/>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -905,7 +1106,7 @@ function WaterAllPicker({ counts, defaultScope, onPick, onClose }) {
   );
 }
 
-function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, onWaterOne, confirmDelete, isDesktop, czechMode, gardenName }) {
+function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, onWaterOne, confirmDelete, isDesktop, czechMode, gardenName, reduceMotion }) {
   const order = { needs:0, soon:1 };
   const list = plants.filter(p=>statusOf(p.days,p.every,p.snoozedUntil)!=='ok')
     .sort((a,b)=> order[statusOf(a.days,a.every,a.snoozedUntil)] - order[statusOf(b.days,b.every,b.snoozedUntil)]);
@@ -952,14 +1153,18 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
       <div style={{ display:'flex', flexDirection:'column', gap:ds(12), padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
         {list.length === 0 && (
           <div style={{ textAlign:'center', padding:'60px 30px', position:'relative', zIndex:2 }}>
-            <div onClick={tapEmpty} style={{ display:'inline-flex', width:64, height:64, borderRadius:999, background:'rgba(110,154,62,0.12)', alignItems:'center', justifyContent:'center', cursor:'pointer', userSelect:'none' }}>
-              <IconCheck s={28} c={C.sage} w={2.4}/>
+            <div onClick={tapEmpty} style={{
+              display:'inline-flex', width:72, height:72, borderRadius:999, background:'rgba(110,154,62,0.12)',
+              alignItems:'center', justifyContent:'center', cursor:'pointer', userSelect:'none', position:'relative',
+              animation: reduceMotion ? undefined : 'sproutBob 4.5s ease-in-out infinite',
+            }}>
+              <LeafOutline size={30} color={C.sage} sw={1.6}/>
             </div>
-            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, marginTop:16 }}>{emptyMsg || 'Nothing to water'}</div>
-            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Every plant is happily hydrated.</div>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, marginTop:16 }}>{emptyMsg || 'Everything is looked after'}</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4, lineHeight:1.5 }}>Every plant is happily hydrated — a quiet, well-tended kind of day.</div>
           </div>
         )}
-        {list.map((p,i)=> <NeedsRow key={p.id} plant={p} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress} onSnooze={onSnooze} onWater={onWaterOne} czechMode={czechMode}/>)}
+        {list.map((p,i)=> <NeedsRow key={p.id} plant={p} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress} onSnooze={onSnooze} onWater={onWaterOne} czechMode={czechMode} reduceMotion={reduceMotion}/>)}
       </div>
     </div>
   );
@@ -1115,7 +1320,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:500, fontSize:26, color:C.ink, marginTop:2, lineHeight:1.15, whiteSpace:'nowrap' }}>{items.length} {items.length===1?'tag':'tags'} ready</div>
           </div>
           {items.length>0 && (
-            <div onClick={onPrintAll} style={{ flexShrink:0, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:7, background:printed?C.sage:C.forest, color:'#fff', borderRadius:999, padding:'10px 16px', boxShadow:'0 4px 12px rgba(45,80,22,0.22)', transition:'background 200ms ease' }}>
+            <div key={printed} onClick={onPrintAll} style={{ flexShrink:0, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:7, background:printed?C.sage:C.forest, color:'#fff', borderRadius:999, padding:'10px 16px', boxShadow:'0 4px 12px rgba(45,80,22,0.22)', transition:'background 200ms ease', animation: printed ? 'waterPulse 260ms cubic-bezier(.34,1.56,.64,1) both' : 'none' }}>
               {printed ? <IconCheck s={15}/> : <IconPrint s={17} c="#fff"/>}
               <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600 }}>{printed?'Sent':'Print all'}</span>
             </div>
@@ -1152,10 +1357,10 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
       )}
       {items.length===0 && (
         <div style={{ textAlign:'center', padding:'56px 30px', position:'relative', zIndex:2 }}>
-          <div style={{ display:'inline-flex', width:64, height:64, borderRadius:999, background:'rgba(107,76,42,0.1)', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ display:'inline-flex', width:64, height:64, borderRadius:999, background:'rgba(107,76,42,0.1)', alignItems:'center', justifyContent:'center', animation:'sproutBob 5s ease-in-out infinite' }}>
             <IconPrint s={28} c={C.brown}/>
           </div>
-          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, marginTop:16 }}>Queue is empty</div>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:22, color:C.forest, marginTop:16 }}>Nothing waiting to print</div>
           <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>Open a plant and tap "Add to print queue" to label it.</div>
         </div>
       )}
@@ -1313,7 +1518,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1866,9 +2071,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
     </div>
   );
   const Toggle = ({ on }) => (
-    <div style={{ width:44, height:26, borderRadius:999, background:on?C.sage:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms' }}>
-      <div style={{ position:'absolute', top:3, left:on?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-    </div>
+    <ToggleKnob on={on} color={C.sage}/>
   );
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
@@ -1910,9 +2113,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Dark mode</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, marginTop:1 }}>Botanical night theme</div>
               </div>
-              <div style={{ width:44, height:26, borderRadius:999, background:darkMode?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
-                <div style={{ position:'absolute', top:3, left:darkMode?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-              </div>
+              <ToggleKnob on={darkMode}/>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden name</div>
@@ -2060,15 +2261,24 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Texture</div>
               <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A very subtle wash behind every screen</div>
               <OptionList value={bgTexture} onSelect={onSetBgTexture} options={BG_TEXTURE_ORDER.map(k=>[k, BG_TEXTURES[k].label])}/>
+              {bgTexture === 'paper' && (
+                <div style={{ marginTop:10 }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:6 }}>Grain intensity</div>
+                  <Segmented value={grainIntensity} onSelect={onSetGrainIntensity} options={GRAIN_ORDER.map(k=>[k, GRAIN_LEVELS[k].label])}/>
+                </div>
+              )}
+            </div>
+            <div style={{ padding:'8px 16px 12px', borderTop:C.hair }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden hero photo</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A rotating plant photo at the top of Garden — off, or placed above/below the title</div>
+              <OptionList value={heroBanner || 'below'} onSelect={onSetHeroBanner} options={[['off','Off'],['below','Below title'],['above','Above title']]}/>
             </div>
             <div onClick={onToggleReduceMotion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Reduce motion</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, marginTop:1 }}>Disable swipe &amp; transition animations</div>
               </div>
-              <div style={{ width:44, height:26, borderRadius:999, background:reduceMotion?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
-                <div style={{ position:'absolute', top:3, left:reduceMotion?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-              </div>
+              <ToggleKnob on={reduceMotion}/>
             </div>
           </div>
         </SettingsSection>
@@ -2093,9 +2303,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Hide healthy plants</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Garden shows only soon &amp; thirsty plants</div>
               </div>
-              <div style={{ width:44, height:26, borderRadius:999, background:hideHealthy?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
-                <div style={{ position:'absolute', top:3, left:hideHealthy?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-              </div>
+              <ToggleKnob on={hideHealthy}/>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Opens on launch</div>
@@ -2147,27 +2355,21 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Confirm before delete</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Ask before removing a plant</div>
               </div>
-              <div style={{ width:44, height:26, borderRadius:999, background:confirmDelete?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
-                <div style={{ position:'absolute', top:3, left:confirmDelete?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-              </div>
+              <ToggleKnob on={confirmDelete}/>
             </div>
             <div onClick={onToggleSwipeNav} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Swipe between tabs</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Horizontal swipe switches screens (mobile)</div>
               </div>
-              <div style={{ width:44, height:26, borderRadius:999, background:swipeNav?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
-                <div style={{ position:'absolute', top:3, left:swipeNav?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-              </div>
+              <ToggleKnob on={swipeNav}/>
             </div>
             <div onClick={onToggleHaptics} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Haptics</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Vibrate on water, snooze &amp; delete (mobile)</div>
               </div>
-              <div style={{ width:44, height:26, borderRadius:999, background:haptics?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
-                <div style={{ position:'absolute', top:3, left:haptics?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-              </div>
+              <ToggleKnob on={haptics}/>
             </div>
           </div>
         </SettingsSection>
@@ -2723,9 +2925,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Show labels</div>
                     <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Text under each {isDesktop ? 'sidebar' : 'bar'} icon</div>
                   </div>
-                  <div style={{ width:44, height:26, borderRadius:999, background:navLabels?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
-                    <div style={{ position:'absolute', top:3, left:navLabels?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-                  </div>
+                  <ToggleKnob on={navLabels}/>
                 </div>
               </div>
             </div>
@@ -2742,9 +2942,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               </div>
               <div onClick={()=>onSetSidebar({ collapsed: !sidebar.collapsed })} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer' }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Collapse to icons</div>
-                <div style={{ width:44, height:26, borderRadius:999, background:sidebar.collapsed?C.forest:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
-                  <div style={{ position:'absolute', top:3, left:sidebar.collapsed?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
-                </div>
+                <ToggleKnob on={sidebar.collapsed}/>
               </div>
               {!sidebar.collapsed && (
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
