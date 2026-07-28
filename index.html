@@ -113,6 +113,57 @@
       var dark = stored != null ? stored === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
     } catch (e) {}
+    // font pairing, applied before first paint so a returning user who picked
+    // Literary/Editorial doesn't flash Classic for one frame. This duplicates
+    // the href/family table also kept in caulis-core.jsx's FONT_PAIRINGS —
+    // unavoidable with no build step to share it, and applyFontPairing()
+    // re-runs the same work harmlessly once React mounts.
+    try {
+      var fp = localStorage.getItem('caulis_font_pairing');
+      var fpTable = {
+        literary: { serif: '"Fraunces", serif', sans: '"Inter", sans-serif',
+          href: 'https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500;1,600;1,700&family=Inter:wght@400;500;600&display=swap' },
+        editorial: { serif: '"Playfair Display", serif', sans: '"Work Sans", sans-serif',
+          href: 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600;1,700&family=Work+Sans:wght@400;500;600&display=swap' },
+      };
+      if (fp && fpTable[fp]) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = fpTable[fp].href;
+        document.head.appendChild(link);
+        document.documentElement.style.setProperty('--font-serif', fpTable[fp].serif);
+        document.documentElement.style.setProperty('--font-sans', fpTable[fp].sans);
+      }
+    } catch (e) {}
+    // splash-screen accent accuracy — the static splash below paints before
+    // React/caulis-core.jsx ever runs, so it can't call the real PALETTES
+    // table or deriveShadesFromHex(). This mirrors just the forest hex per
+    // curated preset, and for Custom uses the raw picked hex directly (close
+    // enough for a sub-second splash; the real derived shade takes over the
+    // instant React mounts and calls applyTheme()).
+    try {
+      var pal = localStorage.getItem('caulis_palette') || 'forest';
+      var curated = {
+        forest: { light: '#2D5016', dark: '#7EC870' },
+        teal:   { light: '#15605A', dark: '#5FC7BC' },
+        plum:   { light: '#5A2456', dark: '#C870BC' },
+        clay:   { light: '#8A3A1E', dark: '#D4885F' },
+        ocean:  { light: '#1D4E89', dark: '#7DAEDC' },
+        amber:  { light: '#8A6A12', dark: '#E0B84E' },
+        rose:   { light: '#8A2A3E', dark: '#E08096' },
+      };
+      var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      var forestHex = null;
+      if (pal === 'custom') {
+        forestHex = localStorage.getItem('caulis_custom_palette_color') || '#2D5016';
+      } else if (curated[pal]) {
+        forestHex = isDark ? curated[pal].dark : curated[pal].light;
+      }
+      if (forestHex) {
+        document.documentElement.style.setProperty('--forest', forestHex);
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#111610' : forestHex);
+      }
+    } catch (e) {}
   })();
 </script>
 <style>
@@ -122,6 +173,7 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) { --bg: #111610; --forest: #7EC870; --line: rgba(255,255,255,0.07); }
   }
+  :root { --font-serif: "Cormorant Garamond", serif; --font-sans: "DM Sans", sans-serif; }
   html, body { background: var(--bg); -webkit-font-smoothing: antialiased; overflow: hidden; height: 100%; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
   #root { height: 100%; overflow: hidden; }
   button, [role="button"], a { touch-action: manipulation; }

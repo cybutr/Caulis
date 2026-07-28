@@ -1313,7 +1313,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1997,6 +1997,36 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 </div>
               </div>
               <OptionList value={iconStroke} onSelect={onSetIconStroke} options={ICON_STROKE_ORDER.map(k=>[k, ICON_STROKE_LEVELS[k].label])}/>
+            </div>
+            <div style={{ padding:'0 16px 12px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:16, color:C.ink }}>Aa</span>
+                </div>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Font pairing</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>{FONT_PAIRINGS[fontPairing || 'classic'].label === 'Classic' ? 'The other two load only when picked' : 'Loaded — applies everywhere text appears'}</div>
+                </div>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:10 }}>
+                {FONT_PAIRING_ORDER.map(k => {
+                  const p = FONT_PAIRINGS[k];
+                  const on = (fontPairing || 'classic') === k;
+                  return (
+                    <div key={k} onClick={()=>onSetFontPairing(k)} style={{
+                      display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, cursor:'pointer',
+                      padding:'10px 12px', borderRadius:rad(12), background: on ? 'rgba(45,80,22,0.08)' : 'transparent',
+                      border: on ? `1px solid ${C.forest}` : '1px solid transparent', transition:'background 160ms, border-color 160ms',
+                    }}>
+                      <div style={{ display:'flex', alignItems:'baseline', gap:9, minWidth:0 }}>
+                        <span style={{ fontFamily:p.serif, fontStyle:'italic', fontWeight:600, fontSize:16, color: on ? C.forest : C.ink, flexShrink:0 }}>Caulis</span>
+                        <span style={{ fontFamily:p.sans, fontSize:11.5, color:C.brown, opacity:0.75, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.label}</span>
+                      </div>
+                      {on && <IconCheck s={15} c={C.forest} w={2.2}/>}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Layout</span>

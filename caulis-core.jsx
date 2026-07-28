@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '171'; // keep in sync with sw.js CACHE
+const APP_VERSION = '172'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -62,8 +62,46 @@ const C_DARK = {
 C.input = C_LIGHT.input;
 C.toast = C_LIGHT.toast;
 
-const FONT_SERIF = '"Cormorant Garamond", serif';
-const FONT_SANS  = '"DM Sans", sans-serif';
+// every call site sets fontFamily to these two constants inline (538 usages
+// across screens/detail/app) — rather than touch every one, the constants
+// point at CSS custom properties so a font-pairing switch is one DOM write
+// instead of a repo-wide refactor. index.html seeds the same two vars on
+// :root for the pre-mount splash / first paint.
+const FONT_SERIF = 'var(--font-serif)';
+const FONT_SANS  = 'var(--font-sans)';
+
+// font pairing — Classic is what's already eagerly loaded via the <link> in
+// index.html, so picking it costs nothing. The other two are fetched lazily,
+// only the moment someone actually selects them, via a dynamically injected
+// Google Fonts stylesheet link — never loaded upfront, so users who never
+// touch this setting pay zero extra bytes.
+const FONT_PAIRINGS = {
+  classic: {
+    label: 'Classic', serif: '"Cormorant Garamond", serif', sans: '"DM Sans", sans-serif', href: null,
+  },
+  literary: {
+    label: 'Literary', serif: '"Fraunces", serif', sans: '"Inter", sans-serif',
+    href: 'https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,500;0,600;1,500;1,600;1,700&family=Inter:wght@400;500;600&display=swap',
+  },
+  editorial: {
+    label: 'Editorial', serif: '"Playfair Display", serif', sans: '"Work Sans", sans-serif',
+    href: 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600;1,700&family=Work+Sans:wght@400;500;600&display=swap',
+  },
+};
+const FONT_PAIRING_ORDER = ['classic', 'literary', 'editorial'];
+function ensureFontLoaded(href) {
+  if (!href || document.querySelector(`link[href="${href}"]`)) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = href;
+  document.head.appendChild(link);
+}
+function applyFontPairing(key) {
+  const p = FONT_PAIRINGS[key] || FONT_PAIRINGS.classic;
+  ensureFontLoaded(p.href);
+  document.documentElement.style.setProperty('--font-serif', p.serif);
+  document.documentElement.style.setProperty('--font-sans', p.sans);
+}
 
 // QR generator (forest-green ink on warm ground) ------------
 function qrUrl(data, size = 240) {
@@ -821,6 +859,7 @@ Object.assign(window, {
   BG_TEXTURES, BG_TEXTURE_ORDER, applyBgTexture, bgTextureStyle,
   STATUS_STYLES, STATUS_STYLE_ORDER, applyStatusStyle, getStatusStyle,
   ICON_STROKE_LEVELS, ICON_STROKE_ORDER, applyIconStroke,
+  FONT_PAIRINGS, FONT_PAIRING_ORDER, applyFontPairing,
   Leaf, LeafOutline, Sprig, gardenGrowthStage, trackSeenValue,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy,
   StatusDot, LocationPill, StatusTag, Specimen,
