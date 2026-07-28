@@ -722,6 +722,17 @@ function IconEyeOff({ s = 16, c = C.ink, a = 0.55 }) {
     <path d="M8.2 8.2a2.4 2.4 0 0 0 3.3 3.3" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round"/>
   </svg>);
 }
+// a pipette/dropper — the "pick any color" affordance for the custom-color
+// swatch slot, in the same restrained line-art language as IconDrop rather
+// than a vibrant rainbow gradient tile (that read as garish next to the
+// curated palette swatches)
+function IconPipette({ s = 20, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <path d="M15.3 3.3l5.4 5.4-2.3 2.3-5.4-5.4 2.3-2.3Z" stroke={c} strokeWidth={isw(1.6)} strokeLinejoin="round"/>
+    <path d="M16.4 8.4 7.5 17.3l-4 .7.7-4 8.9-8.9" stroke={c} strokeWidth={isw(1.6)} strokeLinejoin="round" strokeLinecap="round"/>
+    <circle cx="5.2" cy="18.8" r="1.2" fill={c}/>
+  </svg>);
+}
 function IconCopy({ s = 16, c = C.ink, a = 0.55 }) {
   return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none" opacity={a}>
     <rect x="7" y="7" width="10.5" height="10.5" rx="2" stroke={c} strokeWidth={isw(1.5)}/>
@@ -907,7 +918,7 @@ Object.assign(window, {
   ICON_STROKE_LEVELS, ICON_STROKE_ORDER, applyIconStroke,
   FONT_PAIRINGS, FONT_PAIRING_ORDER, applyFontPairing,
   Leaf, LeafOutline, Sprig, gardenGrowthStage, trackSeenValue,
-  IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy,
+  IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy, IconPipette,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
   useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION, MOTION,

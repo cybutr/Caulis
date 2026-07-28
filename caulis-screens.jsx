@@ -71,6 +71,23 @@ function SwatchRow({ options, value, onSelect, size = 32 }) {
     <div style={{ display:'flex', gap:12, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
       {options.map(opt => {
         const on = value === opt.key;
+        // the custom slot reads as a tool ("pick any color"), not a color
+        // itself — a calm pipette icon, never the old vibrant rainbow tile.
+        // The picked hue only shows as a small tip-dot once actually selected.
+        if (opt.key === 'custom') {
+          return (
+            <div key={opt.key} onClick={()=>onSelect(opt.key)} title={opt.label} style={{
+              flexShrink:0, width:size, height:size, borderRadius:999, cursor:'pointer', position:'relative',
+              background:'rgba(45,80,22,0.06)', border:C.hair,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${opt.ring || C.forest}` : 'none',
+              transition:'box-shadow 160ms ease',
+            }}>
+              <IconPipette s={Math.round(size*0.56)} c={C.brown} a={0.75}/>
+              {on && <span style={{ position:'absolute', right:2, bottom:2, width:7, height:7, borderRadius:999, background:opt.ring || C.forest, boxShadow:`0 0 0 1.5px ${C.bg}` }}/>}
+            </div>
+          );
+        }
         return (
           <div key={opt.key} onClick={()=>onSelect(opt.key)} title={opt.label} style={{
             flexShrink:0, width:size, height:size, borderRadius:999, background:opt.swatch, cursor:'pointer',
@@ -126,14 +143,15 @@ function CustomColorPicker({ hex, onChange }) {
   const warn = contrastWarningFor(hex);
   const bad = warn.warnLight || warn.warnDark;
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:11, marginTop:10, padding:'9px 11px', borderRadius:rad(12), background:'rgba(45,80,22,0.05)' }}>
-      <label style={{ position:'relative', width:34, height:34, borderRadius:999, flexShrink:0, cursor:'pointer', boxShadow:'0 1px 3px rgba(43,42,38,0.18)' }}>
+    <div style={{ display:'flex', alignItems:'center', gap:ds(12), marginTop:10, padding:`${ds(10)}px ${ds(12)}px`, borderRadius:rad(14), background:C.panel, border:C.hair }}>
+      <label style={{ position:'relative', width:36, height:36, borderRadius:999, flexShrink:0, cursor:'pointer', boxShadow:`0 0 0 3px ${C.bg}, 0 0 0 4px ${C.line}, 0 1px 3px rgba(43,42,38,0.18)` }}>
         <input type="color" value={hex} onChange={e=>onChange(e.target.value)}
           style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, cursor:'pointer', border:'none', padding:0 }}/>
         <div style={{ position:'absolute', inset:0, borderRadius:999, background:hex, pointerEvents:'none' }}/>
       </label>
       <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:'ui-monospace, "SF Mono", Menlo, monospace', fontSize:12.5, fontWeight:600, color:C.ink }}>{hex.toUpperCase()}</div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.5, textTransform:'uppercase' }}>Custom color</div>
+        <div style={{ fontFamily:'ui-monospace, "SF Mono", Menlo, monospace', fontSize:13, fontWeight:600, color:C.ink, marginTop:2 }}>{hex.toUpperCase()}</div>
         {bad ? (
           <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:'#B4472E', opacity:0.9, marginTop:2, lineHeight:1.35 }}>
             Low contrast{warn.warnLight && warn.warnDark ? ' in light & dark mode' : warn.warnLight ? ' in light mode' : ' in dark mode'} — may be hard to read ({(warn.warnLight ? warn.light : warn.dark).toFixed(1)}:1)
@@ -2130,7 +2148,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{PALETTES[palette].label}</span>
               </div>
               <SwatchRow value={palette} onSelect={onSetPalette} options={PALETTE_ORDER.map(key => key === 'custom'
-                ? { key, label:'Custom', swatch:'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', ring:customPaletteColor }
+                ? { key, label:'Custom', ring:customPaletteColor }
                 : { key, label:PALETTES[key].label, swatch:PALETTES[key].swatch })}/>
               {palette === 'custom' && <CustomColorPicker hex={customPaletteColor} onChange={onSetCustomPaletteColor}/>}
             </div>
@@ -2143,7 +2161,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{ACCENTS[accent || 'match'].label}</span>
               </div>
               <SwatchRow value={accent || 'match'} onSelect={onSetAccent} options={ACCENT_ORDER.map(key => {
-                if (key === 'custom') return { key, label:'Custom', swatch:'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', ring:customAccentColor };
+                if (key === 'custom') return { key, label:'Custom', ring:customAccentColor };
                 const a = ACCENTS[key];
                 const swatch = a.swatch ? (darkMode ? (a.dark || a.swatch) : a.swatch) : `linear-gradient(135deg, ${C.forest} 50%, ${C.sage} 50%)`;
                 return { key, label:a.label, swatch, ring: a.swatch || C.forest };
