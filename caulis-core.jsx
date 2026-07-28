@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '166'; // keep in sync with sw.js CACHE
+const APP_VERSION = '167'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -441,7 +441,17 @@ function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2, onT
   const sway = !onTap && stage > 0;
   return (
     <svg width={w} height={h} viewBox="0 0 260 300" onClick={onTap}
-      style={{ position:'absolute', right, bottom, opacity, pointerEvents: onTap ? 'auto' : 'none', cursor: onTap ? 'pointer' : 'default',
+      style={{ position:'absolute', right, bottom, opacity,
+        // 'visiblePainted' (not 'auto') on purpose — 'auto' makes the entire
+        // 260x300 bounding box hit-testable including its transparent
+        // majority, which silently ate every ambient badge tap on the Garden
+        // screen (the one screen this prop is interactive on): any badge
+        // landing in that bottom-right quadrant found this box's cursor:
+        // pointer while walking its occlusion probe and got permanently
+        // disqualified. Restricting the hit-test to actual painted strokes
+        // shrinks the clickable/cursor area down to the drawn plant lines,
+        // matching what a user can actually see as tappable.
+        pointerEvents: onTap ? 'visiblePainted' : 'none', cursor: onTap ? 'pointer' : 'default',
         transformOrigin:'85% 95%', animation: sway ? 'sprigSway 9s ease-in-out infinite' : 'none' }}>
       <path d="M205 296 C 150 250, 120 180, 132 96 C 138 56, 158 30, 196 14"
         fill="none" stroke={C.brown} strokeWidth="1.4" strokeLinecap="round"/>

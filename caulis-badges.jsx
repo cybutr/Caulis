@@ -443,12 +443,13 @@ function _BadgeHit({ def, size, dur, delay, clickable }) {
         </div>
       </div>
       {tip && (
-        <div style={{
-          position:'absolute', bottom:'100%', left:'50%', transform:'translateX(-50%)', marginBottom:6,
-          background:C.toast, color:'#fff', fontFamily:FONT_SANS, fontSize:11, fontWeight:600,
-          padding:'5px 9px', borderRadius:8, whiteSpace:'nowrap', boxShadow:'0 6px 16px rgba(0,0,0,0.22)',
-          pointerEvents:'none', animation:'popUp 180ms cubic-bezier(.2,.9,.3,1.2)',
-        }}>{def.name}</div>
+        <div style={{ position:'absolute', bottom:'100%', left:'50%', transform:'translateX(-50%)', marginBottom:6, pointerEvents:'none' }}>
+          <div style={{
+            background:C.toast, color:'#fff', fontFamily:FONT_SANS, fontSize:11, fontWeight:600,
+            padding:'5px 9px', borderRadius:8, whiteSpace:'nowrap', boxShadow:'0 6px 16px rgba(0,0,0,0.22)',
+            animation:'popUp 180ms cubic-bezier(.2,.9,.3,1.2)',
+          }}>{def.name}</div>
+        </div>
       )}
     </div>
   );

@@ -83,6 +83,37 @@ function SwatchRow({ options, value, onSelect, size = 32 }) {
   );
 }
 
+// full-width stacked rows with a trailing checkmark — for text-label presets
+// that don't fit a segmented pill on a 390px screen (3 options with words
+// like "Vignette"/"Paper grain" wrapped the old Segmented pill onto a second,
+// half-empty line). Matches the rest of Settings' own row-list visual
+// language (trailing checkmark = same affordance as a radio-style choice
+// elsewhere in this app) instead of SwatchRow's circle pattern, which is
+// built for color swatches specifically, not text options.
+function OptionList({ options, value, onSelect }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', borderRadius:rad(12), border:C.hair, overflow:'hidden', marginTop:8 }}>
+      {options.map(([val, label, desc], i) => {
+        const on = value === val;
+        return (
+          <div key={String(val)} onClick={()=>onSelect(val)} style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between', gap:10,
+            padding: desc ? '10px 13px' : '9px 13px', cursor:'pointer',
+            background: on ? 'rgba(122,158,78,0.1)' : 'transparent',
+            borderTop: i ? C.hair : 'none', transition:'background 140ms ease',
+          }}>
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:on?600:500, color:C.ink, opacity:on?1:0.78 }}>{label}</div>
+              {desc && <div style={{ fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.55, marginTop:1 }}>{desc}</div>}
+            </div>
+            {on && <svg width="15" height="15" viewBox="0 0 24 24" style={{ flexShrink:0 }}><path d="M5 13l4 4L19 7" stroke={C.forest} strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // a pill-style segmented picker — shared by every 2-4 option Appearance
 // control (card density, radius density, image treatment, spacing, texture)
 function Segmented({ options, value, onSelect }) {
@@ -1843,28 +1874,28 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Shape &amp; photos</span>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px', gap:12 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:11, minWidth:0 }}>
+            <div style={{ padding:'8px 16px 12px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
                 <div style={{ flexShrink:0, width:30, height:30, borderRadius:rad(16), background:'rgba(122,158,78,0.22)', border:`1.5px solid ${C.sage}`, transition:'border-radius 160ms ease' }}/>
                 <div>
                   <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Corner roundness</div>
                   <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Scales every card, button &amp; sheet corner</div>
                 </div>
               </div>
-              <Segmented value={radiusDensity} onSelect={onSetRadiusDensity} options={RADIUS_ORDER.map(k=>[k, RADIUS_DENSITY[k].label])}/>
+              <OptionList value={radiusDensity} onSelect={onSetRadiusDensity} options={RADIUS_ORDER.map(k=>[k, RADIUS_DENSITY[k].label])}/>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px', gap:12 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:11, minWidth:0 }}>
+            <div style={{ padding:'0 16px 12px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
                 <div style={{ flexShrink:0, width:30, height:30, borderRadius:rad(8), background:'linear-gradient(135deg, #8FBB5E 0%, #2D5016 100%)', filter:IMAGE_TREATMENTS[imageTreatment].filter, transition:'filter 200ms ease' }}/>
                 <div>
                   <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Photo treatment</div>
                   <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How plant photos render everywhere</div>
                 </div>
               </div>
-              <Segmented value={imageTreatment} onSelect={onSetImageTreatment} options={IMAGE_TREATMENT_ORDER.map(k=>[k, IMAGE_TREATMENTS[k].label])}/>
+              <OptionList value={imageTreatment} onSelect={onSetImageTreatment} options={IMAGE_TREATMENT_ORDER.map(k=>[k, IMAGE_TREATMENTS[k].label])}/>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px', gap:12 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:11, minWidth:0 }}>
+            <div style={{ padding:'0 16px 12px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
                 <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   {statusStyle === 'minimal'
                     ? <span style={{ fontFamily:FONT_SANS, fontSize:7, fontWeight:800, color:STATUS.needs.dot }}>OK</span>
@@ -1875,45 +1906,40 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                   <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Dot with glow, or a plain text label</div>
                 </div>
               </div>
-              <Segmented value={statusStyle} onSelect={onSetStatusStyle} options={STATUS_STYLE_ORDER.map(k=>[k, STATUS_STYLES[k].label])}/>
+              <OptionList value={statusStyle} onSelect={onSetStatusStyle} options={STATUS_STYLE_ORDER.map(k=>[k, STATUS_STYLES[k].label])}/>
             </div>
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Layout</span>
             </div>
+            {/* "Columns" and "Padding & gaps" are two genuinely different axes
+                (how many cards per row vs. how tight the padding/gaps are)
+                that used to sit as two similarly-worded rows ("Card density" /
+                "Spacing") right next to each other with no visual grouping —
+                that's what read as a duplicate control. Grouping the column
+                preset and its manual override together, then clearly
+                separating "Padding & gaps" underneath with its own
+                independent-of-columns description, makes the split obvious
+                at a glance instead of requiring the user to read both twice. */}
             {!isDesktop && (
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px' }}>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Card density</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Default 2 or 3 columns — ignored once Garden columns below is set</div>
-                </div>
-                <Segmented value={cardDensity} onSelect={onSetDensity} options={[['comfy','Comfy'],['compact','Compact']]}/>
+              <div style={{ padding:'8px 16px 12px' }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Columns</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How many plant cards sit per row in Garden</div>
+                <OptionList value={gridCols || (cardDensity === 'compact' ? 3 : 2)} onSelect={v => { onSetGridCols(v); onSetDensity(v === 3 ? 'compact' : 'comfy'); }}
+                  options={[[2,'2 columns'],[3,'3 columns'],[4,'4 columns']]}/>
               </div>
             )}
-            {!isDesktop && (
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px' }}>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden columns</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Force a fixed column count, overriding Card density</div>
-                </div>
-                <Segmented value={gridCols || 0} onSelect={onSetGridCols} options={[[0,'Auto'],[2,'2'],[3,'3'],[4,'4']]}/>
-              </div>
-            )}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px' }}>
-              <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Spacing</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Padding &amp; gaps across Garden &amp; Needs Water</div>
-              </div>
-              <Segmented value={uiDensity} onSelect={onSetUiDensity} options={UI_DENSITY_ORDER.map(k=>[k, UI_DENSITY[k].label])}/>
+            <div style={{ padding:'0 16px 12px' }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Padding &amp; gaps</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Tightness of spacing everywhere — independent of column count</div>
+              <OptionList value={uiDensity} onSelect={onSetUiDensity} options={UI_DENSITY_ORDER.map(k=>[k, UI_DENSITY[k].label])}/>
             </div>
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Background</span>
             </div>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 16px 12px' }}>
-              <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Texture</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A very subtle wash behind every screen</div>
-              </div>
-              <Segmented value={bgTexture} onSelect={onSetBgTexture} options={BG_TEXTURE_ORDER.map(k=>[k, BG_TEXTURES[k].label])}/>
+            <div style={{ padding:'8px 16px 12px' }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Texture</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A very subtle wash behind every screen</div>
+              <OptionList value={bgTexture} onSelect={onSetBgTexture} options={BG_TEXTURE_ORDER.map(k=>[k, BG_TEXTURES[k].label])}/>
             </div>
             <div onClick={onToggleReduceMotion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
               <div>
@@ -2062,15 +2088,19 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               </div>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
-              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, marginBottom:1 }}>Watering ping frequency</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:10 }}>How often the watering/reminder push can fire</div>
-              <div style={{ display:'flex', gap:6 }}>
-                {[[1,'Daily'],[2,'2 days'],[3,'3 days'],[7,'Weekly']].map(([days, label]) => {
-                  const on = wateringFrequencyDays === days;
-                  return (
-                    <div key={days} onClick={()=>onSetWateringFrequencyDays(days)} style={{ flex:1, height:32, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', background: on?C.forest:'rgba(45,80,22,0.07)', color: on?'#fff':C.ink, opacity: on?1:0.6, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, transition:'all 140ms ease' }}>{label}</div>
-                  );
-                })}
+              <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:1 }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Watering ping frequency</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:C.forest }}>{wateringFrequencyDays === 1 ? 'Daily' : `Every ${wateringFrequencyDays} days`}</div>
+              </div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:12 }}>How often the watering/reminder push can fire</div>
+              <input
+                type="range" min="1" max="14" step="1" value={wateringFrequencyDays}
+                onChange={e=>onSetWateringFrequencyDays(Number(e.target.value))}
+                style={{ width:'100%', accentColor:C.forest, height:22, cursor:'pointer' }}
+              />
+              <div style={{ display:'flex', justifyContent:'space-between', marginTop:2 }}>
+                <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.5 }}>1 day</span>
+                <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.5 }}>14 days</span>
               </div>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
@@ -2743,7 +2773,17 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     {plants.length === 0 ? (
                       <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.6 }}>This device isn't logged into a garden with any plants yet — these tools act on whatever garden you're currently in, not on a garden loaded elsewhere in Admin.</div>
                     ) : (
-                      <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      // bounded-height scroll wrapper, added back deliberately as a
+                      // plain un-animated div — a prior pass had removed a scroll
+                      // container from around this exact list while chasing an
+                      // unrelated "renders blank" bug, worked around by dropping the
+                      // wrapper instead of root-causing it. This one is a normal
+                      // block-level child of the accordion's already-open body (the
+                      // accordion's own collapse animation lives on SettingsSection's
+                      // grid-template-rows wrapper, several levels up) — it never
+                      // itself sits inside anything mid-transform, so it doesn't
+                      // fight that animation the way the earlier attempt apparently did.
+                      <div style={{ maxHeight:'60vh', overflowY:'auto', display:'flex', flexDirection:'column', gap:6, paddingRight:2 }}>
                         {plants.map(p => historyRow(p))}
                       </div>
                     )}

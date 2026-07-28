@@ -1287,11 +1287,11 @@ function App() {
   // (lastDoneAt/history, statusOf-compatible days/every) rather than a
   // parallel status mechanism, and stored as just another field inside each
   // plant object so the existing plants[] sync/merge path already covers it.
-  const addSchedule = (plantId, { label, everyDays }) => {
+  const addSchedule = (plantId, { label, everyDays, pushEnabled = true }) => {
     haptic('light');
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
     setPlants(ps => ps.map(p => p.id !== plantId ? p : {
-      ...p, schedules: [...(p.schedules || []), { id, label, everyDays: Math.max(1, everyDays | 0), lastDoneAt: null, history: [] }],
+      ...p, schedules: [...(p.schedules || []), { id, label, everyDays: Math.max(1, everyDays | 0), pushEnabled, lastDoneAt: null, history: [] }],
     }));
   };
   const editSchedule = (plantId, scheduleId, changes) => {

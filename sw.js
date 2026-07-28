@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v166';
+const CACHE = 'caulis-v167';
 const SHELL = [
   './',
   './index.html',
@@ -12,6 +12,12 @@ const SHELL = [
   './app.jsx',
   './icon-192.png',
   './icon-512.png',
+  './notif-watering.png',
+  './notif-watering-badge.png',
+  './notif-reminder.png',
+  './notif-reminder-badge.png',
+  './notif-digest.png',
+  './notif-digest-badge.png',
 ];
 
 // Caulis moved off GitHub Pages. A tab/PWA still on the old origin may be
@@ -63,18 +69,32 @@ const VIBRATE_PATTERNS = {
   digest: [60],
 };
 
+// one small branded glyph per push type — same forest-green rounded-square
+// badge as the app's own home-screen icon, with a distinct white line glyph
+// per kind (droplet / clock / calendar-check) so a watering ping, a custom
+// reminder, and the weekly digest are visually distinguishable at a glance
+// in the notification tray, not three identical leaf icons. `badge` is the
+// small monochrome status-bar glyph Android silhouette-masks on its own
+// (alpha channel only, no green background needed there).
+const ICONS = {
+  watering: { icon: './notif-watering.png', badge: './notif-watering-badge.png' },
+  reminder: { icon: './notif-reminder.png', badge: './notif-reminder-badge.png' },
+  digest:   { icon: './notif-digest.png',   badge: './notif-digest-badge.png' },
+};
+
 self.addEventListener('push', e => {
   let payload = { title: 'Caulis', body: 'You have a garden update.' };
   try { payload = e.data.json(); } catch (err) {}
   const type = payload.type || 'watering';
+  const icons = ICONS[type] || ICONS.watering;
   // renotify + a stable per-TYPE tag (not per-notification) means a second
   // push of the same kind replaces the still-showing one on the lock screen
   // instead of stacking — the closest thing the Notifications API has to
   // "don't buzz me twice for the same kind of thing".
   e.waitUntil(self.registration.showNotification(payload.title || 'Caulis', {
     body: payload.body || '',
-    icon: './icon-192.png',
-    badge: './icon-192.png',
+    icon: icons.icon,
+    badge: icons.badge,
     tag: payload.tag || type,
     renotify: true,
     vibrate: VIBRATE_PATTERNS[type] || VIBRATE_PATTERNS.watering,

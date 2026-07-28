@@ -34,7 +34,15 @@ function ScheduleRow({ schedule, onMarkDone, onEdit }) {
     <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 0', borderTop:C.hair }}>
       <span style={{ width:8, height:8, borderRadius:999, background:s.dot, flexShrink:0 }}/>
       <div style={{ flex:1, minWidth:0 }} onClick={()=>onEdit(schedule)}>
-        <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink }}>{schedule.label}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+          <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink }}>{schedule.label}</div>
+          {schedule.pushEnabled === false && (
+            <svg width="11" height="11" viewBox="0 0 24 24" style={{ opacity:0.4, flexShrink:0 }} title="Push off">
+              <path d="M6 8a6 6 0 0 1 12 0v5l1.5 3h-15L6 13Z" fill="none" stroke={C.brown} strokeWidth="1.8" strokeLinejoin="round"/>
+              <path d="M3 3l18 18" stroke={C.brown} strokeWidth="1.8" strokeLinecap="round"/>
+            </svg>
+          )}
+        </div>
         <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>{scheduleAgo(schedule.label, days)} · every {schedule.everyDays} day{schedule.everyDays === 1 ? '' : 's'}</div>
       </div>
       <div onClick={()=>onMarkDone(schedule.id)} style={{ cursor:'pointer', flexShrink:0, padding:'7px 13px', borderRadius:999, background:s.soft, color:s.dot, fontFamily:FONT_SANS, fontSize:12, fontWeight:600 }}>Mark done</div>
@@ -52,11 +60,12 @@ function ScheduleForm({ initial, onSave, onCancel, onDelete }) {
     return initial.everyDays % 7 === 0 ? initial.everyDays / 7 : initial.everyDays;
   });
   const [unit, setUnit] = useState(() => (initial && initial.everyDays % 7 === 0) ? 'weeks' : 'days');
+  const [pushEnabled, setPushEnabled] = useState(() => initial ? initial.pushEnabled !== false : true);
   const valid = label.trim().length > 0 && Number(value) > 0 && Number.isInteger(Number(value));
   const save = () => {
     if (!valid) return;
     const everyDays = unit === 'weeks' ? Number(value) * 7 : Number(value);
-    onSave({ label: label.trim(), everyDays });
+    onSave({ label: label.trim(), everyDays, pushEnabled });
   };
   return (
     <div onClick={onCancel} style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(20,30,12,0.42)', display:'flex', alignItems:'flex-end', justifyContent:'center', animation:'fade 160ms ease' }}>
@@ -75,7 +84,16 @@ function ScheduleForm({ initial, onSave, onCancel, onDelete }) {
             ))}
           </div>
         </div>
-        <div style={{ display:'flex', gap:10, marginTop:22 }}>
+        <div onClick={()=>setPushEnabled(v=>!v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:18, cursor:'pointer' }}>
+          <div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink }}>Push notifications</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Notify when this reminder is due</div>
+          </div>
+          <div style={{ width:44, height:26, borderRadius:999, background:pushEnabled?C.sage:'rgba(45,80,22,0.14)', position:'relative', transition:'background 200ms', flexShrink:0 }}>
+            <div style={{ position:'absolute', top:3, left:pushEnabled?21:3, width:20, height:20, borderRadius:999, background:'#fff', boxShadow:'0 1px 3px rgba(0,0,0,0.2)', transition:'left 200ms' }}/>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:10, marginTop:16 }}>
           {initial && (
             <div onClick={onDelete} style={{ flex:1, textAlign:'center', padding:'13px 0', borderRadius:rad(14), background:'rgba(180,71,46,0.1)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#B4472E', cursor:'pointer' }}>Delete</div>
           )}
@@ -298,6 +316,30 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 <span style={{ opacity:0.6 }}> · every {plant.benchmark || plant.every + ' days'}</span>
               </InfoTile>
             </div>
+            {/* moved up from below the watering log — "can't find how to add
+                a custom schedule" was a placement problem, not a wiring bug:
+                this card was fully functional but buried after four other
+                tiles, with a plain text "+ Add" that didn't read as a button */}
+            {!readonly && (
+              <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:'14px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: (plant.schedules||[]).length ? 4 : 0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:24, height:24, borderRadius:7, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 6v6l4 2" stroke={C.forest} strokeWidth="1.8" strokeLinecap="round"/><circle cx="12" cy="12" r="8.5" stroke={C.forest} strokeWidth="1.8"/></svg>
+                    </div>
+                    <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.forest, letterSpacing:0.5, textTransform:'uppercase' }}>Custom reminders</span>
+                  </div>
+                  <div onClick={()=>setScheduleForm({})} style={{ cursor:'pointer', display:'flex', alignItems:'center', gap:5, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:'#fff', background:C.forest, borderRadius:999, padding:'6px 12px' }}>
+                    <IconPlus s={11} c="#fff" w={2}/> Add
+                  </div>
+                </div>
+                {(plant.schedules || []).length ? (plant.schedules.map(s => (
+                  <ScheduleRow key={s.id} schedule={s} onMarkDone={onMarkScheduleDone ? id=>onMarkScheduleDone(plant.id, id) : ()=>{}} onEdit={setScheduleForm}/>
+                ))) : (
+                  <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.55 }}>Misting, fertilizing, rotating — anything on its own schedule, with its own push toggle.</div>
+                )}
+              </div>
+            )}
             {(() => {
               const mismatch = roomLight ? roomLightMismatch(plant, roomLight) : null;
               if (!mismatch) return null;
@@ -346,24 +388,6 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 </InfoTile>
               );
             })()}
-            {!readonly && (
-              <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:'14px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)' }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: (plant.schedules||[]).length ? 4 : 0 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ width:24, height:24, borderRadius:7, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 6v6l4 2" stroke={C.forest} strokeWidth="1.8" strokeLinecap="round"/><circle cx="12" cy="12" r="8.5" stroke={C.forest} strokeWidth="1.8"/></svg>
-                    </div>
-                    <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.forest, letterSpacing:0.5, textTransform:'uppercase' }}>Reminders</span>
-                  </div>
-                  <div onClick={()=>setScheduleForm({})} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest, padding:'4px 8px' }}>+ Add</div>
-                </div>
-                {(plant.schedules || []).length ? (plant.schedules.map(s => (
-                  <ScheduleRow key={s.id} schedule={s} onMarkDone={onMarkScheduleDone ? id=>onMarkScheduleDone(plant.id, id) : ()=>{}} onEdit={setScheduleForm}/>
-                ))) : (
-                  <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.55 }}>No custom reminders yet — misting, fertilizing, rotating, anything on its own schedule.</div>
-                )}
-              </div>
-            )}
             <div style={{ display:'flex', alignItems:'center', gap:6, padding:'2px 4px' }}>
               <LeafOutline size={11} color={C.brown} sw={1.5}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.55, letterSpacing:0.2 }}>Care data &amp; photo via Perenual, House Plants &amp; Wikipedia</span>

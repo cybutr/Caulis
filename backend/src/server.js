@@ -49,7 +49,10 @@ function plantNeedsWater(p) {
 }
 function dueSchedules(p) {
   const schedules = Array.isArray(p.schedules) ? p.schedules : [];
-  return schedules.filter(s => s && s.label && isDue(s.lastDoneAt, s.everyDays));
+  // pushEnabled defaults true (schedules created before this field existed
+  // have it undefined) — only an explicit false ever suppresses a push,
+  // independent of the global customRemindersEnabled toggle
+  return schedules.filter(s => s && s.label && s.pushEnabled !== false && isDue(s.lastDoneAt, s.everyDays));
 }
 
 async function sendPush(sub, payload) {
