@@ -76,8 +76,22 @@ function App() {
   // an explicit confirm in-app is what actually stops that, since a person
   // who didn't generate the link themselves has no reason to recognize the
   // garden key it names and can decline.
+  const MIGRATION_STALE_MS = 10 * 60 * 1000;
   const [pendingMigration, setPendingMigration] = useState(() => {
-    try { const raw = sessionStorage.getItem('caulis_pending_migration'); return raw ? JSON.parse(raw) : null; } catch(e) { return null; }
+    try {
+      const raw = sessionStorage.getItem('caulis_pending_migration');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      // older/no stagedAt (or an unanswered payload sitting past the window) — an
+      // iOS PWA can "relaunch" from sessionStorage many times without ever really
+      // closing, so an unattended confirm must expire instead of re-showing forever
+      const stagedAt = parsed && parsed.stagedAt;
+      if (!stagedAt || Date.now() - stagedAt > MIGRATION_STALE_MS) {
+        sessionStorage.removeItem('caulis_pending_migration');
+        return null;
+      }
+      return parsed.payload;
+    } catch(e) { return null; }
   });
   const confirmMigration = () => {
     if (!pendingMigration) return;
@@ -1311,11 +1325,11 @@ function App() {
   // (lastDoneAt/history, statusOf-compatible days/every) rather than a
   // parallel status mechanism, and stored as just another field inside each
   // plant object so the existing plants[] sync/merge path already covers it.
-  const addSchedule = (plantId, { label, everyDays, pushEnabled = true }) => {
+  const addSchedule = (plantId, { label, everyDays, pushEnabled = true, icon }) => {
     haptic('light');
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
     setPlants(ps => ps.map(p => p.id !== plantId ? p : {
-      ...p, schedules: [...(p.schedules || []), { id, label, everyDays: Math.max(1, everyDays | 0), pushEnabled, lastDoneAt: null, history: [] }],
+      ...p, schedules: [...(p.schedules || []), { id, label, everyDays: Math.max(1, everyDays | 0), pushEnabled, icon: icon || defaultScheduleIcon(label), lastDoneAt: null, history: [] }],
     }));
   };
   const editSchedule = (plantId, scheduleId, changes) => {

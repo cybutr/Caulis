@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '173'; // keep in sync with sw.js CACHE
+const APP_VERSION = '174'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -740,6 +740,110 @@ function IconCopy({ s = 16, c = C.ink, a = 0.55 }) {
   </svg>);
 }
 
+// ── curated reminder icon set — same line-art language/isw() convention as
+// every Icon* above; a fixed, hand-drawn set rather than free SVG upload
+// (no sanitization pipeline in this repo, no build step to vet an asset)
+function IconMist({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <path d="M8 21v-7.5a3 3 0 0 1 3-3h1a3 3 0 0 1 3 3V21" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M9.5 10.5V4l2-2 2 2v6.5" stroke={c} strokeWidth={isw(1.7)} strokeLinejoin="round"/>
+    <path d="M17 8.5l2.2-1.2M18 12h2.5M17 15.5l2.2 1.2" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round"/>
+  </svg>);
+}
+function IconFertilize({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <path d="M7 10.5h10l-1.3 9a2 2 0 0 1-2 1.7h-3.4a2 2 0 0 1-2-1.7l-1.3-9Z" stroke={c} strokeWidth={isw(1.7)} strokeLinejoin="round"/>
+    <path d="M9 10.5V7a3 3 0 0 1 6 0v3.5" stroke={c} strokeWidth={isw(1.7)} strokeLinejoin="round"/>
+    <path d="M12 13.5v5M9.7 15.5h4.6" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round"/>
+  </svg>);
+}
+function IconSun({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <circle cx="12" cy="12" r="4.5" stroke={c} strokeWidth={isw(1.8)}/>
+    <path d="M12 2.5v2.4M12 19.1v2.4M21.5 12h-2.4M4.9 12H2.5M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7M18.4 18.4l-1.7-1.7M7.3 7.3 5.6 5.6" stroke={c} strokeWidth={isw(1.8)} strokeLinecap="round"/>
+  </svg>);
+}
+function IconScissors({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <circle cx="6" cy="6.5" r="2.5" stroke={c} strokeWidth={isw(1.7)}/>
+    <circle cx="6" cy="17.5" r="2.5" stroke={c} strokeWidth={isw(1.7)}/>
+    <path d="M8 8.2 20 19M8 15.8 20 5" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
+  </svg>);
+}
+function IconRepot({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <path d="M6 9h12l-1.4 10.2a2 2 0 0 1-2 1.8H9.4a2 2 0 0 1-2-1.8L6 9Z" stroke={c} strokeWidth={isw(1.7)} strokeLinejoin="round"/>
+    <path d="M4.5 9h15" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
+    <path d="M9.5 9V6.5a2.5 2.5 0 0 1 5 0V9" stroke={c} strokeWidth={isw(1.7)}/>
+  </svg>);
+}
+function IconClock({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <circle cx="12" cy="12" r="8.5" stroke={c} strokeWidth={isw(1.7)}/>
+    <path d="M12 7.5V12l3.2 2" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>);
+}
+function IconCalendarCheck({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke={c} strokeWidth={isw(1.7)}/>
+    <path d="M3.5 9.5h17M8 3v3.5M16 3v3.5" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
+    <path d="M8.5 14.3l2.2 2.2 4.3-4.6" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>);
+}
+function IconThermometer({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <path d="M13.5 13.2V5.5a1.5 1.5 0 0 0-3 0v7.7a3.5 3.5 0 1 0 3 0Z" stroke={c} strokeWidth={isw(1.7)} strokeLinejoin="round"/>
+    <circle cx="12" cy="16.5" r="1.4" fill={c}/>
+  </svg>);
+}
+function IconRotate({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <path d="M4.5 12a7.5 7.5 0 0 1 12.6-5.5M19.5 12a7.5 7.5 0 0 1-12.6 5.5" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
+    <path d="M17.5 3.5v3.5H14M6.5 20.5V17H10" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>);
+}
+function IconWipe({ s = 24, c = C.ink, a = 1 }) {
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
+    <path d="M5 19c3-1 5.5-3.5 6.5-6.5C13 8 16 6 19 5.5" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
+    <path d="M15.5 5.5c1 1.3 1 3-.3 4.7" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round" opacity="0.6"/>
+    <circle cx="6" cy="19.5" r="1.4" fill={c}/>
+  </svg>);
+}
+
+// key → { label, Icon } — SCHEDULE_ICON_ORDER drives picker grid order,
+//'leaf'/'droplet' reuse the existing LeafOutline/IconDrop rather than
+// redrawing what already exists in this file's visual language
+const SCHEDULE_ICONS = {
+  droplet:  { label: 'Water',    Icon: (p) => <IconDrop {...p}/> },
+  mist:     { label: 'Mist',     Icon: (p) => <IconMist {...p}/> },
+  fertilize:{ label: 'Fertilize',Icon: (p) => <IconFertilize {...p}/> },
+  sun:      { label: 'Light',    Icon: (p) => <IconSun {...p}/> },
+  scissors: { label: 'Prune',    Icon: (p) => <IconScissors {...p}/> },
+  repot:    { label: 'Repot',    Icon: (p) => <IconRepot {...p}/> },
+  rotate:   { label: 'Rotate',   Icon: (p) => <IconRotate {...p}/> },
+  wipe:     { label: 'Clean',    Icon: (p) => <IconWipe {...p}/> },
+  leaf:     { label: 'Leaf',     Icon: ({ s, c, a }) => <LeafOutline size={s} color={c} sw={1.4}/> },
+  thermometer:{ label: 'Temp',   Icon: (p) => <IconThermometer {...p}/> },
+  clock:    { label: 'Clock',    Icon: (p) => <IconClock {...p}/> },
+  calendar: { label: 'Calendar', Icon: (p) => <IconCalendarCheck {...p}/> },
+};
+const SCHEDULE_ICON_ORDER = ['droplet','mist','fertilize','sun','scissors','repot','rotate','wipe','leaf','thermometer','clock','calendar'];
+// simple keyword fallback, not real NLP — a sensible default beats a blank
+// generic marker on every existing schedule that predates this feature
+function defaultScheduleIcon(label) {
+  const l = (label || '').toLowerCase();
+  if (/mist|spray|humid/.test(l)) return 'mist';
+  if (/water/.test(l)) return 'droplet';
+  if (/fertil|feed|nutrient/.test(l)) return 'fertilize';
+  if (/sun|light|rotate|turn/.test(l)) return /rotate|turn/.test(l) ? 'rotate' : 'sun';
+  if (/prune|trim|cut/.test(l)) return 'scissors';
+  if (/repot|pot/.test(l)) return 'repot';
+  if (/clean|wipe|dust/.test(l)) return 'wipe';
+  if (/temp/.test(l)) return 'thermometer';
+  return 'calendar';
+}
+function scheduleIconKey(schedule) { return (schedule && schedule.icon && SCHEDULE_ICONS[schedule.icon]) ? schedule.icon : defaultScheduleIcon(schedule && schedule.label); }
+
 // ════════════════════════════════════════════════════════════
 //  Small shared components
 // ════════════════════════════════════════════════════════════
@@ -919,6 +1023,8 @@ Object.assign(window, {
   FONT_PAIRINGS, FONT_PAIRING_ORDER, applyFontPairing,
   Leaf, LeafOutline, Sprig, gardenGrowthStage, trackSeenValue,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy, IconPipette,
+  IconMist, IconFertilize, IconSun, IconScissors, IconRepot, IconClock, IconCalendarCheck, IconThermometer, IconRotate, IconWipe,
+  SCHEDULE_ICONS, SCHEDULE_ICON_ORDER, defaultScheduleIcon, scheduleIconKey,
   StatusDot, LocationPill, StatusTag, Specimen,
   SEED_LOCATIONS,
   useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION, MOTION,

@@ -30,8 +30,13 @@ function ScheduleRow({ schedule, onMarkDone, onEdit }) {
   const days = schedule.lastDoneAt ? daysSinceMidnight(schedule.lastDoneAt) : null;
   const status = days == null ? 'needs' : statusOf(days, schedule.everyDays);
   const s = STATUS[status];
+  const iconKey = scheduleIconKey(schedule);
+  const ScheduleIcon = SCHEDULE_ICONS[iconKey].Icon;
   return (
     <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 0', borderTop:C.hair }}>
+      <div style={{ width:24, height:24, borderRadius:7, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+        <ScheduleIcon s={14} c={C.forest} a={1}/>
+      </div>
       <span style={{ width:8, height:8, borderRadius:999, background:s.dot, flexShrink:0 }}/>
       <div style={{ flex:1, minWidth:0 }} onClick={()=>onEdit(schedule)}>
         <div style={{ display:'flex', alignItems:'center', gap:5 }}>
@@ -61,11 +66,15 @@ function ScheduleForm({ initial, onSave, onCancel, onDelete }) {
   });
   const [unit, setUnit] = useState(() => (initial && initial.everyDays % 7 === 0) ? 'weeks' : 'days');
   const [pushEnabled, setPushEnabled] = useState(() => initial ? initial.pushEnabled !== false : true);
+  // null (no explicit pick yet) tracks separately from the keyword default so
+  // typing a label before ever touching the picker keeps following the guess
+  const [iconPick, setIconPick] = useState(() => (initial && initial.icon) || null);
+  const icon = iconPick || defaultScheduleIcon(label);
   const valid = label.trim().length > 0 && Number(value) > 0 && Number.isInteger(Number(value));
   const save = () => {
     if (!valid) return;
     const everyDays = unit === 'weeks' ? Number(value) * 7 : Number(value);
-    onSave({ label: label.trim(), everyDays, pushEnabled });
+    onSave({ label: label.trim(), everyDays, pushEnabled, icon });
   };
   return (
     <div onClick={onCancel} style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(20,30,12,0.42)', display:'flex', alignItems:'flex-end', justifyContent:'center', animation:'fade 160ms ease' }}>
@@ -83,6 +92,21 @@ function ScheduleForm({ initial, onSave, onCancel, onDelete }) {
               <div key={u} onClick={()=>setUnit(u)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:rad(9), cursor:'pointer', background: unit===u?C.forest:'transparent', color: unit===u?'#fff':C.ink, opacity: unit===u?1:0.55, fontFamily:FONT_SANS, fontSize:13, fontWeight:600, transition:'all 140ms ease' }}>{u}</div>
             ))}
           </div>
+        </div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.7, letterSpacing:0.4, textTransform:'uppercase', margin:'16px 0 6px' }}>Icon</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+          {SCHEDULE_ICON_ORDER.map(key => {
+            const on = icon === key;
+            const Ico = SCHEDULE_ICONS[key].Icon;
+            return (
+              <div key={key} onClick={()=>setIconPick(key)} title={SCHEDULE_ICONS[key].label} style={{
+                width:36, height:36, borderRadius:rad(11), cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                background: on ? C.forest : 'rgba(45,80,22,0.07)', transition:'background 140ms ease',
+              }}>
+                <Ico s={16} c={on ? '#fff' : C.ink} a={on ? 1 : 0.7}/>
+              </div>
+            );
+          })}
         </div>
         <div onClick={()=>setPushEnabled(v=>!v)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:18, cursor:'pointer' }}>
           <div>

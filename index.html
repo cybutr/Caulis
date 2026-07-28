@@ -74,7 +74,7 @@
         xhr.send();
         if (xhr.status < 400) {
           const { payload } = JSON.parse(xhr.responseText);
-          sessionStorage.setItem('caulis_pending_migration', JSON.stringify(payload));
+          sessionStorage.setItem('caulis_pending_migration', JSON.stringify({ payload, stagedAt: Date.now() }));
         }
       } catch (e) {}
       params.delete('_migrate');

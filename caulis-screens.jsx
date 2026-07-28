@@ -220,6 +220,27 @@ function SettingsSection({ title, open, onToggle, children, id, matched, query, 
   );
 }
 
+// a second, quieter tier of collapse nested inside a SettingsSection body —
+// same open/chevron language, one size down (smaller type, tighter padding,
+// no uppercase section-header treatment) so a dense section (Developer,
+// Appearance) can group its rows without reading as another top-level
+// accordion. Single-open-per-parent is the caller's choice, not baked in here.
+function SubCollapse({ title, open, onToggle, children }) {
+  return (
+    <div style={{ borderRadius:rad(14), border:C.hair, overflow:'hidden', background:C.panel }}>
+      <div onClick={onToggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding:'11px 13px' }}>
+        <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.ink }}>{title}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" style={{ transform: open?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45, flexShrink:0 }}><path d="M6 9l6 6 6-6" stroke={C.brown} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </div>
+      <div style={{ display:'grid', gridTemplateRows: open?'1fr':'0fr', transition:'grid-template-rows 260ms ease' }}>
+        <div style={{ overflow:'hidden', minHeight:0 }}>
+          <div style={{ borderTop:C.hair }}>{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // declaration order of every Settings accordion section, and its heading —
 // drives both search ranking (title hits score highest) and tie-breaking
 // (earlier sections win ties so results stay stable between keystrokes).
@@ -1782,6 +1803,15 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
     setAdminOpenSec(s => { const n = s === id ? null : id; GS.set('caulis_admin_open', n); return n; });
     if (id === 'system' && !adminSystemData && !adminSystemBusy) loadAdminSystem();
   };
+  // same single-open-per-parent SubCollapse pattern as Admin above, reused for
+  // the two sections the user singled out as too dense — Appearance and
+  // Developer each get their own independent namespaced key
+  const [apOpenSec, setApOpenSec] = useState(() => GS.get('caulis_ap_open', null));
+  const isApOpen = (id) => apOpenSec === id;
+  const toggleApSec = (id) => setApOpenSec(s => { const n = s === id ? null : id; GS.set('caulis_ap_open', n); return n; });
+  const [devOpenSec, setDevOpenSec] = useState(() => GS.get('caulis_dev_open2', null));
+  const isDevOpen = (id) => devOpenSec === id;
+  const toggleDevSec = (id) => setDevOpenSec(s => { const n = s === id ? null : id; GS.set('caulis_dev_open2', n); return n; });
   const loadAdminSystem = async () => {
     setAdminSystemBusy(true);
     try { const s = await onAdminGetSystem(adminSecret); if (s) setAdminSystemData(s); } catch (e) {}
@@ -2139,117 +2169,117 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               <input value={gardenName} onChange={e=>onSetGardenName(e.target.value.slice(0,24))} placeholder="Caulis"
                 style={{ width:'100%', boxSizing:'border-box', border:C.hair, borderRadius:rad(11), padding:'9px 12px', fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.forest, background:C.input, outline:'none' }}/>
             </div>
-            <div style={{ padding:'12px 16px', borderTop:C.hair }}>
-              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Accent color</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Theme color for buttons, icons &amp; highlights</div>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:10 }}>
+            <SubCollapse title="Color & palette" open={isApOpen('color')} onToggle={()=>toggleApSec('color')}>
+              <div style={{ padding:'12px 16px' }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Accent color</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Theme color for buttons, icons &amp; highlights</div>
+                  </div>
+                  <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{PALETTES[palette].label}</span>
                 </div>
-                <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{PALETTES[palette].label}</span>
+                <SwatchRow value={palette} onSelect={onSetPalette} options={PALETTE_ORDER.map(key => key === 'custom'
+                  ? { key, label:'Custom', ring:customPaletteColor }
+                  : { key, label:PALETTES[key].label, swatch:PALETTES[key].swatch })}/>
+                {palette === 'custom' && <CustomColorPicker hex={customPaletteColor} onChange={onSetCustomPaletteColor}/>}
               </div>
-              <SwatchRow value={palette} onSelect={onSetPalette} options={PALETTE_ORDER.map(key => key === 'custom'
-                ? { key, label:'Custom', ring:customPaletteColor }
-                : { key, label:PALETTES[key].label, swatch:PALETTES[key].swatch })}/>
-              {palette === 'custom' && <CustomColorPicker hex={customPaletteColor} onChange={onSetCustomPaletteColor}/>}
-            </div>
-            <div style={{ padding:'12px 16px', borderTop:C.hair }}>
-              <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Selected tab highlight</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Independent accent for the active nav tab</div>
+              <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Selected tab highlight</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Independent accent for the active nav tab</div>
+                  </div>
+                  <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{ACCENTS[accent || 'match'].label}</span>
                 </div>
-                <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{ACCENTS[accent || 'match'].label}</span>
+                <SwatchRow value={accent || 'match'} onSelect={onSetAccent} options={ACCENT_ORDER.map(key => {
+                  if (key === 'custom') return { key, label:'Custom', ring:customAccentColor };
+                  const a = ACCENTS[key];
+                  const swatch = a.swatch ? (darkMode ? (a.dark || a.swatch) : a.swatch) : `linear-gradient(135deg, ${C.forest} 50%, ${C.sage} 50%)`;
+                  return { key, label:a.label, swatch, ring: a.swatch || C.forest };
+                })}/>
+                {accent === 'custom' && <CustomColorPicker hex={customAccentColor} onChange={onSetCustomAccentColor}/>}
               </div>
-              <SwatchRow value={accent || 'match'} onSelect={onSetAccent} options={ACCENT_ORDER.map(key => {
-                if (key === 'custom') return { key, label:'Custom', ring:customAccentColor };
-                const a = ACCENTS[key];
-                const swatch = a.swatch ? (darkMode ? (a.dark || a.swatch) : a.swatch) : `linear-gradient(135deg, ${C.forest} 50%, ${C.sage} 50%)`;
-                return { key, label:a.label, swatch, ring: a.swatch || C.forest };
-              })}/>
-              {accent === 'custom' && <CustomColorPicker hex={customAccentColor} onChange={onSetCustomAccentColor}/>}
-            </div>
-            <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
-              <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Shape &amp; photos</span>
-            </div>
-            <div style={{ padding:'8px 16px 12px' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-                <div style={{ flexShrink:0, width:30, height:30, borderRadius:rad(16), background:'rgba(122,158,78,0.22)', border:`1.5px solid ${C.sage}`, transition:'border-radius 160ms ease' }}/>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Corner roundness</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Scales every card, button &amp; sheet corner</div>
+            </SubCollapse>
+            <SubCollapse title="Shape & photos" open={isApOpen('shape')} onToggle={()=>toggleApSec('shape')}>
+              <div style={{ padding:'12px 16px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                  <div style={{ flexShrink:0, width:30, height:30, borderRadius:rad(16), background:'rgba(122,158,78,0.22)', border:`1.5px solid ${C.sage}`, transition:'border-radius 160ms ease' }}/>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Corner roundness</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Scales every card, button &amp; sheet corner</div>
+                  </div>
                 </div>
+                <OptionList value={radiusDensity} onSelect={onSetRadiusDensity} options={RADIUS_ORDER.map(k=>[k, RADIUS_DENSITY[k].label])}/>
               </div>
-              <OptionList value={radiusDensity} onSelect={onSetRadiusDensity} options={RADIUS_ORDER.map(k=>[k, RADIUS_DENSITY[k].label])}/>
-            </div>
-            <div style={{ padding:'0 16px 12px' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-                <div style={{ flexShrink:0, width:30, height:30, borderRadius:rad(8), background:'linear-gradient(135deg, #8FBB5E 0%, #2D5016 100%)', filter:IMAGE_TREATMENTS[imageTreatment].filter, transition:'filter 200ms ease' }}/>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Photo treatment</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How plant photos render everywhere</div>
+              <div style={{ padding:'0 16px 12px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                  <div style={{ flexShrink:0, width:30, height:30, borderRadius:rad(8), background:'linear-gradient(135deg, #8FBB5E 0%, #2D5016 100%)', filter:IMAGE_TREATMENTS[imageTreatment].filter, transition:'filter 200ms ease' }}/>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Photo treatment</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How plant photos render everywhere</div>
+                  </div>
                 </div>
+                <OptionList value={imageTreatment} onSelect={onSetImageTreatment} options={IMAGE_TREATMENT_ORDER.map(k=>[k, IMAGE_TREATMENTS[k].label])}/>
               </div>
-              <OptionList value={imageTreatment} onSelect={onSetImageTreatment} options={IMAGE_TREATMENT_ORDER.map(k=>[k, IMAGE_TREATMENTS[k].label])}/>
-            </div>
-            <div style={{ padding:'0 16px 12px' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-                <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  {statusStyle === 'minimal'
-                    ? <span style={{ fontFamily:FONT_SANS, fontSize:7, fontWeight:800, color:STATUS.needs.dot }}>OK</span>
-                    : <div style={{ width:9, height:9, borderRadius:999, background:STATUS.needs.dot, boxShadow:`0 0 0 3px ${STATUS.needs.ring}` }}/>}
+              <div style={{ padding:'0 16px 12px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                  <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    {statusStyle === 'minimal'
+                      ? <span style={{ fontFamily:FONT_SANS, fontSize:7, fontWeight:800, color:STATUS.needs.dot }}>OK</span>
+                      : <div style={{ width:9, height:9, borderRadius:999, background:STATUS.needs.dot, boxShadow:`0 0 0 3px ${STATUS.needs.ring}` }}/>}
+                  </div>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Status indicator</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Dot with glow, or a plain text label</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Status indicator</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Dot with glow, or a plain text label</div>
-                </div>
+                <OptionList value={statusStyle} onSelect={onSetStatusStyle} options={STATUS_STYLE_ORDER.map(k=>[k, STATUS_STYLES[k].label])}/>
               </div>
-              <OptionList value={statusStyle} onSelect={onSetStatusStyle} options={STATUS_STYLE_ORDER.map(k=>[k, STATUS_STYLES[k].label])}/>
-            </div>
-            <div style={{ padding:'0 16px 12px' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-                <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <IconGear s={16} c={C.ink}/>
+              <div style={{ padding:'0 16px 12px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                  <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <IconGear s={16} c={C.ink}/>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Icon weight</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Line thickness of every UI icon — independent of corner roundness</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Icon weight</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Line thickness of every UI icon — independent of corner roundness</div>
-                </div>
+                <OptionList value={iconStroke} onSelect={onSetIconStroke} options={ICON_STROKE_ORDER.map(k=>[k, ICON_STROKE_LEVELS[k].label])}/>
               </div>
-              <OptionList value={iconStroke} onSelect={onSetIconStroke} options={ICON_STROKE_ORDER.map(k=>[k, ICON_STROKE_LEVELS[k].label])}/>
-            </div>
-            <div style={{ padding:'0 16px 12px' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
-                <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:16, color:C.ink }}>Aa</span>
+              <div style={{ padding:'0 16px 12px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                  <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:16, color:C.ink }}>Aa</span>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Font pairing</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>{FONT_PAIRINGS[fontPairing || 'classic'].label === 'Classic' ? 'The other two load only when picked' : 'Loaded — applies everywhere text appears'}</div>
+                  </div>
                 </div>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Font pairing</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>{FONT_PAIRINGS[fontPairing || 'classic'].label === 'Classic' ? 'The other two load only when picked' : 'Loaded — applies everywhere text appears'}</div>
-                </div>
-              </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:10 }}>
-                {FONT_PAIRING_ORDER.map(k => {
-                  const p = FONT_PAIRINGS[k];
-                  const on = (fontPairing || 'classic') === k;
-                  return (
-                    <div key={k} onClick={()=>onSetFontPairing(k)} style={{
-                      display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, cursor:'pointer',
-                      padding:'10px 12px', borderRadius:rad(12), background: on ? 'rgba(45,80,22,0.08)' : 'transparent',
-                      border: on ? `1px solid ${C.forest}` : '1px solid transparent', transition:'background 160ms, border-color 160ms',
-                    }}>
-                      <div style={{ display:'flex', alignItems:'baseline', gap:9, minWidth:0 }}>
-                        <span style={{ fontFamily:p.serif, fontStyle:'italic', fontWeight:600, fontSize:16, color: on ? C.forest : C.ink, flexShrink:0 }}>Caulis</span>
-                        <span style={{ fontFamily:p.sans, fontSize:11.5, color:C.brown, opacity:0.75, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.label}</span>
+                <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:10 }}>
+                  {FONT_PAIRING_ORDER.map(k => {
+                    const p = FONT_PAIRINGS[k];
+                    const on = (fontPairing || 'classic') === k;
+                    return (
+                      <div key={k} onClick={()=>onSetFontPairing(k)} style={{
+                        display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, cursor:'pointer',
+                        padding:'10px 12px', borderRadius:rad(12), background: on ? 'rgba(45,80,22,0.08)' : 'transparent',
+                        border: on ? `1px solid ${C.forest}` : '1px solid transparent', transition:'background 160ms, border-color 160ms',
+                      }}>
+                        <div style={{ display:'flex', alignItems:'baseline', gap:9, minWidth:0 }}>
+                          <span style={{ fontFamily:p.serif, fontStyle:'italic', fontWeight:600, fontSize:16, color: on ? C.forest : C.ink, flexShrink:0 }}>Caulis</span>
+                          <span style={{ fontFamily:p.sans, fontSize:11.5, color:C.brown, opacity:0.75, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.label}</span>
+                        </div>
+                        {on && <IconCheck s={15} c={C.forest} w={2.2}/>}
                       </div>
-                      {on && <IconCheck s={15} c={C.forest} w={2.2}/>}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-            <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
-              <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Layout</span>
-            </div>
+            </SubCollapse>
             {/* "Columns" and "Padding & gaps" are two genuinely different axes
                 (how many cards per row vs. how tight the padding/gaps are)
                 that used to sit as two similarly-worded rows ("Card density" /
@@ -2259,45 +2289,46 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 separating "Padding & gaps" underneath with its own
                 independent-of-columns description, makes the split obvious
                 at a glance instead of requiring the user to read both twice. */}
-            {!isDesktop && (
-              <div style={{ padding:'8px 16px 12px' }}>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Columns</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How many plant cards sit per row in Garden</div>
-                <OptionList value={gridCols || (cardDensity === 'compact' ? 3 : 2)} onSelect={v => { onSetGridCols(v); onSetDensity(v === 3 ? 'compact' : 'comfy'); }}
-                  options={[[2,'2 columns'],[3,'3 columns'],[4,'4 columns']]}/>
-              </div>
-            )}
-            <div style={{ padding:'0 16px 12px' }}>
-              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Padding &amp; gaps</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Tightness of spacing everywhere — independent of column count</div>
-              <OptionList value={uiDensity} onSelect={onSetUiDensity} options={UI_DENSITY_ORDER.map(k=>[k, UI_DENSITY[k].label])}/>
-            </div>
-            <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
-              <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Background</span>
-            </div>
-            <div style={{ padding:'8px 16px 12px' }}>
-              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Texture</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A very subtle wash behind every screen</div>
-              <OptionList value={bgTexture} onSelect={onSetBgTexture} options={BG_TEXTURE_ORDER.map(k=>[k, BG_TEXTURES[k].label])}/>
-              {bgTexture === 'paper' && (
-                <div style={{ marginTop:10 }}>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:6 }}>Grain intensity</div>
-                  <Segmented value={grainIntensity} onSelect={onSetGrainIntensity} options={GRAIN_ORDER.map(k=>[k, GRAIN_LEVELS[k].label])}/>
+            <SubCollapse title="Layout & spacing" open={isApOpen('layout')} onToggle={()=>toggleApSec('layout')}>
+              {!isDesktop && (
+                <div style={{ padding:'12px 16px' }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Columns</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How many plant cards sit per row in Garden</div>
+                  <OptionList value={gridCols || (cardDensity === 'compact' ? 3 : 2)} onSelect={v => { onSetGridCols(v); onSetDensity(v === 3 ? 'compact' : 'comfy'); }}
+                    options={[[2,'2 columns'],[3,'3 columns'],[4,'4 columns']]}/>
                 </div>
               )}
-            </div>
-            <div style={{ padding:'8px 16px 12px', borderTop:C.hair }}>
-              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden hero photo</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A rotating plant photo at the top of Garden — off, or placed above/below the title</div>
-              <OptionList value={heroBanner || 'below'} onSelect={onSetHeroBanner} options={[['off','Off'],['below','Below title'],['above','Above title']]}/>
-            </div>
-            <div onClick={onToggleReduceMotion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
-              <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Reduce motion</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, marginTop:1 }}>Disable swipe &amp; transition animations</div>
+              <div style={{ padding: isDesktop ? '12px 16px' : '0 16px 12px' }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Padding &amp; gaps</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Tightness of spacing everywhere — independent of column count</div>
+                <OptionList value={uiDensity} onSelect={onSetUiDensity} options={UI_DENSITY_ORDER.map(k=>[k, UI_DENSITY[k].label])}/>
               </div>
-              <ToggleKnob on={reduceMotion}/>
-            </div>
+            </SubCollapse>
+            <SubCollapse title="Background & motion" open={isApOpen('bg')} onToggle={()=>toggleApSec('bg')}>
+              <div style={{ padding:'12px 16px' }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Texture</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A very subtle wash behind every screen</div>
+                <OptionList value={bgTexture} onSelect={onSetBgTexture} options={BG_TEXTURE_ORDER.map(k=>[k, BG_TEXTURES[k].label])}/>
+                {bgTexture === 'paper' && (
+                  <div style={{ marginTop:10 }}>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:6 }}>Grain intensity</div>
+                    <Segmented value={grainIntensity} onSelect={onSetGrainIntensity} options={GRAIN_ORDER.map(k=>[k, GRAIN_LEVELS[k].label])}/>
+                  </div>
+                )}
+              </div>
+              <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden hero photo</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A rotating plant photo at the top of Garden — off, or placed above/below the title</div>
+                <OptionList value={heroBanner || 'below'} onSelect={onSetHeroBanner} options={[['off','Off'],['below','Below title'],['above','Above title']]}/>
+              </div>
+              <div onClick={onToggleReduceMotion} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Reduce motion</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, marginTop:1 }}>Disable swipe &amp; transition animations</div>
+                </div>
+                <ToggleKnob on={reduceMotion}/>
+              </div>
+            </SubCollapse>
           </div>
         </SettingsSection>
         <SettingsSection title="Garden" open={isOpen('garden')} onToggle={()=>toggleSec('garden')} id={'sec-'+'garden'} matched={settingsMatches[settingsMatchIdx] === 'garden'} query={settingsMatches.includes('garden') ? settingsQuery : ''} bodyRef={registerSection('garden')}>
@@ -3087,8 +3118,8 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     {plantEditor(plants, onDevSetDays)}
                   </div>
 
-                  <div style={{ height:1, background:C.line }}/>
-
+                  <SubCollapse title="Watering log & fixes" open={isDevOpen('log')} onToggle={()=>toggleDevSec('log')}>
+                  <div style={{ padding:16, display:'flex', flexDirection:'column', gap:18 }}>
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                     <div style={grpLabel}>Scan for issues</div>
                     {issues.length === 0 ? (
@@ -3183,9 +3214,11 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     </div>
                     );
                   })()}
+                  </div>
+                  </SubCollapse>
 
-                  <div style={{ height:1, background:C.line }}/>
-
+                  <SubCollapse title="Sync tools" open={isDevOpen('sync')} onToggle={()=>toggleDevSec('sync')}>
+                  <div style={{ padding:16, display:'flex', flexDirection:'column', gap:18 }}>
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                     <div style={grpLabel}>Sync / rev</div>
                     <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>
@@ -3211,11 +3244,11 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                     </div>
                     {testPushMsg && <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.brown, opacity:0.8 }}>{testPushMsg}</div>}
                   </div>
+                  </div>
+                  </SubCollapse>
 
-                  <div style={{ height:1, background:C.line }}/>
-
-                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-                    <div style={grpLabel}>Admin</div>
+                  <SubCollapse title="Cross-garden node management" open={isDevOpen('admin')} onToggle={()=>toggleDevSec('admin')}>
+                  <div style={{ padding:16, display:'flex', flexDirection:'column', gap:10 }}>
                     {!adminUnlocked ? (
                       <>
                         <input type="password" value={adminSecret} onChange={e=>{ setAdminSecret(e.target.value); setAdminErr(false); }} onKeyDown={e=>{ if(e.key==='Enter') unlockAdmin(); }} placeholder="Admin secret" style={dInput}/>
@@ -3421,6 +3454,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                       </div>
                     )}
                   </div>
+                  </SubCollapse>
 
                   <div style={{ height:1, background:C.line }}/>
                   <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
