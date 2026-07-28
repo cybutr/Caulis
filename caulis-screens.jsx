@@ -114,6 +114,38 @@ function OptionList({ options, value, onSelect }) {
   );
 }
 
+// the free-form color picker slot — wraps a real <input type="color">
+// (the platform primitive; this repo pulls in zero UI libraries and has no
+// build step, so a color-picker package isn't the right call) in a swatch
+// that matches the rest of this row's visual language as closely as the
+// browser's own color-picker chrome allows. Below it: the live hex value and
+// a REAL computed WCAG contrast check against both theme backgrounds — not a
+// hardcoded guess — so a pick that would be hard to read gets a plain,
+// non-blocking warning instead of silently shipping bad contrast.
+function CustomColorPicker({ hex, onChange }) {
+  const warn = contrastWarningFor(hex);
+  const bad = warn.warnLight || warn.warnDark;
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:11, marginTop:10, padding:'9px 11px', borderRadius:rad(12), background:'rgba(45,80,22,0.05)' }}>
+      <label style={{ position:'relative', width:34, height:34, borderRadius:999, flexShrink:0, cursor:'pointer', boxShadow:'0 1px 3px rgba(43,42,38,0.18)' }}>
+        <input type="color" value={hex} onChange={e=>onChange(e.target.value)}
+          style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, cursor:'pointer', border:'none', padding:0 }}/>
+        <div style={{ position:'absolute', inset:0, borderRadius:999, background:hex, pointerEvents:'none' }}/>
+      </label>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontFamily:'ui-monospace, "SF Mono", Menlo, monospace', fontSize:12.5, fontWeight:600, color:C.ink }}>{hex.toUpperCase()}</div>
+        {bad ? (
+          <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:'#B4472E', opacity:0.9, marginTop:2, lineHeight:1.35 }}>
+            Low contrast{warn.warnLight && warn.warnDark ? ' in light & dark mode' : warn.warnLight ? ' in light mode' : ' in dark mode'} — may be hard to read ({(warn.warnLight ? warn.light : warn.dark).toFixed(1)}:1)
+          </div>
+        ) : (
+          <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.5, marginTop:2 }}>Tap the swatch to pick any color</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // a pill-style segmented picker — shared by every 2-4 option Appearance
 // control (card density, radius density, image treatment, spacing, texture)
 function Segmented({ options, value, onSelect }) {
@@ -272,7 +304,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
 }
 
 // ── Shared screen header ──────────────────────────────────
-function ScreenHead({ eyebrow, title, isDesktop }) {
+function ScreenHead({ eyebrow, title, isDesktop, appName }) {
   return (
     <div style={{ padding: isDesktop ? '32px 28px 0' : '56px 22px 0', position:'relative', zIndex:2 }}>
       {!isDesktop && (
@@ -280,7 +312,7 @@ function ScreenHead({ eyebrow, title, isDesktop }) {
           <div style={{ width:30, height:30, borderRadius:999, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
             <Leaf size={16} color={C.forest}/>
           </div>
-          <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:26, color:C.forest, letterSpacing:0.3 }}>Caulis</span>
+          <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:26, color:C.forest, letterSpacing:0.3 }}>{appName || 'Caulis'}</span>
         </div>
       )}
       <div style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:500, color:C.brown, opacity:0.72, marginTop: isDesktop ? 0 : 0, letterSpacing:0.4, textTransform:'uppercase' }}>{eyebrow}</div>
@@ -382,7 +414,7 @@ function EmptyGarden({ onAdd }) {
   );
 }
 
-function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges }) {
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName }) {
   const [healthOpen, setHealthOpen] = useState(false);
   const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
@@ -466,7 +498,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
                 <div style={{ width:30, height:30, borderRadius:999, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                   <Leaf size={16} color={C.forest}/>
                 </div>
-                <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:30, color:C.forest, letterSpacing:0.3 }}>Caulis</span>
+                <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:30, color:C.forest, letterSpacing:0.3 }}>{gardenName || 'Caulis'}</span>
               </div>
             )}
             <div style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.3, textTransform:'uppercase' }}>{todayGreeting()}</div>
@@ -873,7 +905,7 @@ function WaterAllPicker({ counts, defaultScope, onPick, onClose }) {
   );
 }
 
-function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, onWaterOne, confirmDelete, isDesktop, czechMode }) {
+function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, onWaterOne, confirmDelete, isDesktop, czechMode, gardenName }) {
   const order = { needs:0, soon:1 };
   const list = plants.filter(p=>statusOf(p.days,p.every,p.snoozedUntil)!=='ok')
     .sort((a,b)=> order[statusOf(a.days,a.every,a.snoozedUntil)] - order[statusOf(b.days,b.every,b.snoozedUntil)]);
@@ -904,7 +936,7 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
       <Sprig opacity={0.16}/>
-      <ScreenHead eyebrow="Today's round" title={list.length ? `${list.length} plants are thirsty` : 'All caught up'} isDesktop={isDesktop}/>
+      <ScreenHead eyebrow="Today's round" title={list.length ? `${list.length} plants are thirsty` : 'All caught up'} isDesktop={isDesktop} appName={gardenName}/>
       {plants.length > 0 && (
         <div style={{ display:'flex', justifyContent:'flex-end', padding:`0 ${sp}px`, marginTop:-8, position:'relative', zIndex:3 }}>
           <div onClick={()=>setPicking(true)} style={{ display:'inline-flex', alignItems:'center', gap:7, padding:'9px 15px', borderRadius:999, cursor:'pointer', background:'rgba(45,80,22,0.08)', color:C.forest, transition:'background 180ms' }}>
@@ -1281,7 +1313,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1841,7 +1873,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
   return (
     <div style={{ minHeight:'100%', position:'relative', paddingBottom:24 }}>
       <Sprig opacity={0.14}/>
-      <ScreenHead eyebrow="Preferences" title="Settings" isDesktop={isDesktop}/>
+      <ScreenHead eyebrow="Preferences" title="Settings" isDesktop={isDesktop} appName={gardenName}/>
       <div style={{ padding:`22px ${sp}px 0`, position:'relative', zIndex:2, display:'flex', gap:28, alignItems:'flex-start' }}>
       <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? 680 : undefined }}>
         <div style={{ position:'relative' }}>
@@ -1883,6 +1915,12 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               </div>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden name</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:8 }}>Shown in place of "Caulis" at the top of every screen</div>
+              <input value={gardenName} onChange={e=>onSetGardenName(e.target.value.slice(0,24))} placeholder="Caulis"
+                style={{ width:'100%', boxSizing:'border-box', border:C.hair, borderRadius:rad(11), padding:'9px 12px', fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:16, color:C.forest, background:C.input, outline:'none' }}/>
+            </div>
+            <div style={{ padding:'12px 16px', borderTop:C.hair }}>
               <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
                 <div>
                   <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Accent color</div>
@@ -1890,7 +1928,10 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 </div>
                 <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{PALETTES[palette].label}</span>
               </div>
-              <SwatchRow value={palette} onSelect={onSetPalette} options={PALETTE_ORDER.map(key => ({ key, label:PALETTES[key].label, swatch:PALETTES[key].swatch }))}/>
+              <SwatchRow value={palette} onSelect={onSetPalette} options={PALETTE_ORDER.map(key => key === 'custom'
+                ? { key, label:'Custom', swatch:'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', ring:customPaletteColor }
+                : { key, label:PALETTES[key].label, swatch:PALETTES[key].swatch })}/>
+              {palette === 'custom' && <CustomColorPicker hex={customPaletteColor} onChange={onSetCustomPaletteColor}/>}
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
               <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
@@ -1901,10 +1942,12 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>{ACCENTS[accent || 'match'].label}</span>
               </div>
               <SwatchRow value={accent || 'match'} onSelect={onSetAccent} options={ACCENT_ORDER.map(key => {
+                if (key === 'custom') return { key, label:'Custom', swatch:'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)', ring:customAccentColor };
                 const a = ACCENTS[key];
                 const swatch = a.swatch ? (darkMode ? (a.dark || a.swatch) : a.swatch) : `linear-gradient(135deg, ${C.forest} 50%, ${C.sage} 50%)`;
                 return { key, label:a.label, swatch, ring: a.swatch || C.forest };
               })}/>
+              {accent === 'custom' && <CustomColorPicker hex={customAccentColor} onChange={onSetCustomAccentColor}/>}
             </div>
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Shape &amp; photos</span>
@@ -1942,6 +1985,18 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 </div>
               </div>
               <OptionList value={statusStyle} onSelect={onSetStatusStyle} options={STATUS_STYLE_ORDER.map(k=>[k, STATUS_STYLES[k].label])}/>
+            </div>
+            <div style={{ padding:'0 16px 12px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11 }}>
+                <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <IconGear s={16} c={C.ink}/>
+                </div>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Icon weight</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Line thickness of every UI icon — independent of corner roundness</div>
+                </div>
+              </div>
+              <OptionList value={iconStroke} onSelect={onSetIconStroke} options={ICON_STROKE_ORDER.map(k=>[k, ICON_STROKE_LEVELS[k].label])}/>
             </div>
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Layout</span>

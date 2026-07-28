@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '170'; // keep in sync with sw.js CACHE
+const APP_VERSION = '171'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -90,8 +90,101 @@ const PALETTES = {
   amber:  { label:'Amber',  swatch:'#8A6A12', light:{ forest:'#8A6A12', sage:'#C0973E' }, dark:{ forest:'#E0B84E', sage:'#D8C074' } },
   rose:   { label:'Rose',   swatch:'#8A2A3E', light:{ forest:'#8A2A3E', sage:'#C06478' }, dark:{ forest:'#E08096', sage:'#E0A0B0' } },
 };
-const PALETTE_ORDER = ['forest','teal','plum','clay','ocean','amber','rose'];
+// ── color math — plain hex/HSL conversions + WCAG relative luminance, no
+// dependency, used to derive a full palette (light/dark forest+sage) from a
+// single user-picked hex and to compute a real contrast ratio against both
+// theme backgrounds (never a hardcoded guess)
+function hexToRgb(hex) {
+  let h = String(hex).replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function rgbToHex({ r, g, b }) {
+  return '#' + [r, g, b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+}
+function rgbToHsl({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0; const l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  return { h: h * 360, s: s * 100, l: l * 100 };
+}
+function hslToRgb({ h, s, l }) {
+  h /= 360; s /= 100; l /= 100;
+  if (s === 0) { const v = l * 255; return { r: v, g: v, b: v }; }
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1; if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return { r: hue2rgb(p, q, h + 1 / 3) * 255, g: hue2rgb(p, q, h) * 255, b: hue2rgb(p, q, h - 1 / 3) * 255 };
+}
+const clampL = (l, min, max) => Math.max(min, Math.min(max, l));
+// one custom hue → a full forest/sage pair for both themes, in the same
+// spirit as the curated PALETTES: light mode darkens toward the base hue,
+// dark mode lifts it into a brighter tint of the same hue (mirrors how
+// e.g. teal/plum/ocean above pair a deep light color with a lit-up dark one)
+function deriveShadesFromHex(hex) {
+  const hsl = rgbToHsl(hexToRgb(hex));
+  return {
+    light: {
+      forest: rgbToHex(hslToRgb({ h: hsl.h, s: hsl.s, l: clampL(hsl.l, 14, 40) })),
+      sage:   rgbToHex(hslToRgb({ h: hsl.h, s: Math.max(20, hsl.s - 15), l: clampL(hsl.l + 22, 40, 64) })),
+    },
+    dark: {
+      forest: rgbToHex(hslToRgb({ h: hsl.h, s: Math.min(90, hsl.s + 5), l: clampL(hsl.l + 32, 55, 82) })),
+      sage:   rgbToHex(hslToRgb({ h: hsl.h, s: Math.max(25, hsl.s - 10), l: clampL(hsl.l + 40, 60, 86) })),
+    },
+  };
+}
+// the independent tab-highlight accent only needs a single dark-mode variant
+function deriveAccentDark(hex) {
+  const hsl = rgbToHsl(hexToRgb(hex));
+  return rgbToHex(hslToRgb({ h: hsl.h, s: Math.min(95, hsl.s + 5), l: clampL(hsl.l + 28, 55, 84) }));
+}
+function relLuminance(hex) {
+  const { r, g, b } = hexToRgb(hex);
+  const chan = v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+  return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b);
+}
+function contrastRatio(hexA, hexB) {
+  const a = relLuminance(hexA), b = relLuminance(hexB);
+  const lighter = Math.max(a, b), darker = Math.min(a, b);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+// real computed WCAG contrast against both theme backgrounds — not a guess.
+// 3:1 is the WCAG 2.1 minimum for large text / UI components, appropriate
+// here since the accent is mostly used for icons, pills and headings rather
+// than small body copy.
+function contrastWarningFor(hex) {
+  try {
+    const light = Math.round(contrastRatio(hex, C_LIGHT.bg) * 100) / 100;
+    const dark = Math.round(contrastRatio(hex, C_DARK.bg) * 100) / 100;
+    return { light, dark, warnLight: light < 3, warnDark: dark < 3 };
+  } catch (e) { return { light: 21, dark: 21, warnLight: false, warnDark: false }; }
+}
+
+const PALETTE_ORDER = ['forest','teal','plum','clay','ocean','amber','rose','custom'];
 let activePalette = 'forest';
+// seeded with a sane default so PALETTES.custom always exists even before the
+// user ever opens the color picker
+PALETTES.custom = { label: 'Custom', swatch: '#2D5016', ...deriveShadesFromHex('#2D5016') };
+function applyCustomPaletteColor(hex) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  PALETTES.custom = { label: 'Custom', swatch: hex, ...deriveShadesFromHex(hex) };
+}
 
 // the "active/selected" highlight — independent of the main forest/sage
 // accent pair above so someone can e.g. run a Teal palette with an Amber
@@ -107,8 +200,13 @@ const ACCENTS = {
   amber:  { label:'Amber',  swatch:'#8A6A12', dark:'#E0B84E' },
   rose:   { label:'Rose',   swatch:'#8A2A3E', dark:'#E08096' },
 };
-const ACCENT_ORDER = ['match','forest','teal','plum','clay','ocean','amber','rose'];
+const ACCENT_ORDER = ['match','forest','teal','plum','clay','ocean','amber','rose','custom'];
 let activeAccent = 'match';
+ACCENTS.custom = { label: 'Custom', swatch: '#2D5016', dark: deriveAccentDark('#2D5016') };
+function applyCustomAccentColor(hex) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  ACCENTS.custom = { label: 'Custom', swatch: hex, dark: deriveAccentDark(hex) };
+}
 
 // corner-radius density — one multiplier over the whole radius scale (11-22px
 // tiles/inputs, 16 buttons, 18 rows, 20-22 cards/sheets) so a single setting
@@ -468,84 +566,84 @@ function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2, onT
 // ════════════════════════════════════════════════════════════
 function IconGarden({ s = 24, c = C.ink, a = 1 }) {
   return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
-    <rect x="3.5" y="3.5" width="7" height="7" rx="2" stroke={c} strokeWidth="1.7"/>
-    <rect x="13.5" y="3.5" width="7" height="7" rx="2" stroke={c} strokeWidth="1.7"/>
-    <rect x="3.5" y="13.5" width="7" height="7" rx="2" stroke={c} strokeWidth="1.7"/>
-    <rect x="13.5" y="13.5" width="7" height="7" rx="2" stroke={c} strokeWidth="1.7"/>
+    <rect x="3.5" y="3.5" width="7" height="7" rx="2" stroke={c} strokeWidth={isw(1.7)}/>
+    <rect x="13.5" y="3.5" width="7" height="7" rx="2" stroke={c} strokeWidth={isw(1.7)}/>
+    <rect x="3.5" y="13.5" width="7" height="7" rx="2" stroke={c} strokeWidth={isw(1.7)}/>
+    <rect x="13.5" y="13.5" width="7" height="7" rx="2" stroke={c} strokeWidth={isw(1.7)}/>
   </svg>);
 }
 function IconDrop({ s = 24, c = C.ink, a = 1, fill = false }) {
   return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
     <path d="M12 3.5C12 3.5 5 11 5 15.5a7 7 0 0014 0C19 11 12 3.5 12 3.5Z"
-      stroke={c} strokeWidth="1.7" fill={fill ? c : 'none'} strokeLinejoin="round"/>
+      stroke={c} strokeWidth={isw(1.7)} fill={fill ? c : 'none'} strokeLinejoin="round"/>
   </svg>);
 }
 function IconScan({ s = 26, c = '#fff' }) {
   return (<svg width={s} height={s} viewBox="0 0 28 28" fill="none">
     <path d="M3 8.5V6a3 3 0 013-3h2.5M19.5 3H22a3 3 0 013 3v2.5M25 19.5V22a3 3 0 01-3 3h-2.5M8.5 25H6a3 3 0 01-3-3v-2.5"
-      stroke={c} strokeWidth="2" strokeLinecap="round"/>
-    <rect x="8" y="8" width="12" height="12" rx="2.5" stroke={c} strokeWidth="2"/>
-    <path d="M3 14h22" stroke={c} strokeWidth="1.4" strokeLinecap="round" opacity="0.55"/>
+      stroke={c} strokeWidth={isw(2)} strokeLinecap="round"/>
+    <rect x="8" y="8" width="12" height="12" rx="2.5" stroke={c} strokeWidth={isw(2)}/>
+    <path d="M3 14h22" stroke={c} strokeWidth={isw(1.4)} strokeLinecap="round" opacity="0.55"/>
   </svg>);
 }
 function IconPrint({ s = 24, c = C.ink, a = 1 }) {
   return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
-    <path d="M7 9V4h10v5" stroke={c} strokeWidth="1.7" strokeLinejoin="round"/>
-    <rect x="3.5" y="9" width="17" height="8" rx="2" stroke={c} strokeWidth="1.7"/>
-    <rect x="7" y="14" width="10" height="6" rx="1" stroke={c} strokeWidth="1.7"/>
+    <path d="M7 9V4h10v5" stroke={c} strokeWidth={isw(1.7)} strokeLinejoin="round"/>
+    <rect x="3.5" y="9" width="17" height="8" rx="2" stroke={c} strokeWidth={isw(1.7)}/>
+    <rect x="7" y="14" width="10" height="6" rx="1" stroke={c} strokeWidth={isw(1.7)}/>
     <circle cx="17" cy="12.2" r="1" fill={c}/>
   </svg>);
 }
 function IconGear({ s = 24, c = C.ink, a = 1 }) {
   return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a}}>
-    <circle cx="12" cy="12" r="3.2" stroke={c} strokeWidth="1.7"/>
+    <circle cx="12" cy="12" r="3.2" stroke={c} strokeWidth={isw(1.7)}/>
     <path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3"
-      stroke={c} strokeWidth="1.7" strokeLinecap="round"/>
+      stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
   </svg>);
 }
 function IconPlus({ s = 16, c = C.forest, w = 1.7 }) {
-  return (<svg width={s} height={s} viewBox="0 0 16 16"><path d="M8 2.5v11M2.5 8h11" stroke={c} strokeWidth={w} strokeLinecap="round"/></svg>);
+  return (<svg width={s} height={s} viewBox="0 0 16 16"><path d="M8 2.5v11M2.5 8h11" stroke={c} strokeWidth={isw(w)} strokeLinecap="round"/></svg>);
 }
 function IconBack({ s = 20, c = C.forest }) {
-  return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none"><path d="M12.5 4 6.5 10l6 6" stroke={c} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg>);
+  return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none"><path d="M12.5 4 6.5 10l6 6" stroke={c} strokeWidth={isw(1.9)} strokeLinecap="round" strokeLinejoin="round"/></svg>);
 }
 function IconMore({ s = 24, c = C.ink, a = 1 }) {
   return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" opacity={a}><circle cx="5" cy="12" r="1.7" fill={c}/><circle cx="12" cy="12" r="1.7" fill={c}/><circle cx="19" cy="12" r="1.7" fill={c}/></svg>);
 }
 function IconDoctor({ s = 24, c = C.ink, a = 1 }) {
   return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" opacity={a}>
-    <path d="M6 3v5a4 4 0 0 0 8 0V3" stroke={c} strokeWidth="1.7" strokeLinecap="round"/>
-    <path d="M5 3h2M13 3h2" stroke={c} strokeWidth="1.7" strokeLinecap="round"/>
-    <path d="M10 12v3.5a4.5 4.5 0 0 0 9 0V14" stroke={c} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-    <circle cx="19" cy="12.5" r="2" stroke={c} strokeWidth="1.7"/>
+    <path d="M6 3v5a4 4 0 0 0 8 0V3" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
+    <path d="M5 3h2M13 3h2" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
+    <path d="M10 12v3.5a4.5 4.5 0 0 0 9 0V14" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="19" cy="12.5" r="2" stroke={c} strokeWidth={isw(1.7)}/>
   </svg>);
 }
 function IconCheck({ s = 18, c = '#fff', w = 2 }) {
-  return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none"><path d="M4 10.5 8 14.5 16 6" stroke={c} strokeWidth={w} strokeLinecap="round" strokeLinejoin="round"/></svg>);
+  return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none"><path d="M4 10.5 8 14.5 16 6" stroke={c} strokeWidth={isw(w)} strokeLinecap="round" strokeLinejoin="round"/></svg>);
 }
 function IconPin({ s = 13, c = C.brown }) {
   return (<svg width={s} height={s} viewBox="0 0 14 14" fill="none">
-    <path d="M7 1.5c-2.5 0-4.3 1.9-4.3 4.2C2.7 8.8 7 12.5 7 12.5s4.3-3.7 4.3-6.8C11.3 3.4 9.5 1.5 7 1.5Z" stroke={c} strokeWidth="1.2"/>
-    <circle cx="7" cy="5.7" r="1.5" stroke={c} strokeWidth="1.2"/>
+    <path d="M7 1.5c-2.5 0-4.3 1.9-4.3 4.2C2.7 8.8 7 12.5 7 12.5s4.3-3.7 4.3-6.8C11.3 3.4 9.5 1.5 7 1.5Z" stroke={c} strokeWidth={isw(1.2)}/>
+    <circle cx="7" cy="5.7" r="1.5" stroke={c} strokeWidth={isw(1.2)}/>
   </svg>);
 }
 function IconEye({ s = 16, c = C.ink, a = 0.55 }) {
   return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none" opacity={a}>
-    <path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>
-    <circle cx="10" cy="10" r="2.4" stroke={c} strokeWidth="1.5"/>
+    <path d="M1.5 10S4.5 4 10 4s8.5 6 8.5 6-3 6-8.5 6-8.5-6-8.5-6Z" stroke={c} strokeWidth={isw(1.5)} strokeLinejoin="round"/>
+    <circle cx="10" cy="10" r="2.4" stroke={c} strokeWidth={isw(1.5)}/>
   </svg>);
 }
 function IconEyeOff({ s = 16, c = C.ink, a = 0.55 }) {
   return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none" opacity={a}>
-    <path d="M2.5 2.5l15 15" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
-    <path d="M8.3 4.4C8.85 4.14 9.42 4 10 4c5.5 0 8.5 6 8.5 6a15 15 0 0 1-2.3 3.1M5.7 5.7A15 15 0 0 0 1.5 10s3 6 8.5 6c1 0 1.9-.18 2.7-.5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M8.2 8.2a2.4 2.4 0 0 0 3.3 3.3" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M2.5 2.5l15 15" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round"/>
+    <path d="M8.3 4.4C8.85 4.14 9.42 4 10 4c5.5 0 8.5 6 8.5 6a15 15 0 0 1-2.3 3.1M5.7 5.7A15 15 0 0 0 1.5 10s3 6 8.5 6c1 0 1.9-.18 2.7-.5" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M8.2 8.2a2.4 2.4 0 0 0 3.3 3.3" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round"/>
   </svg>);
 }
 function IconCopy({ s = 16, c = C.ink, a = 0.55 }) {
   return (<svg width={s} height={s} viewBox="0 0 20 20" fill="none" opacity={a}>
-    <rect x="7" y="7" width="10.5" height="10.5" rx="2" stroke={c} strokeWidth="1.5"/>
-    <path d="M13 7V4.5A1.5 1.5 0 0 0 11.5 3H4a1.5 1.5 0 0 0-1.5 1.5V12a1.5 1.5 0 0 0 1.5 1.5H7" stroke={c} strokeWidth="1.5" strokeLinecap="round"/>
+    <rect x="7" y="7" width="10.5" height="10.5" rx="2" stroke={c} strokeWidth={isw(1.5)}/>
+    <path d="M13 7V4.5A1.5 1.5 0 0 0 11.5 3H4a1.5 1.5 0 0 0-1.5 1.5V12a1.5 1.5 0 0 0 1.5 1.5H7" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round"/>
   </svg>);
 }
 
@@ -562,6 +660,21 @@ let statusStyle = 'dot';
 function applyStatusStyle(v) { if (STATUS_STYLES[v]) statusStyle = v; }
 function getStatusStyle() { return statusStyle; }
 const STATUS_ABBR = { ok:'OK', soon:'SOON', needs:'NEEDS' };
+
+// icon stroke weight — a single multiplier over every UI icon's line width,
+// independent of corner-radius density (that scales *roundness*, this scales
+// *boldness*) and independent of image treatment (that's photos, not icons).
+// Icon components already take s/c/a props; isw() is the extra hook each one
+// runs its literal stroke widths through.
+const ICON_STROKE_LEVELS = {
+  thin:    { label: 'Thin',    mult: 0.7 },
+  regular: { label: 'Regular', mult: 1 },
+  bold:    { label: 'Bold',    mult: 1.45 },
+};
+const ICON_STROKE_ORDER = ['thin', 'regular', 'bold'];
+let iconStrokeMult = 1;
+function applyIconStroke(level) { iconStrokeMult = (ICON_STROKE_LEVELS[level] || ICON_STROKE_LEVELS.regular).mult; }
+function isw(v) { return Math.round(v * iconStrokeMult * 100) / 100; }
 
 function StatusDot({ status, size = 9 }) {
   const s = STATUS[status];
@@ -701,11 +814,13 @@ Object.assign(window, {
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor, MILESTONES,
   PALETTES, PALETTE_ORDER, ACCENTS, ACCENT_ORDER,
+  applyCustomPaletteColor, applyCustomAccentColor, contrastWarningFor,
   RADIUS_DENSITY, RADIUS_ORDER, applyRadiusDensity, rad,
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,
   BG_TEXTURES, BG_TEXTURE_ORDER, applyBgTexture, bgTextureStyle,
   STATUS_STYLES, STATUS_STYLE_ORDER, applyStatusStyle, getStatusStyle,
+  ICON_STROKE_LEVELS, ICON_STROKE_ORDER, applyIconStroke,
   Leaf, LeafOutline, Sprig, gardenGrowthStage, trackSeenValue,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy,
   StatusDot, LocationPill, StatusTag, Specimen,
