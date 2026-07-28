@@ -196,16 +196,37 @@ function App() {
   const [pushError, setPushError] = useState(null);
   const pushSupported = typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window;
 
+  // reminder time is chosen in local time in Settings but stored/compared
+  // server-side in UTC (the backend has no idea what timezone the garden's
+  // devices are in) — converting through a throwaway Date keeps this correct
+  // across DST without hand-rolling offset math.
+  const localHourToUtc = (h) => { const d = new Date(); d.setHours(h, 0, 0, 0); return d.getUTCHours(); };
+  const utcHourToLocal = (h) => { const d = new Date(); d.setUTCHours(h, 0, 0, 0); return d.getHours(); };
+  const [reminderHourLocal, setReminderHourLocalRaw] = useState(() => lsGet('caulis_push_hour_local', 8));
+  const [digestDay, setDigestDayRaw] = useState(() => lsGet('caulis_push_digest_day', 1)); // 0=Sun..6=Sat
+  const [customRemindersEnabled, setCustomRemindersEnabledRaw] = useState(() => lsGet('caulis_push_custom', false));
+
   const ensurePushSubscription = async () => {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
-    if (sub) return sub;
+    if (sub) { lsSet('caulis_push_endpoint', sub.endpoint); return sub; }
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') throw new Error('permission denied');
+    // safety net: if a previous browser-level subscription existed under a
+    // different endpoint (PWA reinstall, service worker unregister/re-
+    // register, iOS clearing site data) but the server was never told it
+    // went away, clean it up server-side before this device creates a fresh
+    // one. Otherwise this same device ends up registered under two live
+    // endpoints, each independently passing the once-a-day gate and both
+    // firing on the same 15-minute cron tick — which reads as "getting hit
+    // repeatedly" even though each row only ever sends once a day.
+    const staleEndpoint = lsGet('caulis_push_endpoint', null);
+    if (staleEndpoint) pushUnsubscribe(staleEndpoint).catch(() => {});
     const key = await pushVapidKey();
     if (!key) throw new Error('push unavailable');
     const applicationServerKey = Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
     sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey });
+    lsSet('caulis_push_endpoint', sub.endpoint);
     return sub;
   };
 
@@ -217,12 +238,12 @@ function App() {
       const nextDigest = kind === 'digest' ? value : pushDigest;
       if (nextWatering || nextDigest) {
         const sub = await ensurePushSubscription();
-        const ok = await pushSubscribe(sub.toJSON(), nextWatering, nextDigest, identifyLang === 'cs' ? 'cs' : 'en');
+        const ok = await pushSubscribe(sub.toJSON(), nextWatering, nextDigest, identifyLang === 'cs' ? 'cs' : 'en', localHourToUtc(reminderHourLocal), digestDay, customRemindersEnabled);
         if (!ok) throw new Error('subscribe failed');
       } else {
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
-        if (sub) { await pushUnsubscribe(sub.endpoint); await sub.unsubscribe(); }
+        if (sub) { await pushUnsubscribe(sub.endpoint); await sub.unsubscribe(); lsSet('caulis_push_endpoint', null); }
       }
       if (kind === 'watering') { setPushWateringRaw(value); lsSet('caulis_push_watering', value); }
       if (kind === 'digest') { setPushDigestRaw(value); lsSet('caulis_push_digest', value); }
@@ -234,17 +255,24 @@ function App() {
   };
   const onTogglePushWatering = () => setPushToggle('watering', !pushWatering);
   const onTogglePushDigest = () => setPushToggle('digest', !pushDigest);
-  // keep the server-side notification language in step with the Czech
-  // toggle even when push was already on — otherwise flipping the toggle
-  // mid-subscription would silently leave old-language copy going out.
-  useEffect(() => {
+
+  // pushes any already-subscribed device's local prefs (language, reminder
+  // hour, digest day, custom-reminder toggle) up to the server — used
+  // whenever one of those settings changes while push is already on, since
+  // otherwise the change would silently only take effect on next subscribe.
+  const syncPushPrefs = async () => {
     if (!pushSupported || (!pushWatering && !pushDigest)) return;
-    (async () => {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) pushSetPrefs(sub.endpoint, pushWatering, pushDigest, identifyLang === 'cs' ? 'cs' : 'en');
-    })();
-  }, [identifyLang]);
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) pushSetPrefs(sub.endpoint, pushWatering, pushDigest, identifyLang === 'cs' ? 'cs' : 'en', localHourToUtc(reminderHourLocal), digestDay, customRemindersEnabled);
+  };
+  const setReminderHourLocal = (h) => { setReminderHourLocalRaw(h); lsSet('caulis_push_hour_local', h); };
+  const setDigestDay = (d) => { setDigestDayRaw(d); lsSet('caulis_push_digest_day', d); };
+  const onToggleCustomReminders = () => { const v = !customRemindersEnabled; setCustomRemindersEnabledRaw(v); lsSet('caulis_push_custom', v); };
+  // keep the server-side notification language/schedule in step with these
+  // toggles even when push was already on — otherwise changing them
+  // mid-subscription would silently leave the old settings active server-side.
+  useEffect(() => { syncPushPrefs(); }, [identifyLang, reminderHourLocal, digestDay, customRemindersEnabled]);
   const [navConfig, setNavConfigRaw] = useState(() => normalizeNav(lsGet('caulis_navbar', null)));
   const setNavConfig = (cfg) => { const n = normalizeNav(cfg); setNavConfigRaw(n); lsSet('caulis_navbar', n); };
   const [navLabels, setNavLabelsRaw] = useState(() => lsGet('caulis_nav_labels', true));
@@ -1249,6 +1277,36 @@ function App() {
   // as 'ok' regardless of the real days/every ratio; it lapses on its own once
   // today catches up, no cleanup needed.
   const snooze = (id, n = 2) => { haptic('light'); setPlants(ps => ps.map(p => p.id === id ? { ...p, snoozedUntil: todayMidnight() + n * 86400000 } : p)); };
+
+  // custom reminder schedules — modeled exactly like the watering system
+  // (lastDoneAt/history, statusOf-compatible days/every) rather than a
+  // parallel status mechanism, and stored as just another field inside each
+  // plant object so the existing plants[] sync/merge path already covers it.
+  const addSchedule = (plantId, { label, everyDays }) => {
+    haptic('light');
+    const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+    setPlants(ps => ps.map(p => p.id !== plantId ? p : {
+      ...p, schedules: [...(p.schedules || []), { id, label, everyDays: Math.max(1, everyDays | 0), lastDoneAt: null, history: [] }],
+    }));
+  };
+  const editSchedule = (plantId, scheduleId, changes) => {
+    setPlants(ps => ps.map(p => p.id !== plantId ? p : {
+      ...p, schedules: (p.schedules || []).map(s => s.id !== scheduleId ? s : { ...s, ...changes }),
+    }));
+  };
+  const removeSchedule = (plantId, scheduleId) => {
+    setPlants(ps => ps.map(p => p.id !== plantId ? p : { ...p, schedules: (p.schedules || []).filter(s => s.id !== scheduleId) }));
+  };
+  const markScheduleDone = (plantId, scheduleId) => {
+    haptic('light');
+    const when = new Date(); when.setHours(0, 0, 0, 0);
+    const stamp = fmtLocalDate(when);
+    setPlants(ps => ps.map(p => p.id !== plantId ? p : {
+      ...p, schedules: (p.schedules || []).map(s => s.id !== scheduleId ? s : {
+        ...s, lastDoneAt: when.getTime(), history: [...(s.history || []), stamp].slice(-60),
+      }),
+    }));
+  };
   // care check-in: an occasional "how's it doing?" nudge that adjusts the
   // watering interval from real outcomes instead of a number guessed once at
   // add-time. 'dismiss' just resets the cooldown without touching every.
@@ -1711,6 +1769,11 @@ window.onload=()=>{
       plants={plants}
       isDesktop={isDesktop}
       czechMode={identifyLang === 'cs'}
+      confirmDelete={confirmDelete}
+      onAddSchedule={addSchedule}
+      onEditSchedule={editSchedule}
+      onRemoveSchedule={removeSchedule}
+      onMarkScheduleDone={markScheduleDone}
     />
   );
 
@@ -1916,7 +1979,7 @@ window.onload=()=>{
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} onWaterAll={waterAll} onWaterOne={waterOne} confirmDelete={confirmDelete} czechMode={identifyLang === 'cs'} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} locations={locations} onAddLocationSetting={addLocation} onRenameLocation={renameLocation} onRemoveLocation={removeLocation} roomLight={roomLight} onSetRoomLight={setRoomLight} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} accent={accent} onSetAccent={setAccent} radiusDensity={radiusDensity} onSetRadiusDensity={setRadiusDensity} imageTreatment={imageTreatment} onSetImageTreatment={setImageTreatment} uiDensity={uiDensity} onSetUiDensity={setUiDensity} bgTexture={bgTexture} onSetBgTexture={setBgTexture} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} pushSupported={pushSupported} pushWatering={pushWatering} pushDigest={pushDigest} pushBusy={pushBusy} pushError={pushError} onTogglePushWatering={onTogglePushWatering} onTogglePushDigest={onTogglePushDigest} onOpenDigest={()=>setDigestOpen(true)} onDevTestPush={devTestPush} onDevDedupeHistory={devDedupeHistory} onDevDeleteHistoryEntry={devDeleteHistoryEntry} onDevBulkUndoLastWatering={devBulkUndoLastWatering} sessionInfo={gardenNode ? getSessionInfo(gardenNode) : null} onDevForcePull={devForcePull} onDevForcePush={devForcePush} syncBusy={syncBusy} syncMsg={syncMsg} badges={badges} ambientBadges={ambientBadges} onToggleAmbientBadges={()=>setAmbientBadges(!ambientBadges)} badgeDensity={badgeDensity} onSetBadgeDensity={setBadgeDensity} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} locations={locations} onAddLocationSetting={addLocation} onRenameLocation={renameLocation} onRemoveLocation={removeLocation} roomLight={roomLight} onSetRoomLight={setRoomLight} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} accent={accent} onSetAccent={setAccent} radiusDensity={radiusDensity} onSetRadiusDensity={setRadiusDensity} imageTreatment={imageTreatment} onSetImageTreatment={setImageTreatment} uiDensity={uiDensity} onSetUiDensity={setUiDensity} bgTexture={bgTexture} onSetBgTexture={setBgTexture} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} pushSupported={pushSupported} pushWatering={pushWatering} pushDigest={pushDigest} pushBusy={pushBusy} pushError={pushError} onTogglePushWatering={onTogglePushWatering} onTogglePushDigest={onTogglePushDigest} reminderHourLocal={reminderHourLocal} onSetReminderHourLocal={setReminderHourLocal} digestDay={digestDay} onSetDigestDay={setDigestDay} customRemindersEnabled={customRemindersEnabled} onToggleCustomReminders={onToggleCustomReminders} onOpenDigest={()=>setDigestOpen(true)} onDevTestPush={devTestPush} onDevDedupeHistory={devDedupeHistory} onDevDeleteHistoryEntry={devDeleteHistoryEntry} onDevBulkUndoLastWatering={devBulkUndoLastWatering} sessionInfo={gardenNode ? getSessionInfo(gardenNode) : null} onDevForcePull={devForcePull} onDevForcePush={devForcePush} syncBusy={syncBusy} syncMsg={syncMsg} badges={badges} ambientBadges={ambientBadges} onToggleAmbientBadges={()=>setAmbientBadges(!ambientBadges)} badgeDensity={badgeDensity} onSetBadgeDensity={setBadgeDensity} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT

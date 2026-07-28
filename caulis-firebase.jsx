@@ -455,22 +455,22 @@ async function pushVapidKey() {
   return ok ? data.key : null;
 }
 
-async function pushSubscribe(subscription, wateringEnabled, digestEnabled, lang) {
+async function pushSubscribe(subscription, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled) {
   const token = getActiveToken();
   if (!token) return false;
   const { ok } = await _api('/api/push/subscribe', {
     method: 'POST',
-    body: JSON.stringify({ subscription, wateringEnabled, digestEnabled, lang }),
+    body: JSON.stringify({ subscription, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled }),
   }, token);
   return ok;
 }
 
-async function pushSetPrefs(endpoint, wateringEnabled, digestEnabled, lang) {
+async function pushSetPrefs(endpoint, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled) {
   const token = getActiveToken();
   if (!token) return false;
   const { ok } = await _api('/api/push/prefs', {
     method: 'PUT',
-    body: JSON.stringify({ endpoint, wateringEnabled, digestEnabled, lang }),
+    body: JSON.stringify({ endpoint, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled }),
   }, token);
   return ok;
 }

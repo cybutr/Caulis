@@ -51,7 +51,13 @@ Spacing: 18–22px side padding, 14px grid gap, 12px list gap, 56px header top.
 
 ```js
 plants[]      // { id, name, latin, location, days, every, light, care, fact,
-              //   watering, benchmark, sunlight[], species_id, image, userImage }
+              //   watering, benchmark, sunlight[], species_id, image, userImage,
+              //   schedules[] }
+              // schedules[]: { id, label, everyDays, lastDoneAt, history[] } — user-
+              // defined recurring reminders (misting, fertilizing, anything), modeled
+              // exactly like watering (lastDoneAt is midnight-anchored like wateredAt,
+              // statusOf(days, everyDays) drives its status pill, no unit is stored —
+              // the add/edit form's days/weeks toggle collapses to a plain everyDays int)
 locations[]   // known room names
 tab           // 'garden' | 'needs' | 'scanner' | 'print' | 'settings'
 detail        // { id, fromScan } | null
@@ -77,8 +83,12 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v87.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v165.
 Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
+
+## Notification settings & custom reminders
+
+`push_subscriptions` (backend) carries per-garden schedule: `reminder_hour_utc` (default 8, converted client-side from the local hour shown in Settings → Notifications via `localHourToUtc`/`utcHourToLocal` in `app.jsx`), `digest_day_of_week` (0=Sun..6=Sat, default 1/Monday), `custom_reminders_enabled` (separate toggle from watering/digest — folds due custom reminders into the single daily push instead of sending a second one). `checkAndSendPushes` (`backend/src/server.js`) gates per-row against these instead of a hardcoded global time. `isDue(anchorMs, everyDays, snoozedUntil)` is the one shared due-calculation used by both watering (`plantNeedsWater`) and custom schedules (`dueSchedules`) — never duplicate the days-since-midnight math again. `buildWateringPush`/`buildDigestPush` combine watering + due schedules into one push per garden per day (never one push per reminder kind — that recreates the original spam pattern) and name a couple of plants/schedules when short (`listNames`), falling back to a count only when long.
 
 ## Watering Model
 

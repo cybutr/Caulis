@@ -108,6 +108,16 @@ export async function initSchema() {
   // earned achievement badges: [{id, earnedAt}] — append-only, never edited in
   // place, so it merges as a plain union across devices with no conflict logic
   await pool.query(`ALTER TABLE garden_data ADD COLUMN IF NOT EXISTS badges JSONB DEFAULT '[]'`);
+
+  // per-subscription notification schedule — lets each garden pick its own
+  // morning ping time and digest weekday instead of the old hardcoded 8am
+  // UTC / Monday for everyone. Hour is stored in UTC (the client converts
+  // from whatever local hour the user picked); day-of-week is 0=Sun..6=Sat.
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS reminder_hour_utc INTEGER NOT NULL DEFAULT 8`);
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS digest_day_of_week SMALLINT NOT NULL DEFAULT 1`);
+  // separate from watering_enabled/digest_enabled on purpose — a garden can
+  // want watering pings but not custom-reminder noise, or vice versa
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS custom_reminders_enabled BOOLEAN NOT NULL DEFAULT false`);
 }
 
 export async function getSetting(key) {

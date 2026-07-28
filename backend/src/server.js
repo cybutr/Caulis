@@ -33,11 +33,23 @@ function deriveWateredAt(p) {
   if (h.length) return midnightFromStamp(h[h.length - 1]);
   return todayMidnightUTC() - (p.days || 0) * DAY_MS;
 }
+// shared by watering AND custom schedules — both are just "days since some
+// anchor timestamp, divided by an interval", so this is the one place that
+// does the days-since-midnight math rather than duplicating it per reminder
+// kind (schedules have no `history` fallback/legacy backfill, unlike
+// watering, since they're new: lastDoneAt is trusted directly or null).
+function isDue(anchorMs, everyDays, snoozedUntil) {
+  if (typeof snoozedUntil === 'number' && todayMidnightUTC() < snoozedUntil) return false;
+  if (anchorMs == null) return true; // never done yet — due immediately
+  const days = Math.max(0, Math.round((todayMidnightUTC() - anchorMs) / DAY_MS));
+  return days / (everyDays || 7) >= 1;
+}
 function plantNeedsWater(p) {
-  if (typeof p.snoozedUntil === 'number' && todayMidnightUTC() < p.snoozedUntil) return false;
-  const days = Math.max(0, Math.round((todayMidnightUTC() - deriveWateredAt(p)) / DAY_MS));
-  const every = p.every || p.benchmark || 7;
-  return days / every >= 1;
+  return isDue(deriveWateredAt(p), p.every || p.benchmark || 7, p.snoozedUntil);
+}
+function dueSchedules(p) {
+  const schedules = Array.isArray(p.schedules) ? p.schedules : [];
+  return schedules.filter(s => s && s.label && isDue(s.lastDoneAt, s.everyDays));
 }
 
 async function sendPush(sub, payload) {
@@ -58,55 +70,121 @@ async function sendPush(sub, payload) {
 // notification chrome stays English always — the Czech toggle only swaps a
 // plant's display name (same as it does everywhere else in the app), it was
 // never meant to translate the app's own voice
-function buildWateringPush(gardenId, plants, lang) {
-  const needsWater = plants.filter(plantNeedsWater);
-  if (!needsWater.length) return null;
+function nameOf(p, cs) { return (cs && p.czech) ? p.czech : (p.name || 'One plant'); }
+
+// "A, B" / "A, B, and C" / "A, B, and N more" — same list-cap shape used for
+// the watering push's multi-plant case, the digest's watered/overdue lists,
+// and the custom-reminder rollup, so the voice stays consistent everywhere
+// a plain count would otherwise have been the only option.
+function listNames(names, max = 2) {
+  if (!names.length) return '';
+  if (names.length <= max) {
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+  }
+  return `${names.slice(0, max).join(', ')}, and ${names.length - max} more`;
+}
+
+function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
   const cs = lang === 'cs';
+  const needsWater = plants.filter(plantNeedsWater);
+  const dueReminders = customRemindersEnabled
+    ? plants.flatMap(p => dueSchedules(p).map(s => ({ plant: p, schedule: s })))
+    : [];
+  if (!needsWater.length && !dueReminders.length) return null;
+
   let title, body, url, actions, data;
-  if (needsWater.length === 1) {
-    const p = needsWater[0];
-    const name = (cs && p.czech) ? p.czech : (p.name || 'One plant');
-    title = 'Thirsty in the pot';
-    body = `${name} is asking for water today.`;
-    url = `./?plant=${encodeURIComponent(p.id)}`;
-    data = { url, gardenId, plantId: p.id, actionToken: signActionToken(gardenId, p.id, 'water') };
-    actions = [{ action: 'water', title: 'Mark watered' }];
+  if (needsWater.length && !dueReminders.length) {
+    if (needsWater.length === 1) {
+      const p = needsWater[0];
+      title = 'Thirsty in the pot';
+      body = `${nameOf(p, cs)} is asking for water today.`;
+      url = `./?plant=${encodeURIComponent(p.id)}`;
+      data = { url, gardenId, plantId: p.id, actionToken: signActionToken(gardenId, p.id, 'water') };
+      actions = [{ action: 'water', title: 'Mark watered' }];
+    } else {
+      title = 'The garden is waiting on the watering can';
+      body = needsWater.length <= 3
+        ? `${listNames(needsWater.map(p => nameOf(p, cs)))} are asking for water today.`
+        : `${needsWater.length} plants are asking for water today.`;
+      url = './?shortcut=needs';
+      data = { url, gardenId };
+    }
   } else {
-    title = 'The garden is waiting on the watering can';
-    body = `${needsWater.length} plants are asking for water today.`;
+    // watering + custom reminders both due today collapse into ONE push
+    // rather than one per kind — sending a push per reminder type is exactly
+    // the spam pattern this whole system is meant to avoid.
+    title = 'A few things need doing in the garden';
+    const parts = [];
+    if (needsWater.length) {
+      parts.push(needsWater.length === 1
+        ? `${nameOf(needsWater[0], cs)} needs water`
+        : (needsWater.length <= 3 ? `${listNames(needsWater.map(p => nameOf(p, cs)))} need water` : `${needsWater.length} plants need water`));
+    }
+    if (dueReminders.length) {
+      parts.push(dueReminders.length === 1
+        ? `${nameOf(dueReminders[0].plant, cs)} is due for ${dueReminders[0].schedule.label.toLowerCase()}`
+        : (dueReminders.length <= 3
+          ? listNames(dueReminders.map(d => `${nameOf(d.plant, cs)} (${d.schedule.label.toLowerCase()})`))
+          : `${dueReminders.length} custom reminders are due`));
+    }
+    body = parts.join('. ') + '.';
     url = './?shortcut=needs';
     data = { url, gardenId };
   }
   return { title, body, tag: 'watering', url, actions, data };
 }
 
-function buildDigestPush(gardenId, plants, lang) {
+function buildDigestPush(gardenId, plants, lang, customRemindersEnabled) {
+  const cs = lang === 'cs';
+  const title = 'This week in your garden';
+  const url = './?shortcut=digest';
+  if (!plants.length) return { title, body: 'No plants yet — add the first one.', tag: 'digest', url, data: { url, gardenId } };
+
   const cutoff = todayMidnightUTC() - 6 * DAY_MS;
+  const wateredNames = [];
   let wateredCount = 0;
+  const scheduleCounts = new Map();
   plants.forEach(p => {
     const h = Array.isArray(p.history) ? p.history : [];
-    wateredCount += h.filter(stamp => midnightFromStamp(stamp) >= cutoff).length;
+    const recent = h.filter(stamp => midnightFromStamp(stamp) >= cutoff);
+    wateredCount += recent.length;
+    if (recent.length) wateredNames.push(nameOf(p, cs));
+    if (customRemindersEnabled) {
+      (Array.isArray(p.schedules) ? p.schedules : []).forEach(s => {
+        if (!s || !s.label) return;
+        const doneRecently = (Array.isArray(s.history) ? s.history : []).filter(stamp => midnightFromStamp(stamp) >= cutoff).length;
+        if (doneRecently) scheduleCounts.set(s.label, (scheduleCounts.get(s.label) || 0) + doneRecently);
+      });
+    }
   });
-  const needsNow = plants.filter(plantNeedsWater).length;
-  const title = 'This week in your garden';
-  let body;
-  if (!plants.length) body = 'No plants yet — add the first one.';
-  else if (needsNow) body = `${wateredCount} waterings this week. ${needsNow} plants waiting on you right now.`;
-  else body = `${wateredCount} waterings this week. Everything's watered — nice work.`;
-  const url = './?shortcut=digest';
+  const overdue = plants.filter(plantNeedsWater);
+
+  const bits = [];
+  bits.push(wateredCount
+    ? `${wateredCount} watering${wateredCount === 1 ? '' : 's'} this week${wateredNames.length ? ` (${listNames(wateredNames, 5)})` : ''}.`
+    : 'No waterings logged this week.');
+  if (scheduleCounts.size) {
+    const rollup = [...scheduleCounts.entries()].map(([label, n]) => `${label.toLowerCase()} ${n} time${n === 1 ? '' : 's'}`);
+    bits.push(`Also ${listNames(rollup, 5)}.`);
+  }
+  if (overdue.length) {
+    bits.push(overdue.length <= 3
+      ? `${listNames(overdue.map(p => nameOf(p, cs)))} ${overdue.length === 1 ? 'is' : 'are'} waiting on you right now.`
+      : `${overdue.length} plants are waiting on you right now.`);
+  } else {
+    bits.push("Everything's watered — nice work.");
+  }
+  const body = bits.join(' ');
   return { title, body, tag: 'digest', url, data: { url, gardenId } };
 }
 
 async function checkAndSendPushes() {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
-  // fires any time from 8am UTC onward (checked every 15 min, gated below by
-  // last_*_sent_on so it only actually sends once per day) — 8am is a
-  // reasonable "morning" slot without per-garden timezone data. Using >= 8
-  // rather than === 8 means a process restart/crash that skips the 8am tick
-  // still catches up later the same day instead of silently skipping it.
-  if (new Date().getUTCHours() < 8) return;
+  const nowUtcHour = new Date().getUTCHours();
   const todayStr = new Date().toISOString().slice(0, 10);
-  const isMonday = new Date().getUTCDay() === 1;
+  const todayDow = new Date().getUTCDay();
 
   const { rows: subs } = await pool.query(
     `SELECT ps.*, gd.plants FROM push_subscriptions ps
@@ -116,17 +194,24 @@ async function checkAndSendPushes() {
 
   for (const sub of subs) {
     const plants = Array.isArray(sub.plants) ? sub.plants : [];
+    // per-garden hour/day, defaulting to the old hardcoded 8am/Monday for
+    // any row from before these columns existed. Using >= hour (not ===)
+    // means a process restart/crash that skips the exact tick still catches
+    // up later the same day instead of silently skipping it — same
+    // semantics as the old global check, just scoped per row now.
+    const hour = typeof sub.reminder_hour_utc === 'number' ? sub.reminder_hour_utc : 8;
+    const digestDow = typeof sub.digest_day_of_week === 'number' ? sub.digest_day_of_week : 1;
 
-    if (sub.watering_enabled && sub.last_watering_sent_on !== todayStr) {
-      const push = buildWateringPush(sub.garden_id, plants, sub.lang);
+    if (sub.watering_enabled && nowUtcHour >= hour && sub.last_watering_sent_on !== todayStr) {
+      const push = buildWateringPush(sub.garden_id, plants, sub.lang, sub.custom_reminders_enabled);
       if (push) {
         const ok = await sendPush(sub, push);
         if (ok) await pool.query('UPDATE push_subscriptions SET last_watering_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
       }
     }
 
-    if (sub.digest_enabled && isMonday && sub.last_digest_sent_on !== todayStr) {
-      const ok = await sendPush(sub, buildDigestPush(sub.garden_id, plants, sub.lang));
+    if (sub.digest_enabled && todayDow === digestDow && nowUtcHour >= hour && sub.last_digest_sent_on !== todayStr) {
+      const ok = await sendPush(sub, buildDigestPush(sub.garden_id, plants, sub.lang, sub.custom_reminders_enabled));
       if (ok) await pool.query('UPDATE push_subscriptions SET last_digest_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
     }
   }
@@ -484,29 +569,37 @@ app.get('/api/push/vapid-key', async (req, reply) => {
   return { key: VAPID_PUBLIC_KEY };
 });
 
+function clampHour(h) { return Number.isInteger(h) && h >= 0 && h <= 23 ? h : null; }
+function clampDow(d) { return Number.isInteger(d) && d >= 0 && d <= 6 ? d : null; }
+
 app.post('/api/push/subscribe', { preHandler: requireAuth }, async (req, reply) => {
-  const { subscription, wateringEnabled = true, digestEnabled = false, lang = 'en' } = req.body || {};
+  const { subscription, wateringEnabled = true, digestEnabled = false, lang = 'en', reminderHourUtc, digestDayOfWeek, customRemindersEnabled = false } = req.body || {};
   if (!subscription?.endpoint) return reply.code(400).send({ error: 'subscription required' });
+  const hour = clampHour(reminderHourUtc) ?? 8;
+  const dow = clampDow(digestDayOfWeek) ?? 1;
   await pool.query(
-    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled, lang)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled, lang, reminder_hour_utc, digest_day_of_week, custom_reminders_enabled)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (endpoint) DO UPDATE SET
-       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5, lang = $6`,
-    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled, lang === 'cs' ? 'cs' : 'en']
+       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5, lang = $6, reminder_hour_utc = $7, digest_day_of_week = $8, custom_reminders_enabled = $9`,
+    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled, lang === 'cs' ? 'cs' : 'en', hour, dow, !!customRemindersEnabled]
   );
   return { ok: true };
 });
 
 app.put('/api/push/prefs', { preHandler: requireAuth }, async (req, reply) => {
-  const { endpoint, wateringEnabled, digestEnabled, lang } = req.body || {};
+  const { endpoint, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled } = req.body || {};
   if (!endpoint) return reply.code(400).send({ error: 'endpoint required' });
   await pool.query(
     `UPDATE push_subscriptions SET
        watering_enabled = COALESCE($1, watering_enabled),
        digest_enabled = COALESCE($2, digest_enabled),
-       lang = COALESCE($3, lang)
-     WHERE endpoint = $4 AND garden_id = $5`,
-    [wateringEnabled, digestEnabled, lang === 'cs' || lang === 'en' ? lang : null, endpoint, req.gardenId]
+       lang = COALESCE($3, lang),
+       reminder_hour_utc = COALESCE($4, reminder_hour_utc),
+       digest_day_of_week = COALESCE($5, digest_day_of_week),
+       custom_reminders_enabled = COALESCE($6, custom_reminders_enabled)
+     WHERE endpoint = $7 AND garden_id = $8`,
+    [wateringEnabled, digestEnabled, lang === 'cs' || lang === 'en' ? lang : null, clampHour(reminderHourUtc), clampDow(digestDayOfWeek), typeof customRemindersEnabled === 'boolean' ? customRemindersEnabled : null, endpoint, req.gardenId]
   );
   return { ok: true };
 });
@@ -530,8 +623,8 @@ app.post('/api/push/test', { preHandler: requireAuth }, async (req, reply) => {
   const plants = Array.isArray(gdRows[0]?.plants) ? gdRows[0].plants : [];
   let sent = 0;
   for (const sub of subs) {
-    const push = kind === 'digest' ? buildDigestPush(req.gardenId, plants, sub.lang)
-      : (buildWateringPush(req.gardenId, plants, sub.lang) || {
+    const push = kind === 'digest' ? buildDigestPush(req.gardenId, plants, sub.lang, sub.custom_reminders_enabled)
+      : (buildWateringPush(req.gardenId, plants, sub.lang, sub.custom_reminders_enabled) || {
           title: 'Test notification',
           body: 'Nothing needs water right now — all quiet in the garden.',
           tag: 'watering', data: { url: './?shortcut=needs', gardenId: req.gardenId },

@@ -17,6 +17,76 @@ function InfoTile({ icon, label, children, accent = C.forest }) {
 
 const offsetLabel = (n) => n === 0 ? 'Today' : n === 1 ? 'Yesterday' : `${n} days ago`;
 
+// ── custom reminder schedules — same status math as watering (statusOf),
+// just anchored on the schedule's own lastDoneAt/everyDays instead of the
+// plant's wateredAt/every ──
+function scheduleAgo(label, days) {
+  if (days == null) return 'Not done yet';
+  if (days <= 0) return `${label} today`;
+  if (days === 1) return `${label} yesterday`;
+  return `${label} ${days} days ago`;
+}
+function ScheduleRow({ schedule, onMarkDone, onEdit }) {
+  const days = schedule.lastDoneAt ? daysSinceMidnight(schedule.lastDoneAt) : null;
+  const status = days == null ? 'needs' : statusOf(days, schedule.everyDays);
+  const s = STATUS[status];
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 0', borderTop:C.hair }}>
+      <span style={{ width:8, height:8, borderRadius:999, background:s.dot, flexShrink:0 }}/>
+      <div style={{ flex:1, minWidth:0 }} onClick={()=>onEdit(schedule)}>
+        <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink }}>{schedule.label}</div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>{scheduleAgo(schedule.label, days)} · every {schedule.everyDays} day{schedule.everyDays === 1 ? '' : 's'}</div>
+      </div>
+      <div onClick={()=>onMarkDone(schedule.id)} style={{ cursor:'pointer', flexShrink:0, padding:'7px 13px', borderRadius:999, background:s.soft, color:s.dot, fontFamily:FONT_SANS, fontSize:12, fontWeight:600 }}>Mark done</div>
+    </div>
+  );
+}
+
+// value + unit → single stored everyDays integer (unit itself is never
+// persisted — keeps the schedule model fully generic downstream, no
+// "watering-shaped" special casing for whatever label the user typed)
+function ScheduleForm({ initial, onSave, onCancel, onDelete }) {
+  const [label, setLabel] = useState(initial ? initial.label : '');
+  const [value, setValue] = useState(() => {
+    if (!initial) return 2;
+    return initial.everyDays % 7 === 0 ? initial.everyDays / 7 : initial.everyDays;
+  });
+  const [unit, setUnit] = useState(() => (initial && initial.everyDays % 7 === 0) ? 'weeks' : 'days');
+  const valid = label.trim().length > 0 && Number(value) > 0 && Number.isInteger(Number(value));
+  const save = () => {
+    if (!valid) return;
+    const everyDays = unit === 'weeks' ? Number(value) * 7 : Number(value);
+    onSave({ label: label.trim(), everyDays });
+  };
+  return (
+    <div onClick={onCancel} style={{ position:'fixed', inset:0, zIndex:90, background:'rgba(20,30,12,0.42)', display:'flex', alignItems:'flex-end', justifyContent:'center', animation:'fade 160ms ease' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:440, background:C.panel, borderRadius:`${rad(22)}px ${rad(22)}px 0 0`, padding:'22px 20px 26px', boxShadow:'0 -8px 32px rgba(0,0,0,0.18)' }}>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.forest, marginBottom:16 }}>{initial ? 'Edit reminder' : 'New reminder'}</div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.7, letterSpacing:0.4, textTransform:'uppercase', marginBottom:6 }}>Label</div>
+        <input value={label} onChange={e=>setLabel(e.target.value)} placeholder="Misting, fertilizing, rotating…" autoFocus
+          style={{ width:'100%', boxSizing:'border-box', height:44, borderRadius:rad(12), border:C.hair, background:C.bg, padding:'0 13px', fontFamily:FONT_SANS, fontSize:14.5, color:C.ink, outline:'none' }}/>
+        <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.7, letterSpacing:0.4, textTransform:'uppercase', margin:'16px 0 6px' }}>Every</div>
+        <div style={{ display:'flex', gap:8 }}>
+          <input type="number" min="1" step="1" value={value} onChange={e=>setValue(e.target.value.replace(/[^0-9]/g,''))}
+            style={{ width:76, boxSizing:'border-box', height:44, borderRadius:rad(12), border:C.hair, background:C.bg, padding:'0 13px', fontFamily:FONT_SANS, fontSize:14.5, color:C.ink, outline:'none' }}/>
+          <div style={{ flex:1, display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:rad(12), padding:3 }}>
+            {['days','weeks'].map(u => (
+              <div key={u} onClick={()=>setUnit(u)} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:rad(9), cursor:'pointer', background: unit===u?C.forest:'transparent', color: unit===u?'#fff':C.ink, opacity: unit===u?1:0.55, fontFamily:FONT_SANS, fontSize:13, fontWeight:600, transition:'all 140ms ease' }}>{u}</div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:10, marginTop:22 }}>
+          {initial && (
+            <div onClick={onDelete} style={{ flex:1, textAlign:'center', padding:'13px 0', borderRadius:rad(14), background:'rgba(180,71,46,0.1)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#B4472E', cursor:'pointer' }}>Delete</div>
+          )}
+          <div onClick={onCancel} style={{ flex:1, textAlign:'center', padding:'13px 0', borderRadius:rad(14), background:'rgba(45,80,22,0.07)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, cursor:'pointer' }}>Cancel</div>
+          <div onClick={save} style={{ flex:1, textAlign:'center', padding:'13px 0', borderRadius:rad(14), background: valid?C.forest:'rgba(45,80,22,0.25)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#fff', cursor: valid?'pointer':'default' }}>Save</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // downscale + jpeg-compress so photos are light enough to sync to Firebase
 function compressImage(dataUrl, max = 1024, q = 0.72) {
   return new Promise(resolve => {
@@ -80,10 +150,12 @@ function PhotoCarousel({ images, tint, height = 196, radius = 22 }) {
 // ════════════════════════════════════════════════════════════
 //  PLANT DETAIL
 // ════════════════════════════════════════════════════════════
-function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, onOpenPlant, onCareCheck, plants, roomLight, isDesktop, readonly = false, czechMode = false }) {
+function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWater, onToggleQueue, onGoQueue, onEdit, onAskDoctor, onOpenPlant, onCareCheck, plants, roomLight, isDesktop, readonly = false, czechMode = false, confirmDelete = false, onAddSchedule, onEditSchedule, onRemoveSchedule, onMarkScheduleDone }) {
   const [justWatered, setJustWatered] = useState(false);
   const [waterOffset, setWaterOffset] = useState(0); // days ago
   const prevRef = useRef(null);
+  const [scheduleForm, setScheduleForm] = useState(null); // null | {} (new) | schedule (editing)
+  const [scheduleDeleteConfirm, setScheduleDeleteConfirm] = useState(null); // schedule id pending delete confirm
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
   const gallery = plantGallery(plant);
 
@@ -274,6 +346,24 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 </InfoTile>
               );
             })()}
+            {!readonly && (
+              <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:'14px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: (plant.schedules||[]).length ? 4 : 0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:24, height:24, borderRadius:7, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 6v6l4 2" stroke={C.forest} strokeWidth="1.8" strokeLinecap="round"/><circle cx="12" cy="12" r="8.5" stroke={C.forest} strokeWidth="1.8"/></svg>
+                    </div>
+                    <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.forest, letterSpacing:0.5, textTransform:'uppercase' }}>Reminders</span>
+                  </div>
+                  <div onClick={()=>setScheduleForm({})} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest, padding:'4px 8px' }}>+ Add</div>
+                </div>
+                {(plant.schedules || []).length ? (plant.schedules.map(s => (
+                  <ScheduleRow key={s.id} schedule={s} onMarkDone={onMarkScheduleDone ? id=>onMarkScheduleDone(plant.id, id) : ()=>{}} onEdit={setScheduleForm}/>
+                ))) : (
+                  <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.55 }}>No custom reminders yet — misting, fertilizing, rotating, anything on its own schedule.</div>
+                )}
+              </div>
+            )}
             <div style={{ display:'flex', alignItems:'center', gap:6, padding:'2px 4px' }}>
               <LeafOutline size={11} color={C.brown} sw={1.5}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.55, letterSpacing:0.2 }}>Care data &amp; photo via Perenual, House Plants &amp; Wikipedia</span>
@@ -313,6 +403,36 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
             <div onClick={undo} style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:5, background:'rgba(255,255,255,0.16)', borderRadius:999, padding:'6px 13px' }}>
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M5 3 2 6l3 3M2 6h6.5a3.5 3.5 0 010 7H6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
               <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:600, color:'#fff' }}>Undo</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {scheduleForm && (
+        <ScheduleForm
+          initial={scheduleForm.id ? scheduleForm : null}
+          onSave={(data) => {
+            if (scheduleForm.id) onEditSchedule && onEditSchedule(plant.id, scheduleForm.id, data);
+            else onAddSchedule && onAddSchedule(plant.id, data);
+            setScheduleForm(null);
+          }}
+          onCancel={()=>setScheduleForm(null)}
+          onDelete={() => {
+            setScheduleForm(null);
+            if (confirmDelete) setScheduleDeleteConfirm(scheduleForm.id);
+            else onRemoveSchedule && onRemoveSchedule(plant.id, scheduleForm.id);
+          }}
+        />
+      )}
+
+      {scheduleDeleteConfirm != null && (
+        <div onClick={()=>setScheduleDeleteConfirm(null)} style={{ position:'fixed', inset:0, zIndex:95, background:'rgba(20,30,12,0.42)', display:'flex', alignItems:'center', justifyContent:'center', padding:24, animation:'fade 160ms ease' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:360, background:C.panel, borderRadius:rad(20), padding:'22px 20px' }}>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.ink, marginBottom:8 }}>Delete this reminder?</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink, opacity:0.65, lineHeight:1.5, marginBottom:20 }}>Its history goes with it — this can't be undone.</div>
+            <div style={{ display:'flex', gap:10 }}>
+              <div onClick={()=>setScheduleDeleteConfirm(null)} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:rad(14), background:'rgba(45,80,22,0.07)', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink, cursor:'pointer' }}>Cancel</div>
+              <div onClick={()=>{ onRemoveSchedule && onRemoveSchedule(plant.id, scheduleDeleteConfirm); setScheduleDeleteConfirm(null); }} style={{ flex:1, textAlign:'center', padding:'12px 0', borderRadius:rad(14), background:'#B4472E', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer' }}>Delete</div>
             </div>
           </div>
         </div>
