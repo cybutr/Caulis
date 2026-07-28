@@ -136,15 +136,15 @@ function Segmented({ options, value, onSelect }) {
 
 // collapsible settings category — module-level so children keep identity (no remount)
 function SettingsSection({ title, open, onToggle, children, id, matched, query, bodyRef }) {
-  // `bodyRef` here is actually a plain callback (registerSection(id) in
-  // SettingsScreen, used to populate sectionRefs.current for search scoring)
-  // — not a real ref object. useTextHighlight expects `ref.current`, and a
-  // function has no such property, so the highlight effect was silently
-  // no-op-ing on every keystroke (its own `!ref.current` guard always true).
-  // A real ref here drives the highlight; the callback still gets called
-  // separately so search scoring keeps working exactly as before.
-  const domRef = useRef(null);
-  useTextHighlight(domRef, query, matched);
+  // Body-text highlighting is NOT done per-instance here on purpose — with
+  // 14 of these mounted at once, a per-section useTextHighlight() effect
+  // (each keyed on the same shared 'settings-match' CSS Highlight registry
+  // entry) races itself: React runs effects top-down, so the one truly
+  // matched section sets the highlight and then every other (inactive)
+  // section's effect immediately deletes that same shared entry again on
+  // the same commit. Net visible result was always zero highlighted ranges.
+  // SettingsScreen now owns this as a single effect over whichever section
+  // is actually the current match — see the effect next to settingsMatches.
   return (
     <div id={id} style={matched ? { borderRadius:rad(16), boxShadow:`0 0 0 2px ${C.forest}`, transition:'box-shadow 200ms ease' } : { transition:'box-shadow 200ms ease' }}>
       <div onClick={onToggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding: matched ? '8px 6px 8px' : '0 6px 8px' }}>
@@ -152,7 +152,7 @@ function SettingsSection({ title, open, onToggle, children, id, matched, query, 
         <svg width="13" height="13" viewBox="0 0 24 24" style={{ transform: open?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45 }}><path d="M6 9l6 6 6-6" stroke={C.brown} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
       </div>
       <div style={{ display:'grid', gridTemplateRows: open?'1fr':'0fr', transition:'grid-template-rows 260ms ease' }}>
-        <div ref={el => { domRef.current = el; bodyRef && bodyRef(el); }} style={{ overflow:'hidden', minHeight:0 }}>{children}</div>
+        <div ref={bodyRef} style={{ overflow:'hidden', minHeight:0 }}>{children}</div>
       </div>
     </div>
   );
@@ -1328,6 +1328,33 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
     return scored.map(s => s.id);
   }, [normalizedQuery]);
   const [settingsMatchIdx, setSettingsMatchIdx] = useState(0);
+  // single owner of the shared 'settings-match' CSS Highlight registry entry
+  // — see the comment in SettingsSection for why this can't safely be done
+  // once per accordion instance. Only ever touches the one section that's
+  // actually the current match (settingsMatches[settingsMatchIdx]).
+  useEffect(() => {
+    if (typeof Highlight === 'undefined' || !window.CSS || !CSS.highlights) return;
+    const activeId = settingsMatches[settingsMatchIdx];
+    const el = activeId && sectionRefs.current[activeId];
+    if (!normalizedQuery || !el) { CSS.highlights.delete('settings-match'); return; }
+    const ranges = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const text = node.textContent.toLowerCase();
+      let from = 0, i;
+      while ((i = text.indexOf(normalizedQuery, from)) !== -1) {
+        const r = new Range();
+        r.setStart(node, i);
+        r.setEnd(node, i + normalizedQuery.length);
+        ranges.push(r);
+        from = i + normalizedQuery.length;
+      }
+    }
+    if (ranges.length) CSS.highlights.set('settings-match', new Highlight(...ranges));
+    else CSS.highlights.delete('settings-match');
+    return () => CSS.highlights.delete('settings-match');
+  }, [settingsMatches, settingsMatchIdx, normalizedQuery]);
   const jumpToSection = (id) => {
     setActiveSec(id);
     GS.set('caulis_set_open', id);
