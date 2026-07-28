@@ -89,6 +89,37 @@ function listNames(names, max = 2) {
   return `${names.slice(0, max).join(', ')}, and ${names.length - max} more`;
 }
 
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// Chrome/Android renders a large banner from `image` in the notification —
+// the one "hero" touch Web Push actually allows (no custom native layout,
+// no Live Activity). Only offered for a real https URL: a user's own photo
+// is stored as a base64 data URI, and inlining that into the push payload
+// would blow well past the ~4KB web push size budget, so only the remote
+// species-photo URL (Perenual/House Plants/Wikipedia, already just a plain
+// string on the plant) ever qualifies.
+function plantImageUrl(p) {
+  const src = p && p.image;
+  return typeof src === 'string' && /^https:\/\//.test(src) ? src : undefined;
+}
+
+// botanical pun pools for the push TITLE only — the body always keeps the
+// real specifics (plant name, count) so the notification stays scannable
+// and actionable even when the joke doesn't land. Picked at random per send
+// rather than one static line, since a repeated joke stops being one after
+// the second push. Chrome/Android title truncates around ~40-50 chars on a
+// single line, so these stay short on purpose. English always — the Czech
+// toggle only swaps plant display names, never this chrome, same rule as
+// the rest of the notification copy.
+const PUN_TITLES = {
+  wateringOne: ['Your best frond is thirsty', 'Leaf it to us: water time', 'Fern real, it needs a drink', 'Thyme to grab the watering can', 'Soil searching for attention'],
+  wateringMany: ['The garden put in a drink order', "Leaf it to us — they're thirsty", 'A round of water, on you', 'Water works needed out there'],
+  reminderOne: ['A little TLC is due', 'Leaf it to us: something is due', "Don't leaf this one hanging", 'Petal to the metal on this one'],
+  reminderMany: ['A few things are coming up roots', 'Leaf it to us — reminders are due', 'The to-do list is budding'],
+  mixed: ['The garden has a few asks', 'Leaf it to us: a couple things', 'A little garden admin is due'],
+  digest: ['This week in the garden', 'Your weekly leaf-through', 'The garden, in brief', "Here's the dirt from this week"],
+};
+
 function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
   const cs = lang === 'cs';
   const needsWater = plants.filter(plantNeedsWater);
@@ -97,13 +128,14 @@ function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
     : [];
   if (!needsWater.length && !dueReminders.length) return null;
 
-  let title, body, url, actions, data, type = 'watering';
+  let title, body, url, actions, data, image, type = 'watering';
   if (needsWater.length && !dueReminders.length) {
     if (needsWater.length === 1) {
       const p = needsWater[0];
-      title = 'Thirsty in the pot';
+      title = pick(PUN_TITLES.wateringOne);
       body = `${nameOf(p, cs)} is asking for water today.`;
       url = `./?plant=${encodeURIComponent(p.id)}`;
+      image = plantImageUrl(p);
       data = {
         url, gardenId, plantId: p.id,
         actionToken: signActionToken(gardenId, p.id, 'water'),
@@ -114,7 +146,7 @@ function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
       // same default, not a new parallel number invented for push.
       actions = [{ action: 'water', title: 'Mark watered' }, { action: 'snooze', title: 'Snooze 2 days' }];
     } else {
-      title = 'The garden is waiting on the watering can';
+      title = pick(PUN_TITLES.wateringMany);
       body = needsWater.length <= 3
         ? `${listNames(needsWater.map(p => nameOf(p, cs)))} are asking for water today.`
         : `${needsWater.length} plants are asking for water today.`;
@@ -125,16 +157,17 @@ function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
     type = 'reminder';
     if (dueReminders.length === 1) {
       const { plant: p, schedule: s } = dueReminders[0];
-      title = 'A custom reminder is due';
+      title = pick(PUN_TITLES.reminderOne);
       body = `${nameOf(p, cs)} is due for ${s.label.toLowerCase()} today.`;
       url = `./?plant=${encodeURIComponent(p.id)}`;
+      image = plantImageUrl(p);
       data = {
         url, gardenId, plantId: p.id, scheduleId: s.id,
         actionToken: signActionToken(gardenId, p.id, 'schedule-done', { scheduleId: s.id }),
       };
       actions = [{ action: 'schedule-done', title: 'Mark done' }];
     } else {
-      title = 'Custom reminders are due';
+      title = pick(PUN_TITLES.reminderMany);
       body = dueReminders.length <= 3
         ? `${listNames(dueReminders.map(d => `${nameOf(d.plant, cs)} (${d.schedule.label.toLowerCase()})`))}.`
         : `${dueReminders.length} custom reminders are due.`;
@@ -146,7 +179,7 @@ function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
     // rather than one per kind — sending a push per reminder type is exactly
     // the spam pattern this whole system is meant to avoid. Mixed pushes get
     // no action buttons: there's no single unambiguous "mark done" target.
-    title = 'A few things need doing in the garden';
+    title = pick(PUN_TITLES.mixed);
     const parts = [];
     if (needsWater.length) {
       parts.push(needsWater.length === 1
@@ -164,12 +197,12 @@ function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
     url = './?shortcut=needs';
     data = { url, gardenId };
   }
-  return { title, body, tag: 'watering', type, url, actions, data };
+  return { title, body, tag: 'watering', type, url, actions, data, image };
 }
 
 function buildDigestPush(gardenId, plants, lang, customRemindersEnabled) {
   const cs = lang === 'cs';
-  const title = 'This week in your garden';
+  const title = pick(PUN_TITLES.digest);
   const url = './?shortcut=digest';
   if (!plants.length) return { title, body: 'No plants yet — add the first one.', tag: 'digest', type: 'digest', url, data: { url, gardenId } };
 

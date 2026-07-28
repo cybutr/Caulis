@@ -95,6 +95,11 @@ self.addEventListener('push', e => {
     body: payload.body || '',
     icon: icons.icon,
     badge: icons.badge,
+    // the one large "hero" touch Web Push actually allows on Chrome/Android
+    // (no custom native layout, no Live Activity) — only ever a real https
+    // species-photo URL from the server, never a user's own base64 photo
+    // (see plantImageUrl() server-side for why); simply absent otherwise
+    image: payload.image || undefined,
     tag: payload.tag || type,
     renotify: true,
     vibrate: VIBRATE_PATTERNS[type] || VIBRATE_PATTERNS.watering,
