@@ -212,7 +212,8 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
             </div>
           )}
           <div style={{
-            position:'absolute', top:9, right:9, width:18, height:18, borderRadius:999, background:C.panel,
+            position:'absolute', top:9, right:9, minWidth:18, height:18, borderRadius:999, background:C.panel,
+            padding: getStatusStyle() === 'minimal' ? '0 6px' : 0,
             display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 2px rgba(43,42,38,0.12)',
           }}>
             <StatusDot status={status}/>
@@ -1241,7 +1242,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -1862,6 +1863,20 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               </div>
               <Segmented value={imageTreatment} onSelect={onSetImageTreatment} options={IMAGE_TREATMENT_ORDER.map(k=>[k, IMAGE_TREATMENTS[k].label])}/>
             </div>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 16px 12px', gap:12 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:11, minWidth:0 }}>
+                <div style={{ flexShrink:0, width:30, height:30, borderRadius:999, background:'rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  {statusStyle === 'minimal'
+                    ? <span style={{ fontFamily:FONT_SANS, fontSize:7, fontWeight:800, color:STATUS.needs.dot }}>OK</span>
+                    : <div style={{ width:9, height:9, borderRadius:999, background:STATUS.needs.dot, boxShadow:`0 0 0 3px ${STATUS.needs.ring}` }}/>}
+                </div>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Status indicator</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Dot with glow, or a plain text label</div>
+                </div>
+              </div>
+              <Segmented value={statusStyle} onSelect={onSetStatusStyle} options={STATUS_STYLE_ORDER.map(k=>[k, STATUS_STYLES[k].label])}/>
+            </div>
             <div style={{ padding:'12px 16px 2px', borderTop:C.hair }}>
               <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase' }}>Layout</span>
             </div>
@@ -2044,6 +2059,18 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div onClick={()=>onSetReminderHourLocal((reminderHourLocal + 23) % 24)} style={{ cursor:'pointer', width:30, height:30, borderRadius:9, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:17, fontWeight:600 }}>−</div>
                 <span style={{ minWidth:60, textAlign:'center', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.ink }}>{reminderHourLocal % 12 === 0 ? 12 : reminderHourLocal % 12}:00 {reminderHourLocal < 12 ? 'AM' : 'PM'}</span>
                 <div onClick={()=>onSetReminderHourLocal((reminderHourLocal + 1) % 24)} style={{ cursor:'pointer', width:30, height:30, borderRadius:9, background:'rgba(45,80,22,0.08)', color:C.forest, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:FONT_SANS, fontSize:17, fontWeight:600 }}>+</div>
+              </div>
+            </div>
+            <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink, marginBottom:1 }}>Watering ping frequency</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:10 }}>How often the watering/reminder push can fire</div>
+              <div style={{ display:'flex', gap:6 }}>
+                {[[1,'Daily'],[2,'2 days'],[3,'3 days'],[7,'Weekly']].map(([days, label]) => {
+                  const on = wateringFrequencyDays === days;
+                  return (
+                    <div key={days} onClick={()=>onSetWateringFrequencyDays(days)} style={{ flex:1, height:32, borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', background: on?C.forest:'rgba(45,80,22,0.07)', color: on?'#fff':C.ink, opacity: on?1:0.6, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, transition:'all 140ms ease' }}>{label}</div>
+                  );
+                })}
               </div>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>

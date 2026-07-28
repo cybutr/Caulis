@@ -46,6 +46,7 @@ Spacing: 18–22px side padding, 14px grid gap, 12px list gap, 56px header top.
 - `agoLabel(days)` formats the watered-ago string.
 - Plant images: `plant.userImage` overrides `plant.image` everywhere.
 - QR payload format: `caulis://plant/{id}`. Generated via `qrUrl(data, size)`.
+- Customization multiplier/preset pattern: a `caulis_*` localStorage value → an `apply*()` call in `app.jsx` (runs every render, no effect needed) → a module-level `let` in `caulis-core.jsx` read through a plain function (`rad()`, `ds()`, `getStatusStyle()`). Never a parallel styling mechanism or inline `<style>` — always through this same apply/read pair. `STATUS_STYLES`/`STATUS_STYLE_ORDER`/`applyStatusStyle`/`getStatusStyle` (`caulis-core.jsx`) toggle `StatusDot`/`StatusTag` between the classic dot+glow ring and a plain colored text abbreviation (`OK`/`SOON`/`NEEDS`) — wired in Settings → Appearance ("Status indicator").
 
 ## State Shape (`app.jsx`)
 
@@ -83,8 +84,12 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v165.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v166.
 Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
+
+Push payloads carry a `type` (`watering` | `reminder` | `digest`) that the `push` handler uses to pick a per-type `vibrate` pattern and a stable `tag` (with `renotify:true`, so a second same-type push replaces rather than stacks). Single-item watering/reminder pushes carry per-action signed tokens in `data` (`actionToken` for water/schedule-done, `snoozeToken` for snooze) minted by `signActionToken(gardenId, plantId, action, extra)` (`backend/src/auth.js`) — `notificationclick` looks up the right token for `e.action` and POSTs it + the action name to `/api/push/action`, which validates the signed action matches the button pressed before mutating anything. iOS Safari PWAs ignore `vibrate` entirely (no web-push vibration API) and don't render `image`/big-picture banners — richness there is limited to title/body/icon/actions; Android/Chrome gets the full set.
+
+`push_subscriptions.watering_frequency_days` (default 1 = daily) lets a garden pick the watering/custom-reminder push cadence independent of its time-of-day — Settings → Notifications → "Watering ping frequency" (Daily / 2 days / 3 days / Weekly). `checkAndSendPushes` in `backend/src/server.js` gates the send on both `last_watering_sent_on !== today` (never sends twice same day) AND elapsed days since the last send `>= watering_frequency_days`. Digest keeps its fixed weekly cadence (day-of-week picker only, no separate frequency column).
 
 ## Notification settings & custom reminders
 

@@ -16,11 +16,14 @@ export function verifyToken(token) {
   return jwt.verify(token, JWT_SECRET);
 }
 
-// narrow, short-lived token embedded in a push notification's "mark as
-// watered" action — scoped to one plant, one purpose, and expires quickly so
-// a stale/lingering notification can't be used to water the wrong day.
-export function signActionToken(gardenId, plantId, action) {
-  return jwt.sign({ gardenId, plantId, action, kind: 'push-action' }, JWT_SECRET, { expiresIn: '36h' });
+// narrow, short-lived token embedded in a push notification action button
+// (water / snooze / schedule-done) — scoped to one plant (+ one schedule for
+// schedule-done), one purpose, and expires quickly so a stale/lingering
+// notification can't be used to act on the wrong day. `extra` carries the
+// action-specific bits (currently just scheduleId) without widening every
+// other action's claim shape.
+export function signActionToken(gardenId, plantId, action, extra = {}) {
+  return jwt.sign({ gardenId, plantId, action, kind: 'push-action', ...extra }, JWT_SECRET, { expiresIn: '36h' });
 }
 
 export function verifyActionToken(token) {

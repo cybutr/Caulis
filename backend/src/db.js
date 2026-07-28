@@ -118,6 +118,12 @@ export async function initSchema() {
   // separate from watering_enabled/digest_enabled on purpose — a garden can
   // want watering pings but not custom-reminder noise, or vice versa
   await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS custom_reminders_enabled BOOLEAN NOT NULL DEFAULT false`);
+
+  // cadence for the watering/custom-reminder push, independent of its
+  // time-of-day (reminder_hour_utc) — 1 = daily (old default/behavior
+  // unchanged), 2/3/7 = every N days. Digest stays a fixed weekly cadence
+  // with just a day-of-week picker, so it gets no matching column.
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS watering_frequency_days SMALLINT NOT NULL DEFAULT 1`);
 }
 
 export async function getSetting(key) {

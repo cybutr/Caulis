@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '165'; // keep in sync with sw.js CACHE
+const APP_VERSION = '166'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -542,8 +542,22 @@ function IconCopy({ s = 16, c = C.ink, a = 0.55 }) {
 // ════════════════════════════════════════════════════════════
 //  Small shared components
 // ════════════════════════════════════════════════════════════
+// status indicator style — 'dot' is the original filled dot+glow ring,
+// 'minimal' swaps it for a plain colored text abbreviation, for anyone who
+// finds the dots visually noisy across a big grid. Same STATUS colors either
+// way — this only changes the shape, never invents a second palette.
+const STATUS_STYLES = { dot: { label:'Dot' }, minimal: { label:'Minimal' } };
+const STATUS_STYLE_ORDER = ['dot', 'minimal'];
+let statusStyle = 'dot';
+function applyStatusStyle(v) { if (STATUS_STYLES[v]) statusStyle = v; }
+function getStatusStyle() { return statusStyle; }
+const STATUS_ABBR = { ok:'OK', soon:'SOON', needs:'NEEDS' };
+
 function StatusDot({ status, size = 9 }) {
   const s = STATUS[status];
+  if (statusStyle === 'minimal') {
+    return <span style={{ fontFamily:FONT_SANS, fontSize:8, fontWeight:800, letterSpacing:0.3, color:s.dot }}>{STATUS_ABBR[status]}</span>;
+  }
   return <div style={{ width:size, height:size, borderRadius:999, background:s.dot, boxShadow:`0 0 0 3px ${s.ring}` }}/>;
 }
 
@@ -568,7 +582,7 @@ function StatusTag({ status }) {
       background:s.soft, color:s.dot, borderRadius:999, padding:'4px 11px',
       fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, letterSpacing:0.2,
     }}>
-      <span style={{ width:7, height:7, borderRadius:999, background:s.dot }}/> {s.label}
+      {statusStyle !== 'minimal' && <span style={{ width:7, height:7, borderRadius:999, background:s.dot }}/>} {s.label}
     </span>
   );
 }
@@ -681,6 +695,7 @@ Object.assign(window, {
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,
   BG_TEXTURES, BG_TEXTURE_ORDER, applyBgTexture, bgTextureStyle,
+  STATUS_STYLES, STATUS_STYLE_ORDER, applyStatusStyle, getStatusStyle,
   Leaf, LeafOutline, Sprig, gardenGrowthStage, trackSeenValue,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy,
   StatusDot, LocationPill, StatusTag, Specimen,

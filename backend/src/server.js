@@ -94,15 +94,22 @@ function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
     : [];
   if (!needsWater.length && !dueReminders.length) return null;
 
-  let title, body, url, actions, data;
+  let title, body, url, actions, data, type = 'watering';
   if (needsWater.length && !dueReminders.length) {
     if (needsWater.length === 1) {
       const p = needsWater[0];
       title = 'Thirsty in the pot';
       body = `${nameOf(p, cs)} is asking for water today.`;
       url = `./?plant=${encodeURIComponent(p.id)}`;
-      data = { url, gardenId, plantId: p.id, actionToken: signActionToken(gardenId, p.id, 'water') };
-      actions = [{ action: 'water', title: 'Mark watered' }];
+      data = {
+        url, gardenId, plantId: p.id,
+        actionToken: signActionToken(gardenId, p.id, 'water'),
+        snoozeToken: signActionToken(gardenId, p.id, 'snooze'),
+      };
+      // "Snooze 2 days" reuses the exact same snoozedUntil concept as the
+      // in-app swipe-to-snooze gesture (app.jsx's snooze()) — 2 days is that
+      // same default, not a new parallel number invented for push.
+      actions = [{ action: 'water', title: 'Mark watered' }, { action: 'snooze', title: 'Snooze 2 days' }];
     } else {
       title = 'The garden is waiting on the watering can';
       body = needsWater.length <= 3
@@ -111,10 +118,31 @@ function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
       url = './?shortcut=needs';
       data = { url, gardenId };
     }
+  } else if (dueReminders.length && !needsWater.length) {
+    type = 'reminder';
+    if (dueReminders.length === 1) {
+      const { plant: p, schedule: s } = dueReminders[0];
+      title = 'A custom reminder is due';
+      body = `${nameOf(p, cs)} is due for ${s.label.toLowerCase()} today.`;
+      url = `./?plant=${encodeURIComponent(p.id)}`;
+      data = {
+        url, gardenId, plantId: p.id, scheduleId: s.id,
+        actionToken: signActionToken(gardenId, p.id, 'schedule-done', { scheduleId: s.id }),
+      };
+      actions = [{ action: 'schedule-done', title: 'Mark done' }];
+    } else {
+      title = 'Custom reminders are due';
+      body = dueReminders.length <= 3
+        ? `${listNames(dueReminders.map(d => `${nameOf(d.plant, cs)} (${d.schedule.label.toLowerCase()})`))}.`
+        : `${dueReminders.length} custom reminders are due.`;
+      url = './?shortcut=needs';
+      data = { url, gardenId };
+    }
   } else {
     // watering + custom reminders both due today collapse into ONE push
     // rather than one per kind — sending a push per reminder type is exactly
-    // the spam pattern this whole system is meant to avoid.
+    // the spam pattern this whole system is meant to avoid. Mixed pushes get
+    // no action buttons: there's no single unambiguous "mark done" target.
     title = 'A few things need doing in the garden';
     const parts = [];
     if (needsWater.length) {
@@ -133,14 +161,14 @@ function buildWateringPush(gardenId, plants, lang, customRemindersEnabled) {
     url = './?shortcut=needs';
     data = { url, gardenId };
   }
-  return { title, body, tag: 'watering', url, actions, data };
+  return { title, body, tag: 'watering', type, url, actions, data };
 }
 
 function buildDigestPush(gardenId, plants, lang, customRemindersEnabled) {
   const cs = lang === 'cs';
   const title = 'This week in your garden';
   const url = './?shortcut=digest';
-  if (!plants.length) return { title, body: 'No plants yet — add the first one.', tag: 'digest', url, data: { url, gardenId } };
+  if (!plants.length) return { title, body: 'No plants yet — add the first one.', tag: 'digest', type: 'digest', url, data: { url, gardenId } };
 
   const cutoff = todayMidnightUTC() - 6 * DAY_MS;
   const wateredNames = [];
@@ -177,7 +205,7 @@ function buildDigestPush(gardenId, plants, lang, customRemindersEnabled) {
     bits.push("Everything's watered — nice work.");
   }
   const body = bits.join(' ');
-  return { title, body, tag: 'digest', url, data: { url, gardenId } };
+  return { title, body, tag: 'digest', type: 'digest', url, data: { url, gardenId } };
 }
 
 async function checkAndSendPushes() {
@@ -201,8 +229,17 @@ async function checkAndSendPushes() {
     // semantics as the old global check, just scoped per row now.
     const hour = typeof sub.reminder_hour_utc === 'number' ? sub.reminder_hour_utc : 8;
     const digestDow = typeof sub.digest_day_of_week === 'number' ? sub.digest_day_of_week : 1;
+    // cadence gate: 1 (default/legacy rows) reproduces the old always-daily
+    // behavior exactly. Higher values skip the intervening days by comparing
+    // elapsed days against the chosen frequency, not just "already sent
+    // today" — that string-equality check alone can never suppress a send on
+    // a later day, so it was never sufficient on its own for anything above
+    // daily cadence.
+    const freqDays = typeof sub.watering_frequency_days === 'number' && sub.watering_frequency_days > 0 ? sub.watering_frequency_days : 1;
+    const lastSentMs = sub.last_watering_sent_on ? midnightFromStamp(sub.last_watering_sent_on) : null;
+    const cadenceDue = lastSentMs == null || Math.round((todayMidnightUTC() - lastSentMs) / DAY_MS) >= freqDays;
 
-    if (sub.watering_enabled && nowUtcHour >= hour && sub.last_watering_sent_on !== todayStr) {
+    if (sub.watering_enabled && nowUtcHour >= hour && sub.last_watering_sent_on !== todayStr && cadenceDue) {
       const push = buildWateringPush(sub.garden_id, plants, sub.lang, sub.custom_reminders_enabled);
       if (push) {
         const ok = await sendPush(sub, push);
@@ -571,24 +608,26 @@ app.get('/api/push/vapid-key', async (req, reply) => {
 
 function clampHour(h) { return Number.isInteger(h) && h >= 0 && h <= 23 ? h : null; }
 function clampDow(d) { return Number.isInteger(d) && d >= 0 && d <= 6 ? d : null; }
+function clampFreq(d) { return Number.isInteger(d) && d >= 1 && d <= 30 ? d : null; }
 
 app.post('/api/push/subscribe', { preHandler: requireAuth }, async (req, reply) => {
-  const { subscription, wateringEnabled = true, digestEnabled = false, lang = 'en', reminderHourUtc, digestDayOfWeek, customRemindersEnabled = false } = req.body || {};
+  const { subscription, wateringEnabled = true, digestEnabled = false, lang = 'en', reminderHourUtc, digestDayOfWeek, customRemindersEnabled = false, wateringFrequencyDays } = req.body || {};
   if (!subscription?.endpoint) return reply.code(400).send({ error: 'subscription required' });
   const hour = clampHour(reminderHourUtc) ?? 8;
   const dow = clampDow(digestDayOfWeek) ?? 1;
+  const freq = clampFreq(wateringFrequencyDays) ?? 1;
   await pool.query(
-    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled, lang, reminder_hour_utc, digest_day_of_week, custom_reminders_enabled)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled, lang, reminder_hour_utc, digest_day_of_week, custom_reminders_enabled, watering_frequency_days)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      ON CONFLICT (endpoint) DO UPDATE SET
-       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5, lang = $6, reminder_hour_utc = $7, digest_day_of_week = $8, custom_reminders_enabled = $9`,
-    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled, lang === 'cs' ? 'cs' : 'en', hour, dow, !!customRemindersEnabled]
+       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5, lang = $6, reminder_hour_utc = $7, digest_day_of_week = $8, custom_reminders_enabled = $9, watering_frequency_days = $10`,
+    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled, lang === 'cs' ? 'cs' : 'en', hour, dow, !!customRemindersEnabled, freq]
   );
   return { ok: true };
 });
 
 app.put('/api/push/prefs', { preHandler: requireAuth }, async (req, reply) => {
-  const { endpoint, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled } = req.body || {};
+  const { endpoint, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled, wateringFrequencyDays } = req.body || {};
   if (!endpoint) return reply.code(400).send({ error: 'endpoint required' });
   await pool.query(
     `UPDATE push_subscriptions SET
@@ -597,9 +636,10 @@ app.put('/api/push/prefs', { preHandler: requireAuth }, async (req, reply) => {
        lang = COALESCE($3, lang),
        reminder_hour_utc = COALESCE($4, reminder_hour_utc),
        digest_day_of_week = COALESCE($5, digest_day_of_week),
-       custom_reminders_enabled = COALESCE($6, custom_reminders_enabled)
-     WHERE endpoint = $7 AND garden_id = $8`,
-    [wateringEnabled, digestEnabled, lang === 'cs' || lang === 'en' ? lang : null, clampHour(reminderHourUtc), clampDow(digestDayOfWeek), typeof customRemindersEnabled === 'boolean' ? customRemindersEnabled : null, endpoint, req.gardenId]
+       custom_reminders_enabled = COALESCE($6, custom_reminders_enabled),
+       watering_frequency_days = COALESCE($7, watering_frequency_days)
+     WHERE endpoint = $8 AND garden_id = $9`,
+    [wateringEnabled, digestEnabled, lang === 'cs' || lang === 'en' ? lang : null, clampHour(reminderHourUtc), clampDow(digestDayOfWeek), typeof customRemindersEnabled === 'boolean' ? customRemindersEnabled : null, clampFreq(wateringFrequencyDays), endpoint, req.gardenId]
   );
   return { ok: true };
 });
@@ -635,15 +675,19 @@ app.post('/api/push/test', { preHandler: requireAuth }, async (req, reply) => {
 });
 
 // fired from the service worker's notificationclick handler when the user
-// taps the "Mark watered" action button directly on a watering-reminder
-// notification — never trusts anything but the signed, single-purpose,
-// short-lived token minted into that specific notification's payload.
+// taps an action button directly on a notification (water / snooze 2 days /
+// mark a custom reminder done) — never trusts anything but the signed,
+// single-purpose, short-lived token minted into that specific notification's
+// payload. One endpoint, one shared transaction shape; each action just
+// picks its own field to mutate on the same locked plants[] row.
 app.post('/api/push/action', async (req, reply) => {
   const { token, action } = req.body || {};
   if (!token) return reply.code(400).send({ error: 'token required' });
   let claims;
   try { claims = verifyActionToken(token); } catch (e) { return reply.code(401).send({ error: 'invalid or expired token' }); }
-  if (claims.action !== 'water' || action !== 'water') return reply.code(400).send({ error: 'unsupported action' });
+  if (!['water', 'snooze', 'schedule-done'].includes(claims.action) || claims.action !== action) {
+    return reply.code(400).send({ error: 'unsupported action' });
+  }
 
   const client = await pool.connect();
   try {
@@ -653,26 +697,55 @@ app.post('/api/push/action', async (req, reply) => {
     const plants = Array.isArray(rows[0].plants) ? rows[0].plants : [];
     const idx = plants.findIndex(p => String(p.id) === String(claims.plantId));
     if (idx === -1) { await client.query('ROLLBACK'); return reply.code(404).send({ error: 'plant not found' }); }
-
-    const todayStr = new Date().toISOString().slice(0, 10);
     const p = plants[idx];
-    const history = Array.isArray(p.history) ? p.history : [];
-    // idempotent: tapping the action twice (or once after already watering
-    // in-app) must never produce the same duplicate-consecutive-date bug
-    // this whole dev-panel scan tool exists to catch.
-    if (history[history.length - 1] !== todayStr) {
-      const nextHistory = [...history, todayStr].slice(-60);
-      // wateredAt has to be the real tap instant (Date.now()), not a
-      // UTC-midnight snap: a client re-derives "days since" against ITS OWN
-      // local midnight (deriveWateredAt/daysSinceMidnight in caulis-core.jsx),
-      // and the server has no idea what that local midnight is. Snapping to
-      // UTC midnight put wateredAt up to a day in the "past" for anyone in a
-      // timezone ahead of UTC tapping the action button in their own early
-      // morning hours — daysSinceMidnight would then round up to 1, showing
-      // the plant as still needing water right after the tap that watered it.
-      // Date.now() has no such failure mode: "now" is always at-or-after
-      // local midnight in every timezone, so it always derives to 0 days.
-      plants[idx] = { ...p, history: nextHistory, wateredAt: Date.now(), wv: 3, days: 0 };
+    let changed = true;
+
+    if (action === 'water') {
+      const history = Array.isArray(p.history) ? p.history : [];
+      const todayStr = new Date().toISOString().slice(0, 10);
+      // idempotent: tapping the action twice (or once after already watering
+      // in-app) must never produce the same duplicate-consecutive-date bug
+      // this whole dev-panel scan tool exists to catch.
+      if (history[history.length - 1] !== todayStr) {
+        const nextHistory = [...history, todayStr].slice(-60);
+        // wateredAt has to be the real tap instant (Date.now()), not a
+        // UTC-midnight snap: a client re-derives "days since" against ITS OWN
+        // local midnight (deriveWateredAt/daysSinceMidnight in caulis-core.jsx),
+        // and the server has no idea what that local midnight is. Snapping to
+        // UTC midnight put wateredAt up to a day in the "past" for anyone in a
+        // timezone ahead of UTC tapping the action button in their own early
+        // morning hours — daysSinceMidnight would then round up to 1, showing
+        // the plant as still needing water right after the tap that watered it.
+        // Date.now() has no such failure mode: "now" is always at-or-after
+        // local midnight in every timezone, so it always derives to 0 days.
+        plants[idx] = { ...p, history: nextHistory, wateredAt: Date.now(), wv: 3, days: 0 };
+      } else {
+        changed = false;
+      }
+    } else if (action === 'snooze') {
+      // same 2-day default as the in-app swipe-to-snooze gesture (snooze()
+      // in app.jsx) — setting snoozedUntil to a fixed future midnight is
+      // naturally idempotent, a second tap just re-sets the same value.
+      const d = new Date(); d.setUTCHours(0, 0, 0, 0);
+      plants[idx] = { ...p, snoozedUntil: d.getTime() + 2 * DAY_MS };
+    } else if (action === 'schedule-done') {
+      const schedules = Array.isArray(p.schedules) ? p.schedules : [];
+      const sIdx = schedules.findIndex(s => String(s?.id) === String(claims.scheduleId));
+      if (sIdx === -1) { await client.query('ROLLBACK'); return reply.code(404).send({ error: 'schedule not found' }); }
+      const s = schedules[sIdx];
+      const d = new Date(); d.setUTCHours(0, 0, 0, 0);
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const sHistory = Array.isArray(s.history) ? s.history : [];
+      if (sHistory[sHistory.length - 1] !== todayStr) {
+        const nextSchedules = [...schedules];
+        nextSchedules[sIdx] = { ...s, lastDoneAt: d.getTime(), history: [...sHistory, todayStr].slice(-60) };
+        plants[idx] = { ...p, schedules: nextSchedules };
+      } else {
+        changed = false;
+      }
+    }
+
+    if (changed) {
       await client.query(
         'UPDATE garden_data SET plants = $1, rev = rev + 1, updated_at = now() WHERE garden_id = $2',
         [JSON.stringify(plants), claims.gardenId]
@@ -682,7 +755,7 @@ app.post('/api/push/action', async (req, reply) => {
     return { ok: true };
   } catch (e) {
     await client.query('ROLLBACK');
-    return reply.code(500).send({ error: 'failed to record watering' });
+    return reply.code(500).send({ error: 'failed to record action' });
   } finally {
     client.release();
   }

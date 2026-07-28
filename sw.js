@@ -1,4 +1,4 @@
-const CACHE = 'caulis-v165';
+const CACHE = 'caulis-v166';
 const SHELL = [
   './',
   './index.html',
@@ -49,15 +49,36 @@ self.addEventListener('activate', e => {
   );
 });
 
+// vibrate patterns give each push TYPE its own felt identity even though the
+// Notifications API otherwise renders all three the same way on most
+// platforms — a short double-tap for the daily watering nudge, a single
+// longer buzz for a due custom reminder, and a gentle single pulse for the
+// once-a-week digest (deliberately the calmest of the three, since it's a
+// summary, not an ask). Chrome/Android honors this; iOS Safari has no web
+// push vibration API at all and silently ignores the field — no crash, just
+// no haptic, which is the graceful-degradation case documented in CLAUDE.md.
+const VIBRATE_PATTERNS = {
+  watering: [80, 40, 80],
+  reminder: [160],
+  digest: [60],
+};
+
 self.addEventListener('push', e => {
   let payload = { title: 'Caulis', body: 'You have a garden update.' };
   try { payload = e.data.json(); } catch (err) {}
+  const type = payload.type || 'watering';
+  // renotify + a stable per-TYPE tag (not per-notification) means a second
+  // push of the same kind replaces the still-showing one on the lock screen
+  // instead of stacking — the closest thing the Notifications API has to
+  // "don't buzz me twice for the same kind of thing".
   e.waitUntil(self.registration.showNotification(payload.title || 'Caulis', {
     body: payload.body || '',
     icon: './icon-192.png',
     badge: './icon-192.png',
-    tag: payload.tag || 'caulis',
-    data: payload.data || { url: payload.url || './' },
+    tag: payload.tag || type,
+    renotify: true,
+    vibrate: VIBRATE_PATTERNS[type] || VIBRATE_PATTERNS.watering,
+    data: { ...(payload.data || { url: payload.url || './' }), type },
     actions: payload.actions || [],
   }));
 });
@@ -66,27 +87,31 @@ self.addEventListener('notificationclick', e => {
   const data = e.notification.data || {};
   const url = data.url || './';
 
-  // "Mark watered" fires straight from the notification, no app UI needed —
-  // record it server-side (idempotent, signed, single-plant token) and only
-  // fall through to opening the app if that request fails, so the user has
-  // a way to see/fix it manually.
-  if (e.action === 'water' && data.actionToken) {
+  // action buttons (water / snooze 2 days / mark reminder done) all fire
+  // straight from the notification, no app UI needed — record server-side
+  // (idempotent, signed, single-purpose token per action) and only fall
+  // through to opening the app if that request fails, so the user has a way
+  // to see/fix it manually. One shared branch: each action just picks which
+  // signed token it was minted with and which action string to send back.
+  const ACTION_TOKENS = { water: 'actionToken', snooze: 'snoozeToken', 'schedule-done': 'actionToken' };
+  const actionToken = data[ACTION_TOKENS[e.action]];
+  if (actionToken) {
     e.notification.close();
     e.waitUntil((async () => {
       try {
         const r = await fetch('https://api.caulis.czeddaru.dev/api/push/action', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ token: data.actionToken, action: 'water' }),
+          body: JSON.stringify({ token: actionToken, action: e.action }),
         });
         if (r.ok) return;
       } catch (err) {}
       // request failed (offline, expired token, server error) — the comment
       // above always described this fallback but the fetch's .catch(()=>{})
       // used to swallow it silently instead, so a failed tap looked identical
-      // to a successful one: notification gone, nothing actually watered.
+      // to a successful one: notification gone, nothing actually recorded.
       // Open the app deep-linked to the plant so the user can see it wasn't
-      // recorded and water it manually.
+      // recorded and act on it manually.
       const target = new URL(url, self.registration.scope).href;
       const clientList = await self.clients.matchAll({ type: 'window' });
       for (const client of clientList) {
