@@ -2722,7 +2722,17 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             const h = Array.isArray(p.history) ? p.history : [];
             const open = historyPlantId === p.id;
             return (
-              <div key={p.id} style={{ borderRadius:rad(11), background:C.bg, overflow:'hidden' }}>
+              // flexShrink:0 is load-bearing here, not decorative — inside the
+              // scroll wrapper below (a bounded-height flex column), a flex
+              // item's default flex-shrink:1 means the browser will squash
+              // every row down toward zero height to make them ALL fit the
+              // container instead of overflowing it, which is what actually
+              // renders as "blank" (every row a few px tall, no visible text)
+              // rather than producing a scrollbar. This is almost certainly
+              // the exact bug a prior pass hit and (never having isolated
+              // this cause) worked around by deleting the scroll wrapper
+              // outright.
+              <div key={p.id} style={{ borderRadius:rad(11), background:C.bg, overflow:'hidden', flexShrink:0 }}>
                 <div onClick={()=>setHistoryPlantId(open ? null : p.id)} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'8px 10px', cursor:'pointer' }}>
                   <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14.5, color:C.forest, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</span>
                   <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6, flexShrink:0 }}>{h.length} entries {open ? '▾' : '▸'}</span>
