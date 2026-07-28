@@ -479,6 +479,12 @@ function EmptyGarden({ onAdd, reduceMotion }) {
 // water" is one signal among several, never an override, so the banner
 // doesn't read as guilt-tripping every single day. Recomputed once per
 // GardenScreen mount (i.e. once per tab-visit/day), never per re-render.
+// collage tile count for the hero — a single blown-up photo stretched across
+// a wide/short banner forces a heavy upscale on typical phone-camera photos
+// (compressImage caps storage at 1024px), so the banner is a small considered
+// collage instead: each tile covers far less display area, so it needs far
+// less upscale from the same source resolution.
+const HERO_TILES = 3;
 function pickGardenHero(plants) {
   const withPhoto = p => (p.photos && p.photos[0]) || p.userImage || p.image;
   const candidates = (plants || []).filter(withPhoto);
@@ -497,9 +503,18 @@ function pickGardenHero(plants) {
   scored.sort((a, b) => b.score - a.score);
   const pick = scored[0];
   try { localStorage.setItem('caulis_hero_last', JSON.stringify([pick.p.id, ...lastFeatured.filter(id => id !== pick.p.id)].slice(0, 5))); } catch (e) {}
-  return { plant: pick.p, why: pick.why };
+  // dedupe by plant id (a plant can't appear twice in its own collage)
+  const group = [];
+  const seen = new Set();
+  for (const s of scored) {
+    if (seen.has(s.p.id)) continue;
+    seen.add(s.p.id);
+    group.push({ plant: s.p, why: s.why });
+    if (group.length >= HERO_TILES) break;
+  }
+  return { plant: pick.p, why: pick.why, group };
 }
-function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, style, placement, onReposition, labUnlocked, onUnlock }) {
+function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, style, placement, onReposition, labUnlocked, onUnlock }) {
   const [hero, setHero] = useState(null);
   // computed once plants actually arrive, not locked to whatever the very
   // first render happened to have — plants can still be mid-sync (local
@@ -522,12 +537,22 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, style, plac
   const dragging = useRef(false);
   const justDragged = useRef(false);
   const startY = useRef(0);
+  // onPointerUp (handleTap, counts toward the secret) fires before the
+  // browser's own click (which opens the plant) on every ordinary tap — so
+  // without this, a single tap both counts AND opens, and the very next tap
+  // reopens Plant Detail before a 2nd/3rd/... tap can ever land, making 7
+  // taps unreachable. First tap in a burst still opens normally (that's the
+  // expected single-tap action); only the 2nd+ rapid tap within the same
+  // counting window is suppressed, so a deliberate rapid-tap burst can keep
+  // going instead of bouncing to Plant Detail after tap one.
+  const suppressOpen = useRef(false);
 
   const handleTap = () => {
-    if (labUnlocked) return;
+    if (labUnlocked) { suppressOpen.current = false; return; }
     if (tapTimer.current) clearTimeout(tapTimer.current);
     tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 1400);
     tapCount.current += 1;
+    suppressOpen.current = tapCount.current > 1;
     if (tapCount.current >= 7) {
       tapCount.current = 0;
       onUnlock && onUnlock();
@@ -561,14 +586,17 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, style, plac
   const click = () => {
     if (justDragged.current) { justDragged.current = false; return; }
     if (labMode) return;
+    if (suppressOpen.current) { suppressOpen.current = false; return; }
     onOpen(hero.plant.id);
   };
 
   if (!hero) return null;
-  const { plant, why } = hero;
-  const img = (plant.photos && plant.photos[0]) || plant.userImage || plant.image;
+  const { plant, why, group } = hero;
   const name = czechMode && plant.czech ? plant.czech : plant.name;
   const caption = why === 'needs' ? `${name} would love a drink today` : why === 'recent' ? 'New in your garden' : `A quiet moment with ${name}`;
+  const tileImg = t => (t.plant.photos && t.plant.photos[0]) || t.plant.userImage || t.plant.image;
+  const tiles = (group && group.length ? group : [{ plant, why }]).slice(0, HERO_TILES);
+  const hideBrokenTile = e => { e.target.style.opacity = '0'; };
   return (
     <div style={{ position:'relative' }}>
       {labToast && (
@@ -591,12 +619,44 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, style, plac
           transition: dragging.current ? 'none' : 'box-shadow 200ms ease, transform 200ms ease',
           animation: reduceMotion ? undefined : 'heroIn 420ms cubic-bezier(.2,.8,.2,1) both',
           touchAction:'none',
+          maxWidth: isDesktop ? 640 : undefined,
           ...style,
         }}>
-        <img key={plant.id} src={img} alt="" style={{
-          position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', transformOrigin:'center',
-          animation: reduceMotion ? undefined : 'kenBurns 16s linear both',
-        }}/>
+        {/* collage, not one full-bleed photo stretched over a wide/short banner —
+            a single stored photo (compressImage caps at 1024px) has to upscale
+            hard to cover the whole width, which is what made the banner look
+            pixelated; each tile below covers far less area so it needs far less
+            upscale from the same source resolution. Featured tile (the scoring
+            winner) reads left and large; up to two supporting tiles stack right —
+            asymmetric on purpose, same "corner note, not centered" logic as the
+            caption below. Falls back to one full-bleed image when only one
+            plant photo exists at all. */}
+        {tiles.length === 1 ? (
+          <img key={tiles[0].plant.id} src={tileImg(tiles[0])} alt="" onError={hideBrokenTile} style={{
+            position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', transformOrigin:'center',
+            animation: reduceMotion ? undefined : 'kenBurns 16s linear both',
+          }}/>
+        ) : (
+          <div style={{ position:'absolute', inset:0, display:'flex', gap:3 }}>
+            <div style={{ flex:'0 0 62%', position:'relative', overflow:'hidden' }}>
+              <img key={tiles[0].plant.id} src={tileImg(tiles[0])} alt="" onError={hideBrokenTile} style={{
+                position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', transformOrigin:'center',
+                animation: reduceMotion ? undefined : 'kenBurns 16s linear both',
+              }}/>
+            </div>
+            <div style={{ flex:'1 1 auto', display:'flex', flexDirection:'column', gap:3 }}>
+              {tiles.slice(1).map((t, i) => (
+                <div key={t.plant.id} style={{ flex:1, position:'relative', overflow:'hidden' }}>
+                  <img src={tileImg(t)} alt="" onError={hideBrokenTile} style={{
+                    position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', transformOrigin:'center',
+                    animation: reduceMotion ? undefined : 'kenBurnsTile 16s linear both',
+                    animationDelay: reduceMotion ? undefined : `${i * 200}ms`,
+                  }}/>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div style={{ position:'absolute', inset:0, ...warmEdgeStyle(1) }}/>
         <div style={{ position:'absolute', inset:0, boxShadow:PHOTO_FRAME_SHADOW }}/>
         <div style={{ position:'absolute', inset:0, background:`linear-gradient(180deg, transparent 38%, ${C.bg}F2 94%)` }}/>
@@ -714,7 +774,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
           <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)', display:'flex', alignItems:'center', gap:8 }}>✦ {healthMsg}</div>
         </div>
       )}
-      {!empty && heroBanner === 'above' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} style={{ margin:`${topPad-30}px 18px 0` }} placement="above" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
+      {!empty && heroBanner === 'above' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} isDesktop={isDesktop} style={{ margin:`${topPad-30}px 18px 0` }} placement="above" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
       <div style={{ padding:`${topPad}px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
         <div style={{ display:'flex', alignItems: isDesktop ? 'flex-end' : 'center', justifyContent:'space-between', gap:12 }}>
           <div>
@@ -774,7 +834,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
 
       {empty && <EmptyGarden onAdd={onAdd} reduceMotion={reduceMotion}/>}
 
-      {!empty && heroBanner === 'below' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} placement="below" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
+      {!empty && heroBanner === 'below' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} isDesktop={isDesktop} placement="below" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
 
       {!empty && (
         <div style={{ padding:`12px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
