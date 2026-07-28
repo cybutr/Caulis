@@ -136,7 +136,15 @@ function Segmented({ options, value, onSelect }) {
 
 // collapsible settings category — module-level so children keep identity (no remount)
 function SettingsSection({ title, open, onToggle, children, id, matched, query, bodyRef }) {
-  useTextHighlight(bodyRef, query, matched);
+  // `bodyRef` here is actually a plain callback (registerSection(id) in
+  // SettingsScreen, used to populate sectionRefs.current for search scoring)
+  // — not a real ref object. useTextHighlight expects `ref.current`, and a
+  // function has no such property, so the highlight effect was silently
+  // no-op-ing on every keystroke (its own `!ref.current` guard always true).
+  // A real ref here drives the highlight; the callback still gets called
+  // separately so search scoring keeps working exactly as before.
+  const domRef = useRef(null);
+  useTextHighlight(domRef, query, matched);
   return (
     <div id={id} style={matched ? { borderRadius:rad(16), boxShadow:`0 0 0 2px ${C.forest}`, transition:'box-shadow 200ms ease' } : { transition:'box-shadow 200ms ease' }}>
       <div onClick={onToggle} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'pointer', padding: matched ? '8px 6px 8px' : '0 6px 8px' }}>
@@ -144,7 +152,7 @@ function SettingsSection({ title, open, onToggle, children, id, matched, query, 
         <svg width="13" height="13" viewBox="0 0 24 24" style={{ transform: open?'rotate(180deg)':'rotate(0deg)', transition:'transform 220ms ease', opacity:0.45 }}><path d="M6 9l6 6 6-6" stroke={C.brown} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
       </div>
       <div style={{ display:'grid', gridTemplateRows: open?'1fr':'0fr', transition:'grid-template-rows 260ms ease' }}>
-        <div ref={bodyRef} style={{ overflow:'hidden', minHeight:0 }}>{children}</div>
+        <div ref={el => { domRef.current = el; bodyRef && bodyRef(el); }} style={{ overflow:'hidden', minHeight:0 }}>{children}</div>
       </div>
     </div>
   );
