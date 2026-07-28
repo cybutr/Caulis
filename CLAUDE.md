@@ -66,6 +66,16 @@ Spacing: 18–22px side padding, 14px grid gap, 12px list gap, 56px header top.
 - **Toggle feedback** (`ToggleKnob`, `caulis-screens.jsx`): every Settings on/off switch is now this one shared component — a brief confirming ring-flash (`toggleFlash`) on change via `key={on}` remount, instead of an instant flat flip. Converted every existing hand-rolled toggle switch to it (search `ToggleKnob` — don't reintroduce a bespoke inline switch elsewhere).
 - **Reduce motion**: every animation above is a pure CSS `@keyframes` + `animation` property, so it's automatically neutralized by the existing global `html[data-rm="1"] *` override (`index.html`) in addition to any JS-level `reduceMotion` gating already present — belt and suspenders, never rely on only one.
 - **Custom reminders are edit-gated** (`caulis-detail.jsx`): `PlantDetail`'s view-mode Reminders section only renders once a plant has 1+ schedules (mark-done and tap-to-edit-existing stay available there) — no empty state, no "add" prompt cluttering the normal view. Adding a NEW reminder only happens from the Add/Edit plant form (`AddPlant`'s own "Reminders" `Field`, gated on `editing` — a brand-new unsaved plant has no id to attach a schedule to). `AddPlant` looks up the live plant from the `plants` prop each render (not the `editing` snapshot captured when the form opened) so a just-added reminder appears immediately.
+- **Surfaces reached in the broadened pass** (previously flat/untouched relative to Garden/Plant Detail): the species-suggestion loading state in the Add/Edit form (`caulis-detail.jsx`) now shows two `shimmerStyle()` skeleton rows instead of a bare spinner+text line — `shimmerStyle()` (`caulis-core.jsx`) existed unwired until this pass. `ContextMenu` (long-press menu, `caulis-screens.jsx`) gained a `warmEdgeStyle` top wash on its sheet plus a `slideFromL` stagger per row. `MoveSheet`'s room list picked up the same stagger. The Scanner `Viewfinder` got a soft warm radial glow behind the frame (no animation added — the existing 2.4s scanline stays the only motion there). `DesktopSidebar` nav rows (`SidebarItem`, new component) gained a hover lift/tint and a warm left-accent bar on the active tab — desktop had received none of today's depth pass until now.
+
+## Location tags (color + icon)
+
+- **Scope choice**: tags attach to LOCATIONS, not individual plants — rooms are a small, stable, named set that repeats across many plant cards, so one tag pays off everywhere that room's name appears; per-plant tagging would be much higher cardinality for the same visual payoff.
+- **Storage** (`app.jsx`): `locationTags` — `{ [roomName]: {color, icon} }` — persisted to `localStorage('caulis_location_tags')` via `setLocationTag(name, tag)`. `color` is a `PALETTE_ORDER` key (`forest`/`teal`/…/`custom`) or `'custom'` + a stored `hex`; `icon` is a `SCHEDULE_ICONS` key — both reuse the exact sets built for the global theme accent picker and custom reminder schedules, no parallel color/icon vocabulary invented. `renameLocation`/`removeLocation` (`app.jsx`) carry/drop the tag entry alongside the room name so it never survives under a stale key.
+- **Deliberately local-only, not synced**: `locations[]` is part of the synced garden payload with a strict server-side DB column and a 3-way `mergeArray` (see `caulis-firebase.jsx`) — that merge path has caused real incidents when widened carelessly. `locationTags` is a per-device visual preference instead, kept out of `pushGarden`/`mergeGarden` entirely, so this feature adds zero risk to the sync path. A plain-string location with no tag renders exactly as before (dot/pin fallback) — fully additive, no migration needed for existing data.
+- **Helpers** (`caulis-core.jsx`): `locationTagColor(tag)` / `locationTagIcon(tag)` resolve a tag to a hex string / icon component, `null` when untagged (every call site falls back to the pre-existing look).
+- **Editor** (`LocationTagEditor`, `caulis-screens.jsx`): inline under each room row in Settings → Garden → Rooms (`LocationsManager`), toggled by tapping a small color-swatch/pipette button next to the room name. Reuses `SwatchRow` + `CustomColorPicker` for color and the `SCHEDULE_ICON_ORDER` 12-icon grid for icon, plus a "Clear tag" action.
+- **Rendered wherever a location shows as a plain chip/label**: Garden screen's room filter chips and grouped-by-room `RoomHeader`, each `PlantCard`'s location line (small color dot), `LocationPill` (Print Queue rows), and the room-picker list in `MoveSheet` (also picked up a staggered fade-in as part of the broader depth pass).
 
 ## State Shape (`app.jsx`)
 
@@ -78,7 +88,8 @@ plants[]      // { id, name, latin, location, days, every, light, care, fact,
               // exactly like watering (lastDoneAt is midnight-anchored like wateredAt,
               // statusOf(days, everyDays) drives its status pill, no unit is stored —
               // the add/edit form's days/weeks toggle collapses to a plain everyDays int)
-locations[]   // known room names
+locations[]   // known room names (plain strings — see Location tags below for
+              // the separate, local-only color/icon overlay keyed by these names)
 tab           // 'garden' | 'needs' | 'scanner' | 'print' | 'settings'
 detail        // { id, fromScan } | null
 form          // { mode:'add' } | { mode:'edit', plant } | null

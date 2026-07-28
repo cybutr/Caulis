@@ -844,9 +844,10 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, o
               </div>
             )}
             {loadingSpecies && (
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:8, padding:'8px 14px' }}>
-                <div style={{ width:16, height:16, borderRadius:999, border:'2px solid rgba(45,80,22,0.2)', borderTopColor:C.forest, animation:'spin 0.9s linear infinite' }}/>
-                <span style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.6 }}>Loading care data…</span>
+              <div style={{ display:'flex', flexDirection:'column', gap:6, marginTop:8 }}>
+                {[0,1].map(i => (
+                  <div key={i} style={{ height:44, borderRadius:rad(12), ...shimmerStyle(), opacity: i ? 0.6 : 1 }}/>
+                ))}
               </div>
             )}
           </Field>

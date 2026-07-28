@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '174'; // keep in sync with sw.js CACHE
+const APP_VERSION = '175'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -881,15 +881,29 @@ function StatusDot({ status, size = 9 }) {
   return <div style={{ width:size, height:size, borderRadius:999, background:s.dot, boxShadow:`0 0 0 3px ${s.ring}` }}/>;
 }
 
-function LocationPill({ label }) {
+// a location's optional {color,icon} tag — color is a PALETTE_ORDER key (or
+// 'custom' + a stored hex), icon is a SCHEDULE_ICONS key. Reuses both existing
+// sets rather than inventing a location-specific color/icon vocabulary.
+function locationTagColor(tag) {
+  if (!tag) return null;
+  if (tag.color === 'custom' && tag.hex) return tag.hex;
+  return (PALETTES[tag.color] || {}).swatch || null;
+}
+function locationTagIcon(tag) {
+  if (!tag || !tag.icon || !SCHEDULE_ICONS[tag.icon]) return null;
+  return SCHEDULE_ICONS[tag.icon].Icon;
+}
+function LocationPill({ label, tag }) {
+  const col = locationTagColor(tag);
+  const TagIcon = locationTagIcon(tag);
   return (
     <span style={{
       display:'inline-flex', alignItems:'center', gap:4,
-      background:'rgba(107,76,42,0.08)', color:C.brown,
+      background: col ? `${col}17` : 'rgba(107,76,42,0.08)', color: col || C.brown,
       borderRadius:999, padding:'4px 10px 4px 8px',
       fontFamily:FONT_SANS, fontSize:11.5, fontWeight:500, letterSpacing:0.2,
     }}>
-      <IconPin/> {label}
+      {TagIcon ? <TagIcon s={11} c={col} a={1}/> : <IconPin/>} {label}
     </span>
   );
 }
@@ -1025,7 +1039,7 @@ Object.assign(window, {
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy, IconPipette,
   IconMist, IconFertilize, IconSun, IconScissors, IconRepot, IconClock, IconCalendarCheck, IconThermometer, IconRotate, IconWipe,
   SCHEDULE_ICONS, SCHEDULE_ICON_ORDER, defaultScheduleIcon, scheduleIconKey,
-  StatusDot, LocationPill, StatusTag, Specimen,
+  StatusDot, LocationPill, StatusTag, Specimen, locationTagColor, locationTagIcon,
   SEED_LOCATIONS,
   useWindowWidth, DESKTOP_BP, PLANT_QR_URL, applyTheme, APP_VERSION, MOTION,
 });

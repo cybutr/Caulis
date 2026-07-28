@@ -296,7 +296,7 @@ function GripIcon({ c = C.brown }) {
 }
 
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion, locationTags }) {
   const [press, setPress] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
@@ -343,7 +343,13 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
           </div>
         </div>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize: compact ? 15.5 : 21, lineHeight:1.12, color:C.forest, marginTop: compact ? 8 : 11, letterSpacing:0.1, overflowWrap:'anywhere' }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
-        <div style={{ fontFamily:FONT_SANS, fontSize: compact ? 9.5 : 10.5, fontWeight:400, color:C.brown, opacity:0.7, marginTop:2, letterSpacing:0.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{plant.location}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2, overflow:'hidden' }}>
+          {(() => {
+            const col = locationTagColor(locationTags && locationTags[plant.location]);
+            return col ? <span style={{ flexShrink:0, width:6, height:6, borderRadius:999, background:col }}/> : null;
+          })()}
+          <span style={{ fontFamily:FONT_SANS, fontSize: compact ? 9.5 : 10.5, fontWeight:400, color:C.brown, opacity:0.7, letterSpacing:0.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{plant.location}</span>
+        </div>
         <div style={{ display:'flex', alignItems:'center', gap: compact ? 4 : 6, marginTop: compact ? 7 : 9 }}>
           <svg width="11" height="13" viewBox="0 0 11 13" style={{flexShrink:0}}>
             <path d="M5.5 1C5.5 1 1 6 1 8.6A4.5 4.5 0 0010 8.6C10 6 5.5 1 5.5 1Z" fill="none" stroke={STATUS[status].dot} strokeWidth="1.1"/>
@@ -410,11 +416,13 @@ function GardenFilterBar({ sort, setSort, sidePad = 22, filterOpen, onToggleFilt
   );
 }
 
-function RoomHeader({ room, count }) {
+function RoomHeader({ room, count, tag }) {
+  const col = locationTagColor(tag);
+  const TagIcon = locationTagIcon(tag);
   return (
     <div style={{ display:'flex', alignItems:'center', gap:8, padding:'18px 4px 2px' }}>
-      <IconPin s={14} c={C.brown}/>
-      <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest, lineHeight:1.1 }}>{room}</span>
+      {TagIcon ? <TagIcon s={14} c={col || C.forest}/> : <IconPin s={14} c={C.brown}/>}
+      <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color: col || C.forest, lineHeight:1.1 }}>{room}</span>
       <div style={{ flex:1, height:'0.5px', background:'rgba(45,80,22,0.12)', margin:'0 4px' }}/>
       <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.3, flexShrink:0 }}>{count}</span>
     </div>
@@ -422,10 +430,10 @@ function RoomHeader({ room, count }) {
 }
 
 function ContextMenu({ plant, onClose, onEdit, onMove, onRemove, isDesktop }) {
-  const Item = ({ icon, label, danger, onClick }) => (
+  const Item = ({ icon, label, danger, onClick, i }) => (
     <div onClick={onClick} style={{
       display:'flex', alignItems:'center', gap:13, padding:'14px 16px', cursor:'pointer',
-      borderTop: C.hair,
+      borderTop: C.hair, animation:`slideFromL 220ms ease both`, animationDelay:`${i*30}ms`,
     }}>
       <div style={{ width:34, height:34, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', background: danger ? 'rgba(180,71,46,0.1)' : 'rgba(122,158,78,0.13)' }}>{icon}</div>
       <span style={{ fontFamily:FONT_SANS, fontSize:14.5, fontWeight:600, color: danger ? '#B4472E' : C.ink, whiteSpace:'nowrap' }}>{label}</span>
@@ -433,15 +441,16 @@ function ContextMenu({ plant, onClose, onEdit, onMove, onRemove, isDesktop }) {
   );
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, zIndex:35, background:'rgba(42,42,38,0.34)', display:'flex', flexDirection:'column', justifyContent:'flex-end', animation:'fade 160ms ease' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ margin:'0 12px 12px', background:C.bg, borderRadius:rad(24), overflow:'hidden', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', boxShadow:'0 -4px 30px rgba(0,0,0,0.12)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'15px 16px 13px' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ position:'relative', margin:'0 12px 12px', background:C.bg, borderRadius:rad(24), overflow:'hidden', animation:'slideUp 260ms cubic-bezier(.2,.8,.2,1)', boxShadow:'0 -4px 30px rgba(0,0,0,0.12)' }}>
+        <div style={warmEdgeStyle(0.8)}/>
+        <div style={{ position:'relative', display:'flex', alignItems:'center', gap:8, padding:'15px 16px 13px' }}>
           <Leaf size={17} color={C.forest}/>
           <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest }}>{plant.name}</span>
           <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>{plant.location}</span>
         </div>
-        <Item icon={<IconPin s={17} c={C.forest}/>} label="Move to another room" onClick={()=>{ onClose(); onMove(plant); }}/>
-        <Item icon={<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M13 3.5l3.5 3.5L7 16.5H3.5V13L13 3.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round"/></svg>} label="Edit plant" onClick={()=>{ onClose(); onEdit(plant); }}/>
-        <Item danger icon={<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M4 5.5h12M8 5.5V4a1 1 0 011-1h2a1 1 0 011 1v1.5M6 5.5l.7 10a1.5 1.5 0 001.5 1.4h3.6a1.5 1.5 0 001.5-1.4l.7-10" stroke="#B4472E" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>} label="Remove plant" onClick={()=>{ onClose(); onRemove(plant.id); }}/>
+        <Item i={0} icon={<IconPin s={17} c={C.forest}/>} label="Move to another room" onClick={()=>{ onClose(); onMove(plant); }}/>
+        <Item i={1} icon={<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M13 3.5l3.5 3.5L7 16.5H3.5V13L13 3.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round"/></svg>} label="Edit plant" onClick={()=>{ onClose(); onEdit(plant); }}/>
+        <Item i={2} danger icon={<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M4 5.5h12M8 5.5V4a1 1 0 011-1h2a1 1 0 011 1v1.5M6 5.5l.7 10a1.5 1.5 0 001.5 1.4h3.6a1.5 1.5 0 001.5-1.4l.7-10" stroke="#B4472E" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>} label="Remove plant" onClick={()=>{ onClose(); onRemove(plant.id); }}/>
         <div onClick={onClose} style={{ borderTop:C.hair, textAlign:'center', padding:'14px', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.brown, opacity:0.7, cursor:'pointer' }}>Cancel</div>
       </div>
     </div>
@@ -606,7 +615,7 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, style, plac
   );
 }
 
-function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab }) {
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab, locationTags }) {
   const [healthOpen, setHealthOpen] = useState(false);
   const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
@@ -654,7 +663,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
     flat = [...matched];
   }
 
-  const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact, reduceMotion };
+  const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact, reduceMotion, locationTags };
   let entranceCounter = 0;
 
   // easter egg: rapid-tapping the corner sprig watermark is a discoverable
@@ -805,13 +814,16 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
               {rooms.length > 0 && <div style={{ flexShrink:0, width:'0.5px', height:20, background:'rgba(45,80,22,0.14)', margin:'0 2px' }}/>}
               {rooms.map(r => {
                 const on = fLoc === r;
+                const tag = locationTags && locationTags[r];
+                const col = locationTagColor(tag);
+                const TagIcon = locationTagIcon(tag);
                 return (
                   <div key={r} onClick={()=>setFLoc(on ? null : r)} style={{
                     flexShrink:0, cursor:'pointer', whiteSpace:'nowrap', display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'6px 12px',
-                    background: on ? 'rgba(122,158,78,0.16)' : C.panel,
-                    border: on ? '1px solid rgba(110,154,62,0.5)' : '0.5px solid rgba(45,80,22,0.14)',
-                    color: on ? C.forest : C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight: on?600:500, transition:'all 140ms ease',
-                  }}><IconPin s={11} c={on?C.forest:C.brown}/> {r}</div>
+                    background: on ? (col ? `${col}22` : 'rgba(122,158,78,0.16)') : C.panel,
+                    border: on ? `1px solid ${col || 'rgba(110,154,62,0.5)'}` : '0.5px solid rgba(45,80,22,0.14)',
+                    color: on ? (col || C.forest) : C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight: on?600:500, transition:'all 140ms ease',
+                  }}>{TagIcon ? <TagIcon s={11} c={on ? (col||C.forest) : (col||C.brown)}/> : <IconPin s={11} c={on?C.forest:C.brown}/>} {r}</div>
                 );
               })}
             </div>
@@ -835,7 +847,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         <div style={{ padding:`4px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
           {groups.map(g => (
             <div key={g.room}>
-              <RoomHeader room={g.room} count={g.items.length}/>
+              <RoomHeader room={g.room} count={g.items.length} tag={locationTags && locationTags[g.room]}/>
               <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, marginTop:10 }}>
                 {g.items.map(p => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} entranceIdx={entranceCounter++}/>)}
               </div>
@@ -1215,6 +1227,7 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
 function Viewfinder({ onTap }) {
   return (
     <div onClick={onTap} style={{ position:'absolute', top:'50%', left:'50%', transform:'translate(-50%,-50%)', width:212, height:212, zIndex:3 }}>
+      <div style={{ position:'absolute', inset:-30, borderRadius:36, background:'radial-gradient(circle, rgba(122,158,78,0.16), transparent 68%)', pointerEvents:'none' }}/>
       {[['top','left'],['top','right'],['bottom','left'],['bottom','right']].map(([v,h],i)=>(
         <div key={i} style={{
           position:'absolute', [v]:0, [h]:0, width:40, height:40,
@@ -1311,7 +1324,7 @@ function ScannerScreen({ plants, onScan, isDesktop, paused }) {
 // ════════════════════════════════════════════════════════════
 //  PRINT QUEUE
 // ════════════════════════════════════════════════════════════
-function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechMode, grip, dragging, over }) {
+function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechMode, grip, dragging, over, locationTags }) {
   return (
     <div style={{ display:'flex', alignItems:'center', gap:10, background:C.panel, borderRadius:rad(18), padding:12, border: over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)', opacity: dragging ? 0.5 : 1, transition:'opacity 140ms ease, border-color 140ms ease' }}>
       <div {...grip} style={{ flexShrink:0, width:22, display:'flex', alignItems:'center', justifyContent:'center', cursor:'grab', touchAction:'none', opacity:0.45 }}><GripIcon/></div>
@@ -1319,7 +1332,7 @@ function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechM
       <div onClick={()=>onOpen(plant.id)} style={{ flex:1, minWidth:0, cursor:'pointer' }}>
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest, lineHeight:1.05, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.ink, opacity:0.55, marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{plant.latin}</div>
-        <div style={{ marginTop:5 }}><LocationPill label={plant.location}/></div>
+        <div style={{ marginTop:5 }}><LocationPill label={plant.location} tag={locationTags && locationTags[plant.location]}/></div>
       </div>
       <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:8, padding:2, flexShrink:0 }}>
         {PRINT_SIZES.map(([label, mm]) => {
@@ -1344,7 +1357,7 @@ function QueueRow({ plant, onOpen, onRemove, sizeMm, globalMm, onSetSize, czechM
     </div>
   );
 }
-function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed, isDesktop, globalPrintSize, onSetGlobalSize, queueSizes, onSetSize, onReorder, monochromePrint, onToggleMono, czechMode }) {
+function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed, isDesktop, globalPrintSize, onSetGlobalSize, queueSizes, onSetSize, onReorder, monochromePrint, onToggleMono, czechMode, locationTags }) {
   const items = queue.map(id => plants.find(p=>p.id===id)).filter(Boolean);
   const re = useReorder(onReorder);
   const sp = isDesktop ? 28 : 22;
@@ -1404,7 +1417,7 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
         </div>
       )}
       <div ref={re.containerRef} style={{ display:'flex', flexDirection:'column', gap:12, padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
-        {items.map((p,i) => <QueueRow key={p.id} plant={p} onOpen={onOpen} onRemove={onRemove} sizeMm={queueSizes[p.id]||null} globalMm={globalPrintSize} onSetSize={onSetSize} czechMode={czechMode} grip={re.grip(i)} dragging={re.dragIdx===i} over={re.overIdx===i && re.dragIdx!==i}/>)}
+        {items.map((p,i) => <QueueRow key={p.id} plant={p} onOpen={onOpen} onRemove={onRemove} sizeMm={queueSizes[p.id]||null} globalMm={globalPrintSize} onSetSize={onSetSize} czechMode={czechMode} grip={re.grip(i)} dragging={re.dragIdx===i} over={re.overIdx===i && re.dragIdx!==i} locationTags={locationTags}/>)}
       </div>
     </div>
   );
@@ -1416,12 +1429,54 @@ function PrintQueueScreen({ queue, plants, onOpen, onRemove, onPrintAll, printed
 // lives there in one move, and removed once it's empty again. Previously
 // onAddLocation was wired to a no-op everywhere, so a "room" only ever
 // existed for as long as some plant happened to sit in it.
-function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLight, onSetRoomLight }) {
+// inline color+icon editor for one room's tag — same SwatchRow/custom-picker
+// vocabulary as the Appearance palette/accent pickers, and the same 12-icon
+// SCHEDULE_ICONS grid built for custom reminder schedules, so a room tag
+// reads as the same underlying feature rather than a third one-off picker.
+function LocationTagEditor({ tag, onChange }) {
+  const color = (tag && tag.color) || null;
+  const hex = (tag && tag.color === 'custom' && tag.hex) || '#6B4C2A';
+  const icon = (tag && tag.icon) || null;
+  const setColor = (key) => onChange({ color: key, hex: key === 'custom' ? hex : undefined, icon });
+  const setHex = (h) => onChange({ color: 'custom', hex: h, icon });
+  const setIcon = (key) => onChange({ color: color || 'forest', hex: color === 'custom' ? hex : undefined, icon: icon === key ? null : key });
+  return (
+    <div style={{ marginTop:8, paddingTop:8, borderTop:C.hair }}>
+      <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.4, textTransform:'uppercase', marginBottom:6 }}>Color</div>
+      <SwatchRow size={26} value={color || 'none'} onSelect={setColor} options={[
+        ...PALETTE_ORDER.map(key => key === 'custom' ? { key, label:'Custom', ring:hex } : { key, label:PALETTES[key].label, swatch:PALETTES[key].swatch }),
+      ]}/>
+      {color === 'custom' && <CustomColorPicker hex={hex} onChange={setHex}/>}
+      <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.4, textTransform:'uppercase', margin:'10px 0 6px' }}>Icon</div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+        {SCHEDULE_ICON_ORDER.map(key => {
+          const on = icon === key;
+          const Ico = SCHEDULE_ICONS[key].Icon;
+          return (
+            <div key={key} onClick={()=>setIcon(key)} title={SCHEDULE_ICONS[key].label} style={{
+              width:30, height:30, borderRadius:rad(10), cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+              background: on ? (locationTagColor({color:color||'forest',hex}) || C.forest) : 'rgba(45,80,22,0.07)', transition:'background 140ms ease',
+            }}>
+              <Ico s={14} c={on ? '#fff' : C.ink} a={on ? 1 : 0.65}/>
+            </div>
+          );
+        })}
+      </div>
+      {(color || icon) && (
+        <div onClick={()=>onChange(null)} style={{ marginTop:10, display:'inline-flex', alignItems:'center', gap:5, cursor:'pointer' }}>
+          <span style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.brown, opacity:0.65 }}>Clear tag</span>
+        </div>
+      )}
+    </div>
+  );
+}
+function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLight, onSetRoomLight, locationTags, onSetLocationTag }) {
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [editing, setEditing] = useState(null);
   const [editVal, setEditVal] = useState('');
   const [lightRoom, setLightRoom] = useState(null);
+  const [tagRoom, setTagRoom] = useState(null);
   const counts = {};
   plants.forEach(p => { counts[p.location] = (counts[p.location] || 0) + 1; });
   const mismatches = {};
@@ -1447,6 +1502,16 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLi
                 </>
               ) : (
                 <>
+                  {(() => {
+                    const tag = locationTags && locationTags[l];
+                    const col = locationTagColor(tag);
+                    const TagIcon = locationTagIcon(tag);
+                    return (
+                      <span onClick={()=>setTagRoom(tagRoom === l ? null : l)} style={{ cursor:'pointer', flexShrink:0, width:20, height:20, borderRadius:999, background: col ? col : 'rgba(45,80,22,0.1)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        {TagIcon ? <TagIcon s={11} c="#fff" a={1}/> : <IconPipette s={11} c={C.brown} a={0.6}/>}
+                      </span>
+                    );
+                  })()}
                   <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:13.5, color:C.ink }}>{l}</span>
                   <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.55 }}>{counts[l] || 0} plant{counts[l] === 1 ? '' : 's'}</span>
                   <span onClick={()=>setLightRoom(lightRoom === l ? null : l)} style={{ cursor:'pointer', padding:4 }}>
@@ -1463,6 +1528,9 @@ function LocationsManager({ plants, locations, onAdd, onRename, onRemove, roomLi
                 </>
               )}
             </div>
+            {tagRoom === l && (
+              <LocationTagEditor tag={locationTags && locationTags[l]} onChange={(tag)=>onSetLocationTag(l, tag)}/>
+            )}
             {lightRoom === l && (
               <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8, paddingTop:8, borderTop:C.hair }}>
                 {ROOM_LIGHT_LEVELS.map(lv => {
@@ -1557,7 +1625,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -2335,7 +2403,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
           <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
             <Row label="Plants tracked" value={String(plants.length)}/>
             <Row label="Locations" value={String(locations.length)}/>
-            <LocationsManager plants={plants} locations={locations} onAdd={onAddLocationSetting} onRename={onRenameLocation} onRemove={onRemoveLocation} roomLight={roomLight} onSetRoomLight={onSetRoomLight}/>
+            <LocationsManager plants={plants} locations={locations} onAdd={onAddLocationSetting} onRename={onRenameLocation} onRemove={onRemoveLocation} roomLight={roomLight} onSetRoomLight={onSetRoomLight} locationTags={locationTags} onSetLocationTag={onSetLocationTag}/>
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Default watering</div>
@@ -3676,7 +3744,7 @@ function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true }) {
 // ════════════════════════════════════════════════════════════
 //  MOVE SHEET (reassign room)
 // ════════════════════════════════════════════════════════════
-function MoveSheet({ plant, ids, locations, onClose, onPick, onAddLocation, isDesktop }) {
+function MoveSheet({ plant, ids, locations, onClose, onPick, onAddLocation, isDesktop, locationTags }) {
   const [typed, setTyped] = useState('');
   const bulk = Array.isArray(ids) && ids.length > 0;
   const targets = bulk ? ids : (plant ? [plant.id] : []);
@@ -3692,15 +3760,19 @@ function MoveSheet({ plant, ids, locations, onClose, onPick, onAddLocation, isDe
         <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:21, color:C.forest, textAlign:'center' }}>{bulk ? `Move ${ids.length} plants` : `Move ${plant.name}`}</div>
         <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65, textAlign:'center', marginTop:3, marginBottom:16 }}>{bulk ? 'Choose a room' : `Currently in ${plant.location}`}</div>
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {locations.map(l => {
+          {locations.map((l, i) => {
             const on = !bulk && l === plant.location;
+            const tag = locationTags && locationTags[l];
+            const col = locationTagColor(tag);
+            const TagIcon = locationTagIcon(tag);
             return (
               <div key={l} onClick={()=>{ targets.forEach(id => onPick(id, l)); onClose(); }} style={{
                 display:'flex', alignItems:'center', gap:11, padding:'13px 14px', cursor:'pointer',
-                background:C.panel, borderRadius:rad(14), border: on ? '1px solid rgba(110,154,62,0.5)' : '0.5px solid rgba(45,80,22,0.12)',
+                background:C.panel, borderRadius:rad(14), border: on ? `1px solid ${col || 'rgba(110,154,62,0.5)'}` : '0.5px solid rgba(45,80,22,0.12)',
+                animation: i < CARD_STAGGER_CAP ? `slideFromL 260ms ease both` : 'none', animationDelay:`${i*24}ms`,
               }}>
-                <IconPin s={16} c={on?C.forest:C.brown}/>
-                <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:14, fontWeight:on?600:500, color: on?C.forest:C.ink }}>{l}</span>
+                {TagIcon ? <TagIcon s={16} c={on ? (col||C.forest) : (col||C.brown)}/> : <IconPin s={16} c={on?C.forest:C.brown}/>}
+                <span style={{ flex:1, fontFamily:FONT_SANS, fontSize:14, fontWeight:on?600:500, color: on?(col||C.forest):C.ink }}>{l}</span>
                 {on && <IconCheck s={16} c={C.sage}/>}
               </div>
             );
@@ -3741,6 +3813,26 @@ function PlantNotFoundScreen({ onBack }) {
 // ════════════════════════════════════════════════════════════
 //  DESKTOP SIDEBAR
 // ════════════════════════════════════════════════════════════
+// desktop sidebar row — a hover lift + warm left-accent bar for the active
+// tab, matching the mobile card-press/entrance vocabulary instead of the flat
+// background-only state the sidebar had before (desktop was otherwise the
+// one surface today's cozy pass hadn't reached at all)
+function SidebarItem({ onClick, title, collapsed, active, accent, children }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} title={title} style={{
+      position:'relative', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', gap:11,
+      padding: collapsed ? '11px 0' : '11px 12px', borderRadius:rad(12), marginBottom:4,
+      cursor:'pointer',
+      background: active ? 'rgba(45,80,22,0.09)' : hover ? 'rgba(45,80,22,0.045)' : 'transparent',
+      transform: hover && !active ? 'translateX(2px)' : 'translateX(0)',
+      transition:'background 140ms ease, transform 160ms cubic-bezier(.2,.8,.2,1)',
+    }}>
+      {active && <span style={{ position:'absolute', left:-6, top:'22%', bottom:'22%', width:3, borderRadius:999, background:accent }}/>}
+      {children}
+    </div>
+  );
+}
 function DesktopSidebar({ tab, setTab, onAction, navConfig, showLabels = true, sidebar = {} }) {
   const slots = normalizeNav(navConfig).filter(s => s.action !== 'empty');
   const fire = (action) => { const a = NAV_ACTIONS[action]; if (!a) return; if (a.tab) setTab(action); else onAction && onAction(action); };
@@ -3772,20 +3864,14 @@ function DesktopSidebar({ tab, setTab, onAction, navConfig, showLabels = true, s
           const active = meta.tab && tab === s.action;
           const accent = navColor(s);
           return (
-            <div key={i} onClick={()=>fire(s.action)} title={collapsed ? navLabel(s) : undefined} style={{
-              display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', gap:11,
-              padding: collapsed ? '11px 0' : '11px 12px', borderRadius:rad(12), marginBottom:4,
-              cursor:'pointer',
-              background: active ? 'rgba(45,80,22,0.09)' : 'transparent',
-              transition:'background 140ms ease',
-            }}>
+            <SidebarItem key={i} onClick={()=>fire(s.action)} title={collapsed ? navLabel(s) : undefined} collapsed={collapsed} active={active} accent={accent}>
               <meta.Icon s={20} c={active ? accent : C.brown} a={active ? 1 : 0.55}/>
               {labels && <span style={{
                 fontFamily:FONT_SANS, fontSize:14, fontWeight: active ? 600 : 500,
                 color: active ? accent : C.ink,
                 opacity: active ? 1 : 0.75,
               }}>{navLabel(s)}</span>}
-            </div>
+            </SidebarItem>
           );
         })}
       </nav>
