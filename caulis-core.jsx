@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '180'; // keep in sync with sw.js CACHE
+const APP_VERSION = '181'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -519,6 +519,37 @@ function deriveWateredAt(p) {
   const h = Array.isArray(p.history) ? p.history : [];
   if (h.length) return midnightFromStamp(h[h.length - 1]);
   return todayMidnight() - (p.days || 0) * DAY_MS;
+}
+
+// "time with this plant" — addedAt is a real creation timestamp (savePlant
+// in app.jsx), backfilled once to "now" for plants saved before this field
+// existed (see the caulis_plants initializer), so an old plant's clock
+// starts ticking from the day this shipped rather than a fabricated past.
+// Milestones only surface as a callout for a short window right after they're
+// crossed (MILESTONE_WINDOW_DAYS) — this is a passing moment, not a permanent
+// stat readout sitting in the detail view forever.
+const PLANT_MILESTONES = [
+  { days: 30, label: 'One month with you' },
+  { days: 182, label: 'Half a year with you' },
+  { days: 365, label: 'One year with you' },
+];
+const MILESTONE_WINDOW_DAYS = 12;
+function plantMilestoneLabel(addedAt) {
+  if (!addedAt) return null;
+  const ageDays = Math.floor((Date.now() - addedAt) / DAY_MS);
+  if (ageDays < 30) return null;
+  // yearly milestones past the first (2 years, 3 years, …) reuse the same
+  // phrasing rather than growing a second label table
+  let best = null;
+  for (const m of PLANT_MILESTONES) if (ageDays >= m.days) best = m;
+  if (ageDays >= 365) {
+    const years = Math.floor(ageDays / 365);
+    if (years >= 2) best = { days: years * 365, label: `${years} years with you` };
+  }
+  if (!best) return null;
+  const sinceCrossing = ageDays - best.days;
+  if (sinceCrossing < 0 || sinceCrossing > MILESTONE_WINDOW_DAYS) return null;
+  return best.label;
 }
 
 // a plant is due a care check-in once it has enough watering history to be
@@ -1074,7 +1105,7 @@ function navTabOrder(cfg) {
 Object.assign(window, {
   C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
   ROOM_LIGHT_LEVELS, sunlightLevel, plantLightRange, roomLightMismatch,
-  careCheckDue, adjustEveryForOutcome, HEALTH_TIERS, gardenHealthScore,
+  careCheckDue, adjustEveryForOutcome, HEALTH_TIERS, gardenHealthScore, plantMilestoneLabel,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor, MILESTONES,
   PALETTES, PALETTE_ORDER, ACCENTS, ACCENT_ORDER,

@@ -280,6 +280,8 @@ const BADGE_DEFS = [
       const earliest = stamps.reduce((min, s) => (s < min ? s : min), stamps[0]);
       return (Date.now() - earliest) >= 365 * DAY_MS;
     } },
+  { id: 'plant-anniversary', name: 'One Year Together', text: 'One plant, one full year, still on the windowsill.', Icon: BadgeIconCalendar,
+    check: ({ plants }) => plants.some(p => p.addedAt && (Date.now() - p.addedAt) >= 365 * DAY_MS) },
   { id: 'well-lit', name: 'Sun Room', text: 'Every plant matched to a room with the right light.', Icon: BadgeIconLantern,
     check: ({ plants, roomLight }) => plants.length >= 5 && !!roomLight &&
       plants.every(p => roomLight[p.location] && !roomLightMismatch(p, roomLight[p.location])) },
@@ -772,20 +774,21 @@ function BadgesView({ badges, onBack, isDesktop }) {
   const locked = BADGE_DEFS.filter(d => !earnedIds.has(d.id) && !d.adminOnly);
   return (
     <div style={{ position:'fixed', inset:0, zIndex:52, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
-      <div style={{ flexShrink:0, padding:'calc(18px + env(safe-area-inset-top)) 18px 14px', display:'flex', alignItems:'center', gap:12 }}>
+      <Sprig opacity={0.12}/>
+      <div style={{ flexShrink:0, padding:'calc(18px + env(safe-area-inset-top)) 18px 14px', display:'flex', alignItems:'center', gap:12, position:'relative', zIndex:2 }}>
         <div onClick={onBack} role="button" style={{ width:36, height:36, borderRadius:999, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><IconBack/></div>
         <div>
           <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest, lineHeight:1.1 }}>Badges</div>
           <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65, marginTop:2 }}>{earned.length} of {BADGE_DEFS.length} earned</div>
         </div>
       </div>
-      <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', display:'flex', flexDirection:'column', gap:22 }}>
+      <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', display:'flex', flexDirection:'column', gap:22, position:'relative', zIndex:2 }}>
         {earnedByDef.length > 0 && (
           <div>
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:10 }}>Earned</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {earnedByDef.map(({ def, at }) => (
-                <div key={def.id} style={{ display:'flex', alignItems:'center', gap:13, padding:'12px 14px', borderRadius:16, background:C.panel, border:C.hair }}>
+              {earnedByDef.map(({ def, at }, i) => (
+                <div key={def.id} style={{ display:'flex', alignItems:'center', gap:13, padding:'12px 14px', borderRadius:16, background:C.panel, border:C.hair, ...cardEntranceStyle(i) }}>
                   <div style={{ flexShrink:0, width:48, height:48, borderRadius:999, background:'rgba(122,158,78,0.13)', display:'flex', alignItems:'center', justifyContent:'center' }}>
                     <def.Icon s={24} c={C.forest}/>
                   </div>
@@ -803,10 +806,10 @@ function BadgesView({ badges, onBack, isDesktop }) {
           <div>
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:10 }}>Locked</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {locked.map(def => {
+              {locked.map((def, i) => {
                 const hidden = !!def.secret;
                 return (
-                  <div key={def.id} style={{ display:'flex', alignItems:'center', gap:13, padding:'12px 14px', borderRadius:16, background:'transparent', border:'1px dashed rgba(45,80,22,0.18)' }}>
+                  <div key={def.id} style={{ display:'flex', alignItems:'center', gap:13, padding:'12px 14px', borderRadius:16, background:'transparent', border:'1px dashed rgba(45,80,22,0.18)', ...cardEntranceStyle(earnedByDef.length + i) }}>
                     <div style={{ flexShrink:0, width:48, height:48, borderRadius:999, display:'flex', alignItems:'center', justifyContent:'center' }}>
                       {hidden
                         ? <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.brown, opacity:0.4 }}>?</div>

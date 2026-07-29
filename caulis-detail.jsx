@@ -198,6 +198,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
   const prevRef = useRef(null);
   const [scheduleForm, setScheduleForm] = useState(null); // null | {} (new) | schedule (editing)
   const [scheduleDeleteConfirm, setScheduleDeleteConfirm] = useState(null); // schedule id pending delete confirm
+  const [showStory, setShowStory] = useState(false);
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
   const gallery = plantGallery(plant);
 
@@ -258,6 +259,19 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
               <StatusTag status={justWatered ? 'ok' : status}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.5 }}>{agoLabel(plant.days)}</span>
             </div>
+            {(() => {
+              // a passing callout, not a permanent stat — only lit up for a
+              // short window right after crossing a real milestone (see
+              // plantMilestoneLabel/MILESTONE_WINDOW_DAYS, caulis-core.jsx)
+              const milestone = plantMilestoneLabel(plant.addedAt);
+              if (!milestone) return null;
+              return (
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:10 }}>
+                  <LeafOutline size={12} color={C.sage} sw={1.6}/>
+                  <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:13.5, color:C.sage }}>{milestone}</span>
+                </div>
+              );
+            })()}
             {(() => {
               if (!plants) return null;
               const parent = plant.propagatedFrom != null ? plants.find(p => p.id === plant.propagatedFrom) : null;
@@ -416,6 +430,10 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 </InfoTile>
               );
             })()}
+            <div onClick={()=>setShowStory(true)} style={{ cursor:'pointer', display:'flex', alignItems:'center', gap:8, padding:'2px 4px' }}>
+              <LeafOutline size={11} color={C.forest} sw={1.6}/>
+              <span style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:600, color:C.forest }}>View this plant's full story</span>
+            </div>
             <div style={{ display:'flex', alignItems:'center', gap:6, padding:'2px 4px' }}>
               <LeafOutline size={11} color={C.brown} sw={1.5}/>
               <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.55, letterSpacing:0.2 }}>Care data &amp; photo via Perenual, House Plants &amp; Wikipedia</span>
@@ -429,6 +447,14 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
               <img src={qrUrl(PLANT_QR_URL(plant.id), 220)} alt="QR code" style={{ width:'100%', height:'100%', display:'block' }}/>
             </div>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest, marginTop:12 }}>Scan to open {czechMode && plant.czech ? plant.czech : plant.name}</div>
+            {/* mirrors the small leaf+wordmark now printed on the physical
+                label itself (see printAll, app.jsx) — this tag leaves the
+                app entirely once it's taped to a pot, so it carries a
+                whisper of the same brand identity out there too */}
+            <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:6, opacity:0.55 }}>
+              <LeafOutline size={11} color={C.sage} sw={1.6}/>
+              <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:12, color:C.sage }}>Caulis</span>
+            </div>
             <div onClick={()=>onToggleQueue(plant.id)} style={{
               marginTop:16, cursor:'pointer', width:'100%',
               display:'flex', alignItems:'center', justifyContent:'center', gap:8, height:48, borderRadius:rad(14),
@@ -489,6 +515,106 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
           </div>
         </div>
       )}
+
+      {showStory && <PlantStoryView plant={plant} czechMode={czechMode} onBack={()=>setShowStory(false)}/>}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  PLANT STORY — one chronological log of everything logged for this plant:
+//  waterings, custom reminder check-ins, and the moment it joined the garden.
+//  Distinct from the tile-based detail view above on purpose: that view
+//  answers "what does this plant need right now", this one answers "what has
+//  actually happened here". Photos have no per-photo timestamp in this data
+//  model (compressImage/photos[] never stored one), so they're shown as an
+//  honest undated gallery strip rather than fabricated into the timeline.
+// ════════════════════════════════════════════════════════════
+function buildPlantStory(plant) {
+  const events = [];
+  if (plant.addedAt) events.push({ type:'added', date: plant.addedAt });
+  (plant.history || []).forEach(s => events.push({ type:'water', date: midnightFromStamp(s) }));
+  (plant.schedules || []).forEach(sch => {
+    (sch.history || []).forEach(s => events.push({ type:'schedule', label: sch.label, icon: sch.icon, date: midnightFromStamp(s) }));
+  });
+  events.sort((a, b) => b.date - a.date);
+  return events;
+}
+function storyEventIcon(ev) {
+  if (ev.type === 'added') return <LeafOutline size={14} color={C.forest} sw={1.7}/>;
+  if (ev.type === 'water') return <IconDrop s={14} c={C.sage}/>;
+  const Ico = (SCHEDULE_ICONS[ev.icon] || SCHEDULE_ICONS.leaf).Icon;
+  return <Ico s={14} c={C.brown} a={0.85}/>;
+}
+function storyEventText(ev, name) {
+  if (ev.type === 'added') return `${name} joined the garden`;
+  if (ev.type === 'water') return 'Watered';
+  return ev.label || 'Reminder logged';
+}
+function PlantStoryView({ plant, czechMode, onBack }) {
+  const name = czechMode && plant.czech ? plant.czech : plant.name;
+  const events = buildPlantStory(plant);
+  const gallery = plantGallery(plant);
+  const fmt = ms => new Date(ms).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  // group by calendar year — a plant that's been around a while can have
+  // hundreds of waterings; flat-listing all of them reads as a wall of dots,
+  // year headers give the log some real structure to scan
+  const groups = [];
+  let cur = null;
+  events.forEach(ev => {
+    const y = new Date(ev.date).getFullYear();
+    if (!cur || cur.year !== y) { cur = { year: y, items: [] }; groups.push(cur); }
+    cur.items.push(ev);
+  });
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:60, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
+      <Sprig opacity={0.12}/>
+      <div style={{ flexShrink:0, padding:'calc(18px + env(safe-area-inset-top)) 18px 14px', display:'flex', alignItems:'center', gap:12, position:'relative', zIndex:2 }}>
+        <div onClick={onBack} role="button" style={{ width:36, height:36, borderRadius:999, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><IconBack/></div>
+        <div>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest, lineHeight:1.1 }}>{name}'s story</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.65, marginTop:2 }}>{events.length} moment{events.length === 1 ? '' : 's'} logged</div>
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', position:'relative', zIndex:2 }}>
+        {gallery.length > 0 && (
+          <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:6, marginBottom:18 }}>
+            {gallery.map((src, i) => (
+              <img key={i} src={src} alt="" style={{ width:72, height:72, borderRadius:rad(14), objectFit:'cover', flexShrink:0, boxShadow:PHOTO_FRAME_SHADOW }}/>
+            ))}
+          </div>
+        )}
+        {events.length === 0 ? (
+          <div style={{ textAlign:'center', padding:'40px 20px', opacity:0.6 }}>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:17, color:C.forest }}>Nothing logged yet</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.7, marginTop:6 }}>Water {name} or check off a reminder to start this story.</div>
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:26 }}>
+            {groups.map(g => (
+              <div key={g.year}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase', marginBottom:10 }}>{g.year}</div>
+                <div style={{ position:'relative', paddingLeft:6 }}>
+                  <div style={{ position:'absolute', left:16, top:4, bottom:4, width:1, background:'rgba(45,80,22,0.1)' }}/>
+                  <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                    {g.items.map((ev, i) => (
+                      <div key={i} style={{ display:'flex', alignItems:'center', gap:12, ...cardEntranceStyle(i) }}>
+                        <div style={{ position:'relative', zIndex:1, flexShrink:0, width:32, height:32, borderRadius:999, background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                          {storyEventIcon(ev)}
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink }}>{storyEventText(ev, name)}</div>
+                        </div>
+                        <div style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11, color:C.brown, opacity:0.55, whiteSpace:'nowrap' }}>{fmt(ev.date)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

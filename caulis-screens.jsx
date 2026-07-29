@@ -551,6 +551,31 @@ function EmptyGarden({ onAdd, reduceMotion }) {
 // collage instead: each tile covers far less display area, so it needs far
 // less upscale from the same source resolution.
 const HERO_TILES = 3;
+// a whisper-layer of seasonal variety on the hero's quietest caption (the
+// "nothing urgent, nothing new" fallback) — real calendar month, no user
+// input, no palette/accent override. Deliberately just wording: a genuine
+// seasonal color tint risked fighting the user's own chosen palette/accent,
+// which this app treats as sacred everywhere else, so that idea stops here.
+const SEASONAL_QUIET_CAPTIONS = {
+  spring: ['New growth this time of year', 'Spring light on {name}', 'A quiet spring moment with {name}'],
+  summer: ['Long days for {name}', 'A quiet moment with {name}', 'Summer light on the leaves'],
+  autumn: ['Slower days for {name}', 'Autumn light on {name}', 'A quiet moment with {name}'],
+  winter: ['{name}, holding steady through winter', 'A quiet moment with {name}', 'Winter light, still green'],
+};
+function currentSeason(month = new Date().getMonth()) {
+  if (month <= 1 || month === 11) return 'winter';
+  if (month <= 4) return 'spring';
+  if (month <= 7) return 'summer';
+  return 'autumn';
+}
+function seasonalQuietCaption(name) {
+  const season = currentSeason();
+  const pool = SEASONAL_QUIET_CAPTIONS[season];
+  // deterministic per day (not per render) so the caption doesn't flicker
+  // between options on every rotation tick within the same visit
+  const idx = new Date().getDate() % pool.length;
+  return pool[idx].replace('{name}', name);
+}
 function pickGardenHero(plants) {
   const withPhoto = p => (p.photos && p.photos[0]) || p.userImage || p.image;
   const candidates = (plants || []).filter(withPhoto);
@@ -628,6 +653,21 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
   const tapTimer = useRef(null);
   const [labToast, setLabToast] = useState(null);
   const [labMode, setLabMode] = useState(false);
+  // "why this photo" — the scoring behind pickGardenHero is real (needs-water
+  // signal, recency, not-shown-lately), but was entirely invisible; a curious
+  // user had no way to know it wasn't random. A tiny reveal, not a settings
+  // page: tap it, get one honest sentence, it fades — same toast vocabulary
+  // as labToast below, never competing with the tap-to-open/7-tap/drag
+  // gestures already layered on this banner (stopPropagation keeps it inert
+  // to all three).
+  const [whyToast, setWhyToast] = useState(false);
+  const whyTimer = useRef(null);
+  const showWhy = (e) => {
+    e.stopPropagation();
+    setWhyToast(true);
+    if (whyTimer.current) clearTimeout(whyTimer.current);
+    whyTimer.current = setTimeout(() => setWhyToast(false), 3200);
+  };
   const [dragDy, setDragDy] = useState(0);
   const pressTimer = useRef(null);
   const dragging = useRef(false);
@@ -693,7 +733,7 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
   const renderContent = (h, fadingOut) => {
     const { plant, why, group } = h;
     const name = czechMode && plant.czech ? plant.czech : plant.name;
-    const caption = why === 'needs' ? `${name} would love a drink today` : why === 'recent' ? 'New in your garden' : `A quiet moment with ${name}`;
+    const caption = why === 'needs' ? `${name} would love a drink today` : why === 'recent' ? 'New in your garden' : seasonalQuietCaption(name);
     const tiles = (group && group.length ? group : [{ plant, why }]).slice(0, HERO_TILES);
     return (
       <div style={{
@@ -735,9 +775,19 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
         {/* deliberately asymmetric: the caption reads as a corner note, not a
             centered banner strip — a small rotated leaf accent breaks the
             grid's otherwise even rhythm rather than sitting dead-center */}
-        <div style={{ position:'absolute', left:16, right:'26%', bottom:12 }}>
-          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest }}>{name}</div>
-          <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.85, marginTop:2, lineHeight:1.35 }}>{caption}</div>
+        <div style={{ position:'absolute', left:16, right:'26%', bottom:12, display:'flex', alignItems:'flex-end', gap:6 }}>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:C.forest }}>{name}</div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.85, marginTop:2, lineHeight:1.35 }}>{caption}</div>
+          </div>
+          {!fadingOut && (
+            <div onClick={showWhy} role="button" aria-label="Why this photo?" style={{
+              flexShrink:0, width:16, height:16, borderRadius:999, marginBottom:1,
+              background:'rgba(255,255,255,0.55)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer',
+            }}>
+              <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:10.5, color:C.forest, lineHeight:1 }}>i</span>
+            </div>
+          )}
         </div>
         <div style={{ position:'absolute', top:12, right:14, opacity:0.7, transform:'rotate(12deg)', filter:'drop-shadow(0 1px 3px rgba(0,0,0,0.4))' }}>
           <LeafOutline size={16} color="#fff" sw={1.6}/>
@@ -745,8 +795,18 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
       </div>
     );
   };
+  const whyText = hero && (
+    hero.why === 'needs' ? "Featured because it's due for water — a nudge, not the only reason a photo gets picked."
+    : hero.why === 'recent' ? "Featured for being new here — recently-added plants get a turn in the spotlight."
+    : "Featured for a quiet moment — no plant needed water, so it's here on rotation and hasn't shown up in the last few days."
+  );
   return (
     <div style={{ position:'relative' }}>
+      {whyToast && whyText && (
+        <div style={{ position:'absolute', left:16, right:16, bottom:-8, transform:'translateY(100%)', zIndex:4, display:'flex', justifyContent:'flex-start', animation:'popUp 200ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+          <div style={{ maxWidth:280, background:C.toast, color:'#fff', borderRadius:12, padding:'9px 12px', fontFamily:FONT_SANS, fontSize:11.5, lineHeight:1.4, boxShadow:'0 8px 20px rgba(0,0,0,0.24)' }}>{whyText}</div>
+        </div>
+      )}
       {labToast && (
         <div style={{ position:'fixed', bottom:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
           <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>{labToast}</div>

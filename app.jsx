@@ -125,7 +125,11 @@ function App() {
     const legacy = lsGet('caulis_img_' + p.id, null);
     const history = Array.isArray(p.history) ? p.history : [];
     const wateredAt = deriveWateredAt({ ...p, history });
-    return { ...p, history, wateredAt, wv: WATER_SCHEMA, days: daysSinceMidnight(wateredAt), photos: photos || (legacy ? [legacy] : (p.photos || [])) };
+    // "time with this plant" needs a real creation moment — a plant saved
+    // before this field existed gets one backfilled to right now rather than
+    // a guessed past date, so its "with you for…" clock starts today, honestly
+    const addedAt = p.addedAt || Date.now();
+    return { ...p, history, wateredAt, wv: WATER_SCHEMA, days: daysSinceMidnight(wateredAt), addedAt, photos: photos || (legacy ? [legacy] : (p.photos || [])) };
   }));
   // rooms are mostly derived from where plants actually live, but a room
   // with zero plants in it (freshly created, or emptied by moving the last
@@ -1422,6 +1426,12 @@ function App() {
     const labelBg  = mono ? '#fff'   : '#FAFAF7';
     const nameCol  = mono ? '#111'   : '#2D5016';
     const latinCol = mono ? '#666'   : '#6B4C2A';
+    // this label is a real physical artifact — taped to a pot, disconnected
+    // from every bit of in-app chrome — so it's worth a whisper of the same
+    // brand identity the rest of the app carries, not just a bare QR square.
+    // Kept tiny and low-ink on purpose: one small leaf glyph + wordmark, safe
+    // under the monochrome toggle same as everything else on this sheet.
+    const brandCol = mono ? '#999' : '#7A9E4E';
     const qrSrc = (data, px) =>
       `https://api.qrserver.com/v1/create-qr-code/?size=${px}x${px}&margin=0&qzone=1&color=${qrInk}&bgcolor=${qrGround}&data=${encodeURIComponent(data)}`;
     const labels = items.map(p => {
@@ -1440,6 +1450,10 @@ function App() {
         <img src="${qrSrc(PLANT_QR_URL(p.id), qrPx)}" alt="" style="width:${qrMm}mm;height:${qrMm}mm"/>
         <div class="name" style="font-size:${namePt}pt;width:${textW}mm;color:${nameCol}">${esc(czechMode && p.czech ? p.czech : p.name)}</div>
         <div class="latin" style="font-size:${latinPt}pt;width:${textW}mm;color:${latinCol}">${esc(p.latin)}</div>
+        <div class="brand" style="color:${brandCol}">
+          <svg width="2.2mm" height="2.2mm" viewBox="0 0 24 24"><path d="M12 21C12 12 6 9 3 4c9 0 15 5 15 13 0-6 3-9 6-9-1 6-4 10-9 12-1 .5-2 1-3 1Z" fill="none" stroke="${brandCol}" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          <span>Caulis</span>
+        </div>
       </div>
     </div>`;
     }).join('');
@@ -1459,6 +1473,9 @@ body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .label img{display:block}
 .name{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;margin-top:1mm;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.02em}
 .latin{font-family:'DM Sans',sans-serif;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:0.5mm;opacity:0.65;letter-spacing:0.01em}
+.brand{display:flex;align-items:center;gap:0.8mm;margin-top:1.6mm;opacity:0.6}
+.brand svg{display:block;flex-shrink:0}
+.brand span{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:600;font-size:5.5pt;letter-spacing:0.03em}
 @media print{body{margin:0}.labels{padding:8mm}}
 </style></head><body>
 <div class="labels">${labels}</div>
@@ -1706,6 +1723,7 @@ window.onload=()=>{
         photos: data.photos || [],
         propagatedFrom: data.propagatedFrom || null,
         aiV: APP_VERSION,
+        addedAt: Date.now(),
       }]);
       setTab('garden');
     }

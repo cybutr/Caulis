@@ -68,6 +68,28 @@ Spacing: 18–22px side padding, 14px grid gap, 12px list gap, 56px header top.
 - **Custom reminders are edit-gated** (`caulis-detail.jsx`): `PlantDetail`'s view-mode Reminders section only renders once a plant has 1+ schedules (mark-done and tap-to-edit-existing stay available there) — no empty state, no "add" prompt cluttering the normal view. Adding a NEW reminder only happens from the Add/Edit plant form (`AddPlant`'s own "Reminders" `Field`, gated on `editing` — a brand-new unsaved plant has no id to attach a schedule to). `AddPlant` looks up the live plant from the `plants` prop each render (not the `editing` snapshot captured when the form opened) so a just-added reminder appears immediately.
 - **Surfaces reached in the broadened pass** (previously flat/untouched relative to Garden/Plant Detail): the species-suggestion loading state in the Add/Edit form (`caulis-detail.jsx`) now shows two `shimmerStyle()` skeleton rows instead of a bare spinner+text line — `shimmerStyle()` (`caulis-core.jsx`) existed unwired until this pass. `ContextMenu` (long-press menu, `caulis-screens.jsx`) gained a `warmEdgeStyle` top wash on its sheet plus a `slideFromL` stagger per row. `MoveSheet`'s room list picked up the same stagger. The Scanner `Viewfinder` got a soft warm radial glow behind the frame (no animation added — the existing 2.4s scanline stays the only motion there). `DesktopSidebar` nav rows (`SidebarItem`, new component) gained a hover lift/tint and a warm left-accent bar on the active tab — desktop had received none of today's depth pass until now.
 
+## Time with this plant (anniversary + seasonal touches, v181)
+
+- **`addedAt`** (`app.jsx`): a real creation timestamp, set on every new plant in `savePlant`'s no-`data.id` branch. Existing plants (saved before this field existed) get it backfilled once in the `caulis_plants` `useState` initializer — `p.addedAt || Date.now()`, i.e. "now," never a fabricated past date, so an old plant's "with you for…" clock honestly starts ticking from the day this shipped. Rides through `mergePlants` (`caulis-firebase.jsx`) with zero special-case code, same as any other plant field (that merge is a generic whole-object 3-way diff, not a field-by-field allowlist).
+- **`plantMilestoneLabel(addedAt)`** (`caulis-core.jsx`): 1 month / 6 months / 1 year, then yearly ("2 years with you", …). Only returns non-null for a short window after crossing (`MILESTONE_WINDOW_DAYS` = 12) — a passing callout, not a permanent stat readout. Rendered in `PlantDetail` just under the location/status row, small italic sage text with a leaf glyph.
+- **Badge**: `plant-anniversary` / "One Year Together" (`caulis-badges.jsx`) — per-plant `addedAt` crossing 365 days, distinct from the pre-existing `garden-anniversary` ("One Year In", garden-wide, earliest watering stamp) and `secret-old-friend` (30 waterings for one plant, not time-based). Reuses `BadgeIconCalendar` deliberately — that icon is already excluded from the ambient wallpaper layer (`AMBIENT_EXCLUDE_ICONS`) since a clock-face glyph drifting near a real on-screen timestamp reads as a false affordance; this badge inherits that exclusion for free.
+- **Seasonal hero captions**: the Garden hero banner's quietest fallback caption (`why` is neither `needs` nor `recent` — nothing urgent, nothing new) now varies by real calendar month (`currentSeason()`/`SEASONAL_QUIET_CAPTIONS`, `caulis-screens.jsx`), picked deterministically by day-of-month so it doesn't flicker between options within one visit. **No seasonal color tint was added** — a real tint risked competing with the user's own chosen palette/accent, which this app treats as sacred everywhere else (custom color picker, custom bg color, font pairing all layer strictly on top of, never over, the user's picks). Wording-only was the honest call here.
+- **Hero "why this photo"**: a tiny `i` chip next to the hero caption (`GardenHeroBanner`) reveals one honest sentence about why that photo was picked (needs-water nudge / recently-added / quiet-rotation), via the same toast vocabulary as the Layout Lab's `labToast`. `stopPropagation` keeps it inert to the tap-to-open/7-tap-unlock/drag-to-reposition gestures already layered on this same element.
+
+## Plant Story (`caulis-detail.jsx`)
+
+- A new chronological view, distinct from the tile-based `PlantDetail` on purpose: the detail view answers "what does this plant need right now," Plant Story answers "what has actually happened here." Opened via "View this plant's full story" under the Watering log tile.
+- `buildPlantStory(plant)` merges three real sources into one sorted (newest-first) list: the `addedAt` moment, every watering `history[]` stamp, and every custom reminder schedule's own `history[]` (each schedule's own icon/label, via `SCHEDULE_ICONS`). Grouped by calendar year with a thin connecting line, same "log" shape as a lot of activity-history UIs but drawn in this app's own vocabulary (`C.hair`, `FONT_SERIF` italic labels, `cardEntranceStyle` stagger).
+- **Photos are shown, not dated**: `photos[]`/`userImage` have no per-photo timestamp anywhere in this data model (`compressImage` never stored one) — rather than fabricate an ordering, the plant's current photos render as a plain undated gallery strip above the timeline. Honest scope-limit, not a bug.
+
+## Print tag warmth (v181)
+
+- The actual physical artifact — the label someone tapes to a pot — was previously a bare QR code + name + latin, with zero brand identity once it left the app. `printAll` (`app.jsx`) now adds one small leaf glyph + italic "Caulis" wordmark under the latin name on every printed label (`.brand` CSS class in the generated label-sheet HTML), respecting the existing monochrome-print toggle (`brandCol` follows `mono` exactly like `qrInk`/`nameCol`). The in-app QR preview in `PlantDetail` mirrors the same small mark so the preview matches what actually prints.
+
+## Badges view (`caulis-badges.jsx`)
+
+- `BadgesView` was missing the `Sprig` watermark every other full-screen overlay carries (the same class of gap the Doctor overlay had before its same-day fix) and had no entrance animation on its earned/locked rows — both fixed: `Sprig opacity={0.12}` plus `cardEntranceStyle(i)` per row (locked rows continue the index count from where earned rows left off).
+
 ## Weekly Digest
 
 - **`WeeklyDigest`** (`caulis-screens.jsx`), opened via Settings → Notifications digest preview / `onOpenDigest`: redesigned in v180 from a single-photo banner + two flat stat tiles into a genuinely richer "weekly recap" using the same tokens (`C`, `rad()`, `ds()`, `FONT_SERIF`/`FONT_SANS`, `warmEdgeStyle`/`PHOTO_FRAME_SHADOW`) as everything else shipped this pass.
@@ -89,6 +111,10 @@ Spacing: 18–22px side padding, 14px grid gap, 12px list gap, 56px header top.
 ```js
 plants[]      // { id, name, latin, location, days, every, light, care, fact,
               //   watering, benchmark, sunlight[], species_id, image, userImage,
+              //   addedAt, schedules[] }
+              // addedAt: real creation timestamp (set in savePlant), backfilled
+              // to Date.now() for pre-existing plants — drives plantMilestoneLabel
+              // ("with you for…" callouts) and the plant-anniversary badge
               //   schedules[] }
               // schedules[]: { id, label, everyDays, lastDoneAt, history[] } — user-
               // defined recurring reminders (misting, fertilizing, anything), modeled
@@ -126,7 +152,7 @@ printed       // bool (transient Print-all confirmation)
 
 ## Service Worker
 
-`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v180.
+`sw.js` line 1: `const CACHE = 'caulis-vN'` — bump N every time any file changes. Current: v181.
 Keep `APP_VERSION` in `caulis-core.jsx` in sync with the `sw.js` CACHE number.
 
 Push payloads carry a `type` (`watering` | `reminder` | `digest`) that the `push` handler uses to pick a per-type `vibrate` pattern and a stable `tag` (with `renotify:true`, so a second same-type push replaces rather than stacks). Single-item watering/reminder pushes carry per-action signed tokens in `data` (`actionToken` for water/schedule-done, `snoozeToken` for snooze) minted by `signActionToken(gardenId, plantId, action, extra)` (`backend/src/auth.js`) — `notificationclick` looks up the right token for `e.action` and POSTs it + the action name to `/api/push/action`, which validates the signed action matches the button pressed before mutating anything. iOS Safari PWAs ignore `vibrate` entirely (no web-push vibration API) and don't render `image`/big-picture banners — richness there is limited to title/body/icon/actions; Android/Chrome gets the full set.
