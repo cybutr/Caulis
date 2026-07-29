@@ -15,6 +15,43 @@ function InfoTile({ icon, label, children, accent = C.forest }) {
   );
 }
 
+// ── flowing care narrative — replaces the old boxed light/watering
+// InfoTile pair (see CLAUDE.md "Plant Detail editorial rework"). Genuinely
+// at-a-glance stat data (reminders, watering log) stays tiled; this is for
+// content meant to be read, not scanned as a number ──
+function InlineGlyph({ children }) {
+  return <span style={{ display:'inline-flex', verticalAlign:-3, marginRight:5 }}>{children}</span>;
+}
+function CareNarrative({ plant }) {
+  if (!plant.light && !plant.watering && !plant.every && !plant.care && !plant.fact) return null;
+  const benchmark = plant.benchmark || (plant.every ? `${plant.every} days` : null);
+  return (
+    <div style={{ padding:'2px 4px' }}>
+      {(plant.light || benchmark) && (
+        <p style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:500, fontSize:17, lineHeight:1.55, color:C.ink, margin:0 }}>
+          {plant.light && (<>
+            <InlineGlyph><IconSun s={15} c={C.sage}/></InlineGlyph>
+            Prefers {plant.light.toLowerCase()} light.{benchmark ? ' ' : ''}
+          </>)}
+          {benchmark && (<>
+            <InlineGlyph><IconDrop s={15} c={C.sage}/></InlineGlyph>
+            {(plant.watering || 'Regular')} watering — about every {benchmark} — keeps it happy.
+          </>)}
+        </p>
+      )}
+      {plant.care && (
+        <p style={{ fontFamily:FONT_SANS, fontSize:14, lineHeight:1.6, color:C.ink, opacity:0.75, margin:'10px 0 0' }}>{plant.care}</p>
+      )}
+      {plant.fact && (
+        <p style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14, lineHeight:1.55, color:C.sage, margin:'10px 0 0' }}>
+          <InlineGlyph><LeafOutline size={11} color={C.sage} sw={1.6}/></InlineGlyph>
+          {plant.fact}
+        </p>
+      )}
+    </div>
+  );
+}
+
 const offsetLabel = (n) => n === 0 ? 'Today' : n === 1 ? 'Yesterday' : `${n} days ago`;
 
 // ── custom reminder schedules — same status math as watering (statusOf),
@@ -355,13 +392,34 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
               which would fight the overlay's own slideUp) so this doesn't
               mount as flat, static chrome under the new hero treatment */}
           <div style={{ display:'flex', flexDirection:'column', gap:12, marginTop:18, animation: reduceMotion ? undefined : 'cardIn 380ms cubic-bezier(.2,.8,.2,1) both', animationDelay: reduceMotion ? undefined : '90ms' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-              <InfoTile icon={<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill={C.sage}/><path d="M12 2.5v2.4M12 19.1v2.4M21.5 12h-2.4M4.9 12H2.5M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7M18.4 18.4l-1.7-1.7M7.3 7.3 5.6 5.6" stroke={C.sage} strokeWidth="1.8" strokeLinecap="round"/></svg>} label="Light">{plant.light || '—'}</InfoTile>
-              <InfoTile icon={<IconDrop s={14} c={C.sage}/>} label="Watering">
-                <span style={{ fontWeight:600 }}>{plant.watering || 'Average'}</span>
-                <span style={{ opacity:0.6 }}> · every {plant.benchmark || plant.every + ' days'}</span>
-              </InfoTile>
-            </div>
+            <CareNarrative plant={plant}/>
+            {(() => {
+              const mismatch = roomLight ? roomLightMismatch(plant, roomLight) : null;
+              const chips = [];
+              if (mismatch) {
+                const msg = mismatch === 'dim'
+                  ? `${plant.location || 'This room'} may be too dim for this plant's light needs.`
+                  : `${plant.location || 'This room'} may get more direct sun than this plant likes.`;
+                chips.push(
+                  <span key="room" style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:999, background:'rgba(201,138,43,0.12)', fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:STATUS.soon.dot }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="none" stroke={STATUS.soon.dot} strokeWidth={isw(1.7)}/><path d="M12 2.5v2.5M12 19v2.5M4.5 12H2M22 12h-2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" stroke={STATUS.soon.dot} strokeWidth={isw(1.7)} strokeLinecap="round"/></svg>
+                    {msg}
+                  </span>
+                );
+              }
+              if (typeof plant.toxicToPets === 'boolean') {
+                chips.push(
+                  <span key="pet" style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'6px 12px', borderRadius:999, background: plant.toxicToPets ? 'rgba(180,71,46,0.1)' : 'rgba(122,158,78,0.1)', fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color: plant.toxicToPets ? STATUS.needs.dot : C.sage }}>
+                    {plant.toxicToPets
+                      ? <svg width="13" height="13" viewBox="0 0 24 24"><path d="M12 2 2 21h20L12 2Z" fill="none" stroke={STATUS.needs.dot} strokeWidth={isw(1.8)} strokeLinejoin="round"/><path d="M12 9v5M12 17.2v.1" stroke={STATUS.needs.dot} strokeWidth={isw(1.8)} strokeLinecap="round"/></svg>
+                      : <IconCheck s={13} c={C.sage}/>}
+                    {plant.toxicToPets ? 'Toxic to pets' : 'Safe for pets'}
+                  </span>
+                );
+              }
+              if (!chips.length) return null;
+              return <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>{chips}</div>;
+            })()}
             {/* moved up from below the watering log — "can't find how to add
                 a custom schedule" was a placement problem, not a wiring bug:
                 this card was fully functional but buried after four other
@@ -382,34 +440,6 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
                 ))}
               </div>
             )}
-            {(() => {
-              const mismatch = roomLight ? roomLightMismatch(plant, roomLight) : null;
-              if (!mismatch) return null;
-              const msg = mismatch === 'dim'
-                ? `${plant.location || 'This room'} may be too dim for this plant's light needs.`
-                : `${plant.location || 'This room'} may get more direct sun than this plant likes.`;
-              return (
-                <InfoTile
-                  icon={<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="none" stroke={STATUS.soon.dot} strokeWidth="1.7"/><path d="M12 2.5v2.5M12 19v2.5M4.5 12H2M22 12h-2.5M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8" stroke={STATUS.soon.dot} strokeWidth="1.7" strokeLinecap="round"/></svg>}
-                  label="Room light"
-                >
-                  <span style={{ color:STATUS.soon.dot, fontWeight:600 }}>{msg}</span>
-                </InfoTile>
-              );
-            })()}
-            {typeof plant.toxicToPets === 'boolean' && (
-              <InfoTile
-                icon={plant.toxicToPets
-                  ? <svg width="14" height="14" viewBox="0 0 24 24"><path d="M12 2 2 21h20L12 2Z" fill="none" stroke={STATUS.needs.dot} strokeWidth="1.8" strokeLinejoin="round"/><path d="M12 9v5M12 17.2v.1" stroke={STATUS.needs.dot} strokeWidth="1.8" strokeLinecap="round"/></svg>
-                  : <IconCheck s={14} c={C.sage}/>}
-                label="Pet safety"
-              >
-                <span style={{ fontWeight:600, color: plant.toxicToPets ? STATUS.needs.dot : C.sage }}>{plant.toxicToPets ? 'Toxic to pets' : 'Safe for pets'}</span>
-                <span style={{ opacity:0.6 }}> — {plant.toxicToPets ? 'keep away from cats & dogs' : 'no known toxicity to cats & dogs'}</span>
-              </InfoTile>
-            )}
-            {plant.care && <InfoTile icon={<LeafOutline size={14} color={C.sage} sw={1.7}/>} label="Care">{plant.care}</InfoTile>}
-            {plant.fact && <InfoTile icon={<span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:700, fontSize:14, color:C.sage }}>i</span>} label="Fun fact">{plant.fact}</InfoTile>}
             {(() => {
               const st = wateringStats(plant.history);
               const fmt = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d).toLocaleDateString('en-US', { month:'short', day:'numeric' }); };
