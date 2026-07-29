@@ -1418,6 +1418,7 @@ function DoctorOverlay({ plant, plants, anthropicKey, model, onApplyCorrection, 
   const sp = isDesktop ? 28 : 18;
   return (
     <div style={{ position: isDesktop ? 'absolute' : 'fixed', inset:0, zIndex:46, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
+      <Sprig opacity={0.1}/>
       <input ref={fileRef} type="file" accept="image/*" style={{ display:'none' }}/>
       <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:`56px ${sp}px 14px`, position:'relative', zIndex:5 }}>
         <div onClick={onBack} style={{ cursor:'pointer', width:38, height:38, borderRadius:999, background:C.panel, border:C.hair, boxShadow:'0 2px 8px rgba(45,80,22,0.06)', display:'flex', alignItems:'center', justifyContent:'center' }}>
