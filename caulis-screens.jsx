@@ -423,7 +423,7 @@ function GripIcon({ c = C.brown }) {
 }
 
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion, locationTags, cardDateMode = 'last' }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion, locationTags, cardDateMode = 'last', span }) {
   const [press, setPress] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
@@ -437,7 +437,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
   const click = () => { if (selectable) { onToggleSelect(plant.id); return; } if (longed.current) { longed.current = false; return; } onOpen(plant.id); };
   const entrance = (!reduceMotion && entranceIdx != null) ? cardEntranceStyle(entranceIdx) : {};
   return (
-    <div data-noswipe="1" style={{ position:'relative', borderRadius: compact ? rad(16) : rad(22), overflow:'hidden', ...entrance }}>
+    <div data-noswipe="1" style={{ position:'relative', borderRadius: compact ? rad(16) : rad(22), overflow:'hidden', gridColumn: span ? `span ${span}` : undefined, ...entrance }}>
       <div
         onPointerDown={start} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} onClick={click}
         style={{
@@ -450,7 +450,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
           cursor:'pointer', position:'relative', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y',
         }}>
         <div style={{ position:'relative' }}>
-          <Specimen tint={tint} height={compact ? 76 : 96} radius={compact ? 11 : 15} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/>
+          <Specimen tint={tint} height={span ? (compact ? 96 : 122) : (compact ? 76 : 96)} radius={compact ? 11 : 15} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/>
           {grip && (
             <div {...grip} onClick={e=>e.stopPropagation()} style={{ position:'absolute', top:9, left:9, width:24, height:24, borderRadius:999, background:C.panel, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 2px rgba(43,42,38,0.12)', cursor:'grab', touchAction:'none' }}>
               <GripIcon/>
@@ -469,7 +469,7 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
             <StatusDot status={status}/>
           </div>
         </div>
-        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize: compact ? 15.5 : 21, lineHeight:1.12, color:C.forest, marginTop: compact ? 8 : 11, letterSpacing:0.1, overflowWrap:'anywhere' }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
+        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize: (compact ? 15.5 : 21) + (span ? 2 : 0), lineHeight:1.12, color:C.forest, marginTop: compact ? 8 : 11, letterSpacing:0.1, overflowWrap:'anywhere' }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
         <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:2, overflow:'hidden' }}>
           {(() => {
             const col = locationTagColor(locationTags && locationTags[plant.location]);
@@ -511,11 +511,27 @@ function ScreenHead({ eyebrow, title, isDesktop, appName }) {
 // ════════════════════════════════════════════════════════════
 //  GARDEN
 // ════════════════════════════════════════════════════════════
-function GardenFilterBar({ sort, setSort, sidePad = 22, filterOpen, onToggleFilter, filterActive }) {
+function GardenFilterBar({ sort, setSort, sidePad = 22, filterOpen, onToggleFilter, filterActive, viewMode, onSetViewMode }) {
   const filters = [['all','All'],['urgent','Most urgent first'],['location','Location']];
   return (
     <div data-noswipe="1" style={{ display:'flex', alignItems:'center', gap:8, overflowX:'auto', padding:`14px ${sidePad}px 2px`, position:'relative', zIndex:2, WebkitOverflowScrolling:'touch' }}>
-      {filters.map(([key,label]) => {
+      {onSetViewMode && [['grid','Grid view'],['journal','Journal view']].map(([key,title]) => {
+        const on = viewMode === key;
+        return (
+          <div key={key} onClick={()=>onSetViewMode(key)} title={title} style={{
+            flexShrink:0, width:34, height:34, borderRadius:999, cursor:'pointer',
+            display:'flex', alignItems:'center', justifyContent:'center',
+            background: on ? C.forest : C.panel,
+            border: on ? '1px solid '+C.forest : '0.5px solid rgba(45,80,22,0.14)',
+            transition:'all 160ms ease',
+          }}>
+            {key === 'grid'
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.6" stroke={on?'#fff':C.brown} strokeWidth="1.8"/><rect x="13" y="3.5" width="7.5" height="7.5" rx="1.6" stroke={on?'#fff':C.brown} strokeWidth="1.8"/><rect x="3.5" y="13" width="7.5" height="7.5" rx="1.6" stroke={on?'#fff':C.brown} strokeWidth="1.8"/><rect x="13" y="13" width="7.5" height="7.5" rx="1.6" stroke={on?'#fff':C.brown} strokeWidth="1.8"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h10" stroke={on?'#fff':C.brown} strokeWidth="1.8" strokeLinecap="round"/></svg>}
+          </div>
+        );
+      })}
+      {viewMode !== 'journal' && filters.map(([key,label]) => {
         const on = sort === key;
         return (
           <div key={key} onClick={()=>setSort(key)} style={{
@@ -539,6 +555,106 @@ function GardenFilterBar({ sort, setSort, sidePad = 22, filterOpen, onToggleFilt
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z" stroke={filterOpen?'#fff':C.brown} strokeWidth="1.8" strokeLinejoin="round"/></svg>
           {filterActive && !filterOpen && <div style={{ position:'absolute', top:5, right:5, width:7, height:7, borderRadius:999, background:C.sage, border:'1.5px solid '+C.panel }}/>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Garden Journal — a second, chronological lens on the same plants
+// (Day One's "same data, another view" pattern). Reuses buildPlantStory
+// (caulis-detail.jsx, built for the per-plant timeline) aggregated across the
+// whole garden instead of one plant, rather than a second parallel history
+// system — every event tagged back to its own plant object.
+function buildGardenJournal(plants) {
+  const events = [];
+  plants.forEach(p => { buildPlantStory(p).forEach(ev => events.push({ ...ev, plant: p })); });
+  events.sort((a, b) => b.date - a.date);
+  return events;
+}
+function journalGroupLabel(ms) {
+  const day = new Date(ms); day.setHours(0,0,0,0);
+  const diffDays = Math.round((todayMidnight() - day.getTime()) / 86400000);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return day.toLocaleDateString('en-US', { weekday:'long' });
+  const sameYear = day.getFullYear() === new Date().getFullYear();
+  return day.toLocaleDateString('en-US', sameYear ? { month:'long', day:'numeric' } : { month:'long', day:'numeric', year:'numeric' });
+}
+function GardenJournalView({ plants, onOpen, onWaterOne, czechMode, reduceMotion, sidePad = 18 }) {
+  const dueNow = plants.filter(p => statusOf(p.days, p.every, p.snoozedUntil) === 'needs');
+  const milestones = plants.map(p => ({ p, label: plantMilestoneLabel(p.addedAt) })).filter(x => x.label);
+  const events = buildGardenJournal(plants).slice(0, 150);
+  const groups = [];
+  let cur = null;
+  events.forEach(ev => {
+    const lbl = journalGroupLabel(ev.date);
+    if (!cur || cur.label !== lbl) { cur = { label: lbl, items: [] }; groups.push(cur); }
+    cur.items.push(ev);
+  });
+  const nameOf = p => czechMode && p.czech ? p.czech : p.name;
+  return (
+    <div style={{ padding:`4px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
+      {dueNow.length > 0 && (
+        <div style={{ marginBottom:22 }}>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase', marginBottom:10 }}>Needs water now</div>
+          <div style={{ display:'flex', gap:8, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+            {dueNow.map((p,i) => (
+              <div key={p.id} onClick={()=>onOpen(p.id)} style={{ flexShrink:0, width:150, background:C.panel, borderRadius:rad(16), border:C.hair, padding:10, cursor:'pointer', boxShadow:'0 1px 2px rgba(43,42,38,0.04), 0 8px 22px rgba(45,80,22,0.05)', ...(reduceMotion ? {} : cardEntranceStyle(i)) }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <div style={{ width:34, height:34, flexShrink:0 }}><Specimen tint={TINTS[(p.id-1)%TINTS.length]} height={34} radius={9} image={(p.photos && p.photos[0]) || p.userImage || p.image}/></div>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:14.5, color:C.forest, lineHeight:1.1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{nameOf(p)}</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.ink, opacity:0.6, marginTop:2 }}>{agoLabel(p.days)}</div>
+                  </div>
+                </div>
+                <div onClick={e=>{ e.stopPropagation(); onWaterOne && onWaterOne(p.id); }} style={{ marginTop:9, display:'flex', alignItems:'center', justifyContent:'center', gap:5, height:30, borderRadius:999, background:STATUS.needs.soft, cursor:'pointer' }}>
+                  <IconDrop s={12} c={STATUS.needs.dot}/>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:12, fontWeight:600, color:STATUS.needs.dot }}>Water</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {milestones.length > 0 && (
+        <div style={{ marginBottom:22, display:'flex', flexDirection:'column', gap:8 }}>
+          {milestones.map(({ p, label }) => (
+            <div key={p.id} onClick={()=>onOpen(p.id)} style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer', padding:'9px 12px', borderRadius:rad(14), background:'rgba(122,158,78,0.1)' }}>
+              <LeafOutline size={14} color={C.sage} sw={1.7}/>
+              <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14, color:C.forest }}>{nameOf(p)} — {label.charAt(0).toLowerCase() + label.slice(1)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {events.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'40px 20px', opacity:0.6 }}>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:18, color:C.forest }}>Nothing logged yet</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.7, marginTop:6 }}>Water a plant or check off a reminder to start the garden's story.</div>
+        </div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:22 }}>
+          {groups.map(g => (
+            <div key={g.label}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:700, color:C.brown, opacity:0.55, letterSpacing:0.6, textTransform:'uppercase', marginBottom:10 }}>{g.label}</div>
+              <div style={{ position:'relative', paddingLeft:6 }}>
+                <div style={{ position:'absolute', left:16, top:4, bottom:4, width:1, background:'rgba(45,80,22,0.1)' }}/>
+                <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                  {g.items.map((ev, i) => (
+                    <div key={i} onClick={()=>onOpen(ev.plant.id)} style={{ display:'flex', alignItems:'center', gap:12, cursor:'pointer', ...(reduceMotion ? {} : cardEntranceStyle(i)) }}>
+                      <div style={{ position:'relative', zIndex:1, flexShrink:0, width:32, height:32, borderRadius:999, background:C.panel, border:C.hair, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        {storyEventIcon(ev)}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{storyEventText(ev, nameOf(ev.plant))}</div>
+                      </div>
+                      <div style={{ flexShrink:0, width:32, height:32, borderRadius:9, overflow:'hidden' }}><Specimen tint={TINTS[(ev.plant.id-1)%TINTS.length]} height={32} radius={9} image={(ev.plant.photos && ev.plant.photos[0]) || ev.plant.userImage || ev.plant.image}/></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -917,7 +1033,7 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
   );
 }
 
-function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab, locationTags, cardDateMode = 'last' }) {
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab, locationTags, cardDateMode = 'last', gridWeighted }) {
   const [healthOpen, setHealthOpen] = useState(false);
   const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
@@ -925,9 +1041,11 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
   const [fStatus, setFStatus] = useState(() => GS.get('caulis_g_status', 'all'));
   const [fLoc, setFLoc] = useState(() => GS.get('caulis_g_loc', null));
   const [filterOpen, setFilterOpen] = useState(false);
+  const [viewMode, setViewMode] = useState(() => GS.get('caulis_garden_view', 'grid'));
   useEffect(() => { GS.set('caulis_g_sort', sort); }, [sort]);
   useEffect(() => { GS.set('caulis_g_status', fStatus); }, [fStatus]);
   useEffect(() => { GS.set('caulis_g_loc', fLoc); }, [fLoc]);
+  useEffect(() => { GS.set('caulis_garden_view', viewMode); }, [viewMode]);
   const [selMode, setSelMode] = useState(false);
   const [sel, setSel] = useState(() => new Set());
   const exitSel = () => { setSelMode(false); setSel(new Set()); };
@@ -967,6 +1085,17 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
 
   const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact, reduceMotion, locationTags, cardDateMode };
   let entranceCounter = 0;
+  // "attention-weighted" grid (opt-in, Settings → Garden): a thirsty or
+  // brand-new plant earns a wider card instead of sitting flush with
+  // everything else — recency reuses the same addedAt field the milestone
+  // callouts already backfilled, so no new plant field needed.
+  const RECENT_ADDED_MS = 3 * 86400000;
+  const cardSpanFor = (p) => {
+    if (!gridWeighted) return null;
+    const needsWater = statusOf(p.days, p.every, p.snoozedUntil) === 'needs';
+    const recent = p.addedAt && (Date.now() - p.addedAt) < RECENT_ADDED_MS;
+    return (needsWater || recent) ? 2 : null;
+  };
 
   // easter egg: rapid-tapping the corner sprig watermark is a discoverable
   // no-op everywhere else in the app — reward the curiosity with a one-line joke
@@ -1093,6 +1222,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
           sort={sort} setSort={setSort} sidePad={sidePad}
           filterOpen={filterOpen} onToggleFilter={()=>setFilterOpen(o=>!o)}
           filterActive={fStatus !== 'all' || !!fLoc}
+          viewMode={viewMode} onSetViewMode={setViewMode}
         />
       )}
 
@@ -1133,7 +1263,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         </div>
       )}
 
-      {!empty && matched.length === 0 && (
+      {!empty && viewMode === 'grid' && matched.length === 0 && (
         <div style={{ textAlign:'center', padding:'48px 30px', position:'relative', zIndex:2 }}>
           <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:20, color:C.forest }}>No matches</div>
           <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4 }}>{nq ? `Nothing matches "${q}".` : 'No plants match these filters.'}</div>
@@ -1145,24 +1275,34 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         </div>
       )}
 
-      {!empty && sort === 'location' && (
+      {!empty && viewMode === 'journal' && (
+        <GardenJournalView plants={matched} onOpen={onOpen} onWaterOne={onWaterOne} czechMode={czechMode} reduceMotion={reduceMotion} sidePad={sidePad}/>
+      )}
+
+      {!empty && viewMode === 'grid' && gridWeighted && sort !== 'location' && (
+        <div style={{ padding:`4px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
+          <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>Manual reorder is paused while emphasis is on.</span>
+        </div>
+      )}
+
+      {!empty && viewMode === 'grid' && sort === 'location' && (
         <div style={{ padding:`4px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
           {groups.map(g => (
             <div key={g.room}>
               <RoomHeader room={g.room} count={g.items.length} tag={locationTags && locationTags[g.room]}/>
-              <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, marginTop:10 }}>
-                {g.items.map(p => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} entranceIdx={entranceCounter++}/>)}
+              <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, marginTop:10, gridAutoFlow: gridWeighted ? 'dense' : undefined }}>
+                {g.items.map(p => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} entranceIdx={entranceCounter++} span={cardSpanFor(p)}/>)}
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {!empty && sort !== 'location' && (() => {
-        const dragEnabled = sort === 'all' && !nq && fStatus === 'all' && !fLoc && !hideHealthy && !selMode;
+      {!empty && viewMode === 'grid' && sort !== 'location' && (() => {
+        const dragEnabled = sort === 'all' && !nq && fStatus === 'all' && !fLoc && !hideHealthy && !selMode && !gridWeighted;
         return (
-          <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
-            {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i} entranceIdx={i}/>)}
+          <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2, gridAutoFlow: gridWeighted ? 'dense' : undefined }}>
+            {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i} entranceIdx={i} span={cardSpanFor(p)}/>)}
           </div>
         );
       })()}
@@ -2080,7 +2220,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, gridWeighted, onToggleGridWeighted, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -2897,6 +3037,13 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Garden shows only soon &amp; thirsty plants</div>
               </div>
               <ToggleKnob on={hideHealthy}/>
+            </div>
+            <div onClick={onToggleGridWeighted} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Emphasize plants that need attention</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Thirsty &amp; brand-new plants get a bigger card in the grid. Pauses manual reorder while on.</div>
+              </div>
+              <ToggleKnob on={gridWeighted}/>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Card date line</div>
