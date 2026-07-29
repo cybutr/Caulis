@@ -68,7 +68,7 @@ function useTextHighlight(ref, query, active) {
 // header (see callers) — never repeated under every swatch.
 function SwatchRow({ options, value, onSelect, size = 32 }) {
   return (
-    <div style={{ display:'flex', gap:12, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+    <div style={{ display:'flex', gap:12, overflowX:'auto', WebkitOverflowScrolling:'touch', padding:'4px 5px 6px' }}>
       {options.map(opt => {
         const on = value === opt.key;
         // the custom slot reads as a tool ("pick any color"), not a color
@@ -132,7 +132,7 @@ function TexturePreviewTile({ tKey, size = 34 }) {
 }
 function TexturePicker({ value, onSelect }) {
   return (
-    <div style={{ display:'flex', gap:12, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+    <div style={{ display:'flex', gap:12, overflowX:'auto', WebkitOverflowScrolling:'touch', padding:'4px 5px 6px' }}>
       {BG_TEXTURE_ORDER.map(k => {
         const on = value === k;
         return (
@@ -674,7 +674,7 @@ function RoomHeader({ room, count, tag }) {
   );
 }
 
-function ContextMenu({ plant, onClose, onEdit, onMove, onRemove, isDesktop }) {
+function ContextMenu({ plant, onClose, onEdit, onMove, onRemove, onToggleFeatured, isDesktop }) {
   const Item = ({ icon, label, danger, onClick, i }) => (
     <div onClick={onClick} style={{
       display:'flex', alignItems:'center', gap:13, padding:'14px 16px', cursor:'pointer',
@@ -695,7 +695,10 @@ function ContextMenu({ plant, onClose, onEdit, onMove, onRemove, isDesktop }) {
         </div>
         <Item i={0} icon={<IconPin s={17} c={C.forest}/>} label="Move to another room" onClick={()=>{ onClose(); onMove(plant); }}/>
         <Item i={1} icon={<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M13 3.5l3.5 3.5L7 16.5H3.5V13L13 3.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round"/></svg>} label="Edit plant" onClick={()=>{ onClose(); onEdit(plant); }}/>
-        <Item i={2} danger icon={<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M4 5.5h12M8 5.5V4a1 1 0 011-1h2a1 1 0 011 1v1.5M6 5.5l.7 10a1.5 1.5 0 001.5 1.4h3.6a1.5 1.5 0 001.5-1.4l.7-10" stroke="#B4472E" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>} label="Remove plant" onClick={()=>{ onClose(); onRemove(plant.id); }}/>
+        {onToggleFeatured && (
+          <Item i={2} icon={<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M10 2.5l2.15 4.36 4.81.7-3.48 3.39.82 4.79L10 13.5l-4.3 2.24.82-4.79-3.48-3.39 4.81-.7L10 2.5Z" stroke={C.forest} strokeWidth="1.6" strokeLinejoin="round" fill={plant.featured ? C.forest : 'none'}/></svg>} label={plant.featured ? 'Unfeature (back to normal size)' : 'Feature this plant (bigger in Garden)'} onClick={()=>{ onClose(); onToggleFeatured(plant); }}/>
+        )}
+        <Item i={3} danger icon={<svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M4 5.5h12M8 5.5V4a1 1 0 011-1h2a1 1 0 011 1v1.5M6 5.5l.7 10a1.5 1.5 0 001.5 1.4h3.6a1.5 1.5 0 001.5-1.4l.7-10" stroke="#B4472E" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>} label="Remove plant" onClick={()=>{ onClose(); onRemove(plant.id); }}/>
         <div onClick={onClose} style={{ borderTop:C.hair, textAlign:'center', padding:'14px', fontFamily:FONT_SANS, fontSize:14, fontWeight:600, color:C.brown, opacity:0.7, cursor:'pointer' }}>Cancel</div>
       </div>
     </div>
@@ -1091,11 +1094,17 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
   // callouts already backfilled, so no new plant field needed.
   const RECENT_ADDED_MS = 3 * 86400000;
   const cardSpanFor = (p) => {
+    // a manual "feature this plant" pick is a deliberate personal choice, not
+    // a status heuristic — it always wins, whether or not the automatic
+    // weighted-grid toggle is even on
+    if (p.featured) return 2;
     if (!gridWeighted) return null;
     const needsWater = statusOf(p.days, p.every, p.snoozedUntil) === 'needs';
     const recent = p.addedAt && (Date.now() - p.addedAt) < RECENT_ADDED_MS;
     return (needsWater || recent) ? 2 : null;
   };
+  const hasFeatured = plants.some(p => p.featured);
+  const denseFlow = gridWeighted || hasFeatured;
 
   // easter egg: rapid-tapping the corner sprig watermark is a discoverable
   // no-op everywhere else in the app — reward the curiosity with a one-line joke
@@ -1112,6 +1121,25 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
       setSprigMsg(SPRIG_LINES[Math.floor(Math.random() * SPRIG_LINES.length)]);
       setTimeout(() => setSprigMsg(null), 2200);
       try { localStorage.setItem('caulis_egg_sprig', '1'); } catch(e) {}
+    }
+  };
+  // second, easier Layout Lab trigger: the greeting text ("Wednesday
+  // afternoon") has no competing single-tap action the hero banner has to
+  // work around, so a plain rapid-tap counter is enough — no deferred-open
+  // dance needed here.
+  const greetTaps = useRef(0);
+  const greetTapTimer = useRef(null);
+  const [greetLabToast, setGreetLabToast] = useState(null);
+  const tapGreeting = () => {
+    if (layoutLabUnlocked) return;
+    if (greetTapTimer.current) clearTimeout(greetTapTimer.current);
+    greetTapTimer.current = setTimeout(() => { greetTaps.current = 0; }, 1400);
+    greetTaps.current += 1;
+    if (greetTaps.current >= 7) {
+      greetTaps.current = 0;
+      onUnlockLayoutLab && onUnlockLayoutLab();
+      setGreetLabToast('Layout Lab unlocked — long-press the hero photo to drag.');
+      setTimeout(() => setGreetLabToast(null), 3200);
     }
   };
   // easter egg: a rare data-state coincidence — rapid-tapping the health pill
@@ -1145,6 +1173,11 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
           <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)', display:'flex', alignItems:'center', gap:8 }}>✦ {healthMsg}</div>
         </div>
       )}
+      {greetLabToast && (
+        <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+          <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>{greetLabToast}</div>
+        </div>
+      )}
       {!empty && heroBanner === 'above' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} isDesktop={isDesktop} style={{ margin:`${topPad-30}px 18px 0` }} placement="above" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
       <div style={{ padding:`${topPad}px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
         <div style={{ display:'flex', alignItems: isDesktop ? 'flex-end' : 'center', justifyContent:'space-between', gap:12 }}>
@@ -1157,7 +1190,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
                 <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:30, color:C.forest, letterSpacing:0.3 }}>{gardenName || 'Caulis'}</span>
               </div>
             )}
-            <div style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.3, textTransform:'uppercase' }}>{todayGreeting()}</div>
+            <div onClick={tapGreeting} style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.3, textTransform:'uppercase', cursor:'default' }}>{todayGreeting()}</div>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:500, fontSize: isDesktop ? 32 : 27, color:C.ink, marginTop:2, lineHeight:1.2 }}>
               {empty ? <>Welcome to Caulis.</> : needs > 0 ? <>{needs} plants would love a drink.</> : <>Everything looks happy today.</>}
             </div>
@@ -1279,9 +1312,9 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         <GardenJournalView plants={matched} onOpen={onOpen} onWaterOne={onWaterOne} czechMode={czechMode} reduceMotion={reduceMotion} sidePad={sidePad}/>
       )}
 
-      {!empty && viewMode === 'grid' && gridWeighted && sort !== 'location' && (
+      {!empty && viewMode === 'grid' && (gridWeighted || hasFeatured) && sort !== 'location' && (
         <div style={{ padding:`4px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
-          <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>Manual reorder is paused while emphasis is on.</span>
+          <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>Manual reorder is paused while a plant is emphasized or emphasis is on.</span>
         </div>
       )}
 
@@ -1290,7 +1323,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
           {groups.map(g => (
             <div key={g.room}>
               <RoomHeader room={g.room} count={g.items.length} tag={locationTags && locationTags[g.room]}/>
-              <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, marginTop:10, gridAutoFlow: gridWeighted ? 'dense' : undefined }}>
+              <div style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, marginTop:10, gridAutoFlow: denseFlow ? 'dense' : undefined }}>
                 {g.items.map(p => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} entranceIdx={entranceCounter++} span={cardSpanFor(p)}/>)}
               </div>
             </div>
@@ -1299,9 +1332,9 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
       )}
 
       {!empty && viewMode === 'grid' && sort !== 'location' && (() => {
-        const dragEnabled = sort === 'all' && !nq && fStatus === 'all' && !fLoc && !hideHealthy && !selMode && !gridWeighted;
+        const dragEnabled = sort === 'all' && !nq && fStatus === 'all' && !fLoc && !hideHealthy && !selMode && !gridWeighted && !hasFeatured;
         return (
-          <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2, gridAutoFlow: gridWeighted ? 'dense' : undefined }}>
+          <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2, gridAutoFlow: denseFlow ? 'dense' : undefined }}>
             {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i} entranceIdx={i} span={cardSpanFor(p)}/>)}
           </div>
         );
@@ -2822,7 +2855,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             <div onClick={onToggleDark} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
               <div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Dark mode</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, marginTop:1 }}>Botanical night theme</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, marginTop:1 }}>Botanical night theme{bgColorChoice && bgColorChoice !== 'off' ? ' — still shifts your accent palette lighter/darker; text color automatically follows your custom background’s own lightness instead, so it always stays readable' : ''}</div>
               </div>
               <ToggleKnob on={darkMode}/>
             </div>
@@ -2983,7 +3016,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
                   <div>
                     <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Background color</div>
-                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>White or black first, then a soft palette tint, or pick your own</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>White or black first, then a soft palette tint, or pick your own — overrides Dark mode's background and text color for readability; Dark mode above still governs your accent palette's shade</div>
                   </div>
                   <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>
                     {bgColorChoice === 'off' ? 'Theme default' : bgColorChoice === 'white' ? 'White' : bgColorChoice === 'black' ? 'Black' : bgColorChoice === 'custom' ? 'Custom' : (PALETTES[bgColorChoice] ? PALETTES[bgColorChoice].label : 'Theme default')}

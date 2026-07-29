@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '187'; // keep in sync with sw.js CACHE
+const APP_VERSION = '188'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -86,16 +86,26 @@ function deriveBgSurfaces(hex) {
   const panelL = clampL(hsl.l + (dark ? 8 : 3));
   const inputL = clampL(hsl.l + (dark ? 11 : -3));
   return {
+    dark,
     panel: rgbToHex(hslToRgb({ h: hsl.h, s: hsl.s, l: panelL })),
     input: rgbToHex(hslToRgb({ h: hsl.h, s: hsl.s, l: inputL })),
   };
 }
+// text has to follow the ACTUAL picked background's lightness, not whichever
+// ink the Dark mode toggle happens to be set to — dark mode's light-mode ink
+// (#2A2A26) rendered over a custom dark background, or its dark-mode ink
+// (#DCE8CC) rendered over a custom light background, both read as
+// pale-on-pale/near-invisible. This is the one real place Dark mode and a
+// custom background color can visibly fight each other, so the custom pick
+// always wins for legibility, same as it already wins for bg/panel/input.
 function applyCustomBgColor(hex) {
   if (!(hex && /^#[0-9a-fA-F]{6}$/.test(hex))) return;
   C.bg = hex;
-  const { panel, input } = deriveBgSurfaces(hex);
+  const { panel, input, dark } = deriveBgSurfaces(hex);
   C.panel = panel;
   C.input = input;
+  C.ink = dark ? C_DARK.ink : C_LIGHT.ink;
+  C.brown = dark ? C_DARK.brown : C_LIGHT.brown;
 }
 // body text (C.ink) is the safety-critical check here — it's read against
 // this background everywhere, not just on accent-colored UI elements, so

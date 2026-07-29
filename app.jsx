@@ -1550,6 +1550,7 @@ window.onload=()=>{
     return () => clearTimeout(t);
   }, [undoDelete]);
   const movePlant   = (id, room) => setPlants(ps => ps.map(p => p.id === id ? { ...p, location: room } : p));
+  const toggleFeatured = (id) => setPlants(ps => ps.map(p => p.id === id ? { ...p, featured: !p.featured } : p));
   const bulkWater  = (ids) => ids.forEach(id => water(id, 0));
   // shared bulk-water primitive: waters exactly the given ids (never "every
   // plant regardless of status" — callers decide scope), snapshots the prior
@@ -2132,6 +2133,7 @@ window.onload=()=>{
             onEdit={p=>setForm({mode:'edit', plant:p})}
             onMove={p=>setMoveTarget(p)}
             onRemove={requestRemove}
+            onToggleFeatured={p=>toggleFeatured(p.id)}
             isDesktop/>
         )}
         {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
@@ -2207,7 +2209,8 @@ window.onload=()=>{
           plant={menuPlant} onClose={()=>setMenuPlant(null)}
           onEdit={p=>setForm({mode:'edit', plant:p})}
           onMove={p=>setMoveTarget(p)}
-          onRemove={requestRemove}/>
+          onRemove={requestRemove}
+          onToggleFeatured={p=>toggleFeatured(p.id)}/>
       )}
       {plantNotFound && <PlantNotFoundScreen onBack={()=>{ setPlantNotFound(false); setTab('garden'); }}/>}
       {undoDeleteEl}
