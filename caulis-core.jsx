@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '176'; // keep in sync with sw.js CACHE
+const APP_VERSION = '177'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {

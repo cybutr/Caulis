@@ -1217,11 +1217,23 @@ function WaterAllPicker({ counts, defaultScope, onPick, onClose }) {
   );
 }
 
-function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, onWaterOne, confirmDelete, isDesktop, czechMode, gardenName, reduceMotion }) {
+function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, onWaterOne, onMarkScheduleDone, confirmDelete, isDesktop, czechMode, gardenName, reduceMotion }) {
   const order = { needs:0, soon:1 };
   const list = plants.filter(p=>statusOf(p.days,p.every,p.snoozedUntil)!=='ok')
     .sort((a,b)=> order[statusOf(a.days,a.every,a.snoozedUntil)] - order[statusOf(b.days,b.every,b.snoozedUntil)]);
   const sp = isDesktop ? 28 : 18;
+  // aggregates every plant's custom schedules the same way this screen already
+  // aggregates watering — reuses ScheduleRow (caulis-detail.jsx) so a mark-done
+  // here behaves identically to marking it done from the plant detail overlay
+  const dueSchedules = useMemo(() => {
+    const rows = [];
+    plants.forEach(p => (p.schedules || []).forEach(s => {
+      const days = s.lastDoneAt ? daysSinceMidnight(s.lastDoneAt) : null;
+      const status = days == null ? 'needs' : statusOf(days, s.everyDays);
+      if (status !== 'ok') rows.push({ plant: p, schedule: s, status });
+    }));
+    return rows.sort((a,b)=> order[a.status] - order[b.status]);
+  }, [plants]);
   const [picking, setPicking] = useState(false);
   const counts = useMemo(() => {
     let needs = 0, soon = 0;
@@ -1277,6 +1289,21 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
         )}
         {list.map((p,i)=> <NeedsRow key={p.id} plant={p} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress} onSnooze={onSnooze} onWater={onWaterOne} czechMode={czechMode} reduceMotion={reduceMotion}/>)}
       </div>
+      {dueSchedules.length > 0 && (
+        <div style={{ padding:`24px ${sp}px 0`, position:'relative', zIndex:2 }}>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, letterSpacing:0.5, textTransform:'uppercase', opacity:0.6, marginBottom:2 }}>Other reminders</div>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:'2px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)' }}>
+            {dueSchedules.map(({ plant, schedule }) => (
+              <div key={`${plant.id}-${schedule.id}`} onClick={()=>onOpen(plant.id)} style={{ cursor:'pointer' }}>
+                <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:13, color:C.forest, paddingTop:11, opacity:0.85 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
+                <div onClick={e=>e.stopPropagation()}>
+                  <ScheduleRow schedule={schedule} onMarkDone={onMarkScheduleDone ? id=>onMarkScheduleDone(plant.id, id) : ()=>{}} onEdit={()=>onOpen(plant.id)}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

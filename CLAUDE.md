@@ -88,6 +88,11 @@ plants[]      // { id, name, latin, location, days, every, light, care, fact,
               // exactly like watering (lastDoneAt is midnight-anchored like wateredAt,
               // statusOf(days, everyDays) drives its status pill, no unit is stored —
               // the add/edit form's days/weeks toggle collapses to a plain everyDays int)
+              // NeedsWaterScreen ("Water" tab) surfaces every plant's due/soon
+              // schedules in an "Other reminders" section below the watering
+              // list — same due-status math as ScheduleRow (caulis-detail.jsx),
+              // reused directly so mark-done there matches the plant-detail
+              // behavior exactly; onMarkScheduleDone is markScheduleDone (app.jsx)
 locations[]   // known room names (plain strings — see Location tags below for
               // the separate, local-only color/icon overlay keyed by these names)
 tab           // 'garden' | 'needs' | 'scanner' | 'print' | 'settings'
