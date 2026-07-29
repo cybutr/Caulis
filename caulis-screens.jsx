@@ -4208,10 +4208,15 @@ function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true, indica
   const slots = normalizeNav(navConfig).filter(s => s.action !== 'empty');
   const fire = (action) => { const a = NAV_ACTIONS[action]; if (!a) return; if (a.tab) setTab(action); else onAction && onAction(action); };
   const floating = barStyle === 'floating';
+  // translucent glass over C.bg itself (not a hardcoded light/dark pair) so
+  // a custom background color tints the bar instead of leaving it pinned
+  // to the two built-in theme hexes
+  const { r: navR, g: navG, b: navB } = hexToRgb(C.bg);
+  const navBg = `rgba(${navR},${navG},${navB},${relLuminance(C.bg) < 0.5 ? 0.9 : 0.86})`;
   return (
     <div style={{
       flexShrink:0, position:'relative', zIndex:30,
-      background: C.bg === '#111610' ? 'rgba(17,22,16,0.9)' : 'rgba(250,250,247,0.86)', backdropFilter:'blur(18px) saturate(160%)', WebkitBackdropFilter:'blur(18px) saturate(160%)',
+      background: navBg, backdropFilter:'blur(18px) saturate(160%)', WebkitBackdropFilter:'blur(18px) saturate(160%)',
       borderTop: floating ? 'none' : '0.5px solid rgba(45,80,22,0.1)',
       borderRadius: floating ? rad(22) : 0,
       margin: floating ? '0 14px calc(10px + env(safe-area-inset-bottom))' : 0,

@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '185'; // keep in sync with sw.js CACHE
+const APP_VERSION = '186'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -69,16 +69,46 @@ C.toast = C_LIGHT.toast;
 // resolveBgColorChoice() (below, once PALETTE_ORDER exists) turns a picker
 // choice into this one hex-or-null — applyCustomBgColor never has to know
 // about "off" vs "white" vs a palette tint vs custom, only the result.
+//
+// C.bg alone only recolors the thin canvas sliver visible around panels —
+// every card/sheet/sidebar reads C.panel, and inputs read C.input, so a
+// custom pick has to derive those too or most of the screen stays stuck on
+// the built-in white. Inspecting the two shipped themes shows panel is
+// ALWAYS a touch lighter than bg (light: FAFAF7→FFFFFF, dark: 111610→
+// 192115 — an "elevated surface" convention, not a light/dark-flipped one),
+// while input runs the other way in each theme (light: sunken, a shade
+// darker than bg; dark: raised, lighter even than panel) — so input derives
+// off the ORIGINAL bg lightness, not the already-lightened panel.
+function deriveBgSurfaces(hex) {
+  const hsl = rgbToHsl(hexToRgb(hex));
+  const dark = hsl.l < 50;
+  const clampL = v => Math.max(0, Math.min(100, v));
+  const panelL = clampL(hsl.l + (dark ? 8 : 3));
+  const inputL = clampL(hsl.l + (dark ? 11 : -3));
+  return {
+    panel: rgbToHex(hslToRgb({ h: hsl.h, s: hsl.s, l: panelL })),
+    input: rgbToHex(hslToRgb({ h: hsl.h, s: hsl.s, l: inputL })),
+  };
+}
 function applyCustomBgColor(hex) {
-  if (hex && /^#[0-9a-fA-F]{6}$/.test(hex)) C.bg = hex;
+  if (!(hex && /^#[0-9a-fA-F]{6}$/.test(hex))) return;
+  C.bg = hex;
+  const { panel, input } = deriveBgSurfaces(hex);
+  C.panel = panel;
+  C.input = input;
 }
 // body text (C.ink) is the safety-critical check here — it's read against
 // this background everywhere, not just on accent-colored UI elements, so
 // this uses the stricter 4.5:1 WCAG AA text minimum rather than the 3:1
 // large-text/UI-component floor contrastWarningFor() uses for accents.
+// Checks both C.bg and the derived C.panel — text sits on panels at least
+// as often as on raw canvas, so a pick that's fine on one but not the other
+// still needs the warning.
 function bgContrastWarningFor(hex) {
   try {
-    const ink = Math.round(contrastRatio(hex, C.ink) * 100) / 100;
+    const { panel } = deriveBgSurfaces(hex);
+    const inkBg = contrastRatio(hex, C.ink), inkPanel = contrastRatio(panel, C.ink);
+    const ink = Math.round(Math.min(inkBg, inkPanel) * 100) / 100;
     const brown = Math.round(contrastRatio(hex, C.brown) * 100) / 100;
     return { ink, brown, warnInk: ink < 4.5, warnBrown: brown < 3 };
   } catch (e) { return { ink: 21, brown: 21, warnInk: false, warnBrown: false }; }
@@ -419,15 +449,20 @@ function veinPatternUri(color) {
 // texture parameter accepted so Settings' live preview swatches can render
 // any option regardless of which one is currently active — defaults to the
 // active texture for the real app-background call sites, which never pass it
+// backgroundImage/backgroundSize are always both present (even as 'none'/
+// 'auto' for none/paper/marble) so the key set never changes shape between
+// renders — call sites spread this alongside a `background` shorthand, and
+// React warns about shorthand/longhand conflicts if a longhand key appears
+// or disappears across a rerender instead of just changing value.
 function bgTextureStyle(texture) {
   const t = texture || activeBgTexture;
   if (t === 'dot') return { backgroundImage: dotPatternUri(C.line), backgroundSize:'60px 60px' };
-  if (t === 'linen') return { backgroundImage: `repeating-linear-gradient(45deg, ${C.line} 0 1px, transparent 1px 15px), repeating-linear-gradient(-45deg, ${C.line} 0 1px, transparent 1px 15px)` };
+  if (t === 'linen') return { backgroundImage: `repeating-linear-gradient(45deg, ${C.line} 0 1px, transparent 1px 15px), repeating-linear-gradient(-45deg, ${C.line} 0 1px, transparent 1px 15px)`, backgroundSize:'auto' };
   if (t === 'vein') return { backgroundImage: veinPatternUri(C.line), backgroundSize:'130px 130px' };
   // paper/marble: real grain (feTurbulence, see index.html's #grainFilter +
   // .grain-overlay) carries these as one fixed full-viewport layer instead of
   // a backgroundImage trick, toggled on by applyGrainIntensity() below.
-  return {};
+  return { backgroundImage:'none', backgroundSize:'auto' };
 }
 
 // grain intensity — same apply/read pattern as icon stroke / radius density:
@@ -1253,7 +1288,7 @@ Object.assign(window, {
   HAPTIC_INTENSITIES, HAPTIC_INTENSITY_ORDER, CARD_DATE_MODES, CARD_DATE_MODE_ORDER,
   PALETTES, PALETTE_ORDER, ACCENTS, ACCENT_ORDER,
   applyCustomPaletteColor, applyCustomAccentColor, contrastWarningFor,
-  applyCustomBgColor, bgContrastWarningFor, rgbToHsv, hsvToRgb, hexToRgb, rgbToHex,
+  applyCustomBgColor, bgContrastWarningFor, rgbToHsv, hsvToRgb, hexToRgb, rgbToHex, relLuminance,
   BG_COLOR_ORDER, BG_TINTS, resolveBgColorChoice,
   RADIUS_DENSITY, RADIUS_ORDER, applyRadiusDensity, rad,
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
