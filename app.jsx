@@ -1866,7 +1866,7 @@ window.onload=()=>{
     <DoctorOverlay plant={doctor.plant ? plants.find(p => p.id === doctor.plant.id) || null : null} plants={plants} anthropicKey={anthropicKey} model={doctorModel} onApplyCorrection={applyCorrection} onBack={()=>setDoctor(null)} isDesktop={isDesktop}/>
   );
   const digestEl = digestOpen && (
-    <WeeklyDigest plants={plants} onBack={()=>setDigestOpen(false)} isDesktop={isDesktop} czechMode={identifyLang === 'cs'}/>
+    <WeeklyDigest plants={plants} onBack={()=>setDigestOpen(false)} isDesktop={isDesktop} czechMode={identifyLang === 'cs'} reduceMotion={reduceMotion}/>
   );
   const badgesEl = badgesOpen && (
     <BadgesView badges={badges} onBack={()=>setBadgesOpen(false)} isDesktop={isDesktop}/>

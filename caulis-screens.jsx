@@ -1228,50 +1228,176 @@ function WaterForecast({ plants, czechMode, onOpen }) {
 // and a weekly-digest push notification's deep link alike. Pulls real
 // numbers out of each plant's history[] rather than showing boilerplate —
 // the same substance also drives the push notification body server-side.
-function WeeklyDigest({ plants, onBack, isDesktop, czechMode }) {
+// same collage tiling technique as GardenHeroBanner — a single stretched
+// photo (compressImage caps storage at 1024px) upscales hard across a wide
+// banner and looks pixelated; tiling up to 3 recently-watered photos instead
+// covers far less area per tile so needs far less upscale. Deliberately the
+// same component family rather than a second parallel implementation, so a
+// future tweak to the collage look only has to happen in one place.
+function DigestHeroCollage({ tiles, reduceMotion }) {
+  const tileImg = p => (p.photos && p.photos[0]) || p.userImage || p.image;
+  const hide = e => { e.target.style.opacity = '0'; };
+  if (!tiles.length) return null;
+  if (tiles.length === 1) {
+    return <img src={tileImg(tiles[0])} alt="" onError={hide} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', animation: reduceMotion ? undefined : 'kenBurns 16s linear both' }}/>;
+  }
+  return (
+    <div style={{ position:'absolute', inset:0, display:'flex', gap:3 }}>
+      <div style={{ flex:'1 1 auto', display:'flex', flexDirection:'column', gap:3 }}>
+        {tiles.slice(1).map((p, i) => (
+          <div key={p.id} style={{ flex:1, position:'relative', overflow:'hidden' }}>
+            <img src={tileImg(p)} alt="" onError={hide} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', animation: reduceMotion ? undefined : 'kenBurnsTile 16s linear both', animationDelay: reduceMotion ? undefined : `${i * 200}ms` }}/>
+          </div>
+        ))}
+      </div>
+      <div style={{ flex:'0 0 62%', position:'relative', overflow:'hidden' }}>
+        <img src={tileImg(tiles[0])} alt="" onError={hide} style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', animation: reduceMotion ? undefined : 'kenBurns 16s linear both' }}/>
+      </div>
+    </div>
+  );
+}
+// small 7-bar activity chart — deliberately plain divs sized by count, not a
+// charting library, in the same spirit as the admin panel's own gauges
+function WeekActivityBars({ counts, labels }) {
+  const max = Math.max(1, ...counts);
+  return (
+    <div style={{ display:'flex', alignItems:'flex-end', gap:6, height:56 }}>
+      {counts.map((c, i) => (
+        <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
+          <div style={{
+            width:'100%', maxWidth:22, height:Math.max(4, Math.round((c / max) * 42)), borderRadius:rad(5),
+            background: c ? C.forest : 'rgba(45,80,22,0.1)', opacity: c ? (i === counts.length - 1 ? 1 : 0.75) : 1,
+            transition:'height 220ms ease',
+          }}/>
+          <span style={{ fontFamily:FONT_SANS, fontSize:9.5, color:C.brown, opacity: i === counts.length - 1 ? 0.9 : 0.5, fontWeight: i === counts.length - 1 ? 700 : 500 }}>{labels[i]}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+function WeeklyDigest({ plants, onBack, isDesktop, czechMode, reduceMotion }) {
   const cutoff = todayMidnight() - 6 * 86400000;
   let wateredCount = 0;
   const recentlyWatered = [];
+  const dayCounts = [0, 0, 0, 0, 0, 0, 0];
+  const dayLabels = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(todayMidnight() - i * 86400000);
+    dayLabels.push(d.toLocaleDateString(undefined, { weekday:'short' }).slice(0, 2));
+  }
   plants.forEach(p => {
     const h = Array.isArray(p.history) ? p.history : [];
     const inWeek = h.filter(stamp => midnightFromStamp(stamp) >= cutoff);
     wateredCount += inWeek.length;
+    inWeek.forEach(stamp => {
+      const idx = 6 - Math.round((todayMidnight() - midnightFromStamp(stamp)) / 86400000);
+      if (idx >= 0 && idx <= 6) dayCounts[idx]++;
+    });
     if (inWeek.length) recentlyWatered.push({ plant: p, last: inWeek[inWeek.length - 1] });
   });
   recentlyWatered.sort((a, b) => midnightFromStamp(b.last) - midnightFromStamp(a.last));
   const needsNow = plants.filter(p => statusOf(p.days, p.every) === 'needs');
+  // custom-reminder completions this week, same schedule.history[] shape as
+  // watering history (both midnight-anchored stamps, see State Shape docs)
+  const remindersDone = [];
+  plants.forEach(p => (p.schedules || []).forEach(s => {
+    const h = Array.isArray(s.history) ? s.history : [];
+    h.filter(stamp => midnightFromStamp(stamp) >= cutoff).forEach(stamp => remindersDone.push({ plant: p, schedule: s, stamp }));
+  }));
+  remindersDone.sort((a, b) => midnightFromStamp(b.stamp) - midnightFromStamp(a.stamp));
   // real user photo only — never the Perenual/species stock image, which
   // reads as a generic placeholder in a "your garden" recap
   const userPhoto = p => (p.photos && p.photos.length ? p.photos[0] : p.userImage) || null;
-  const fallbackPlant = plants.find(p => userPhoto(p));
-  const highlight = recentlyWatered.find(r => userPhoto(r.plant)) || (fallbackPlant ? { plant: fallbackPlant } : null);
+  const photoCandidates = [];
+  const seenIds = new Set();
+  [...recentlyWatered.map(r => r.plant), ...plants].forEach(p => {
+    if (seenIds.has(p.id) || !userPhoto(p)) return;
+    seenIds.add(p.id);
+    photoCandidates.push(p);
+  });
+  const heroTiles = photoCandidates.slice(0, 3);
+  const heroPlant = heroTiles[0];
   const name = p => czechMode && p.czech ? p.czech : p.name;
+  const rangeLabel = (() => {
+    const from = new Date(cutoff), to = new Date();
+    const fmt = d => d.toLocaleDateString(undefined, { month:'short', day:'numeric' });
+    return `${fmt(from)} – ${fmt(to)}`;
+  })();
   return (
     <div style={{ position:'fixed', inset:0, zIndex:52, background:C.bg, display:'flex', flexDirection:'column', animation:'slideUp 320ms cubic-bezier(.2,.8,.2,1)' }}>
       <div style={{ flexShrink:0, padding:'calc(18px + env(safe-area-inset-top)) 18px 14px', display:'flex', alignItems:'center', gap:12 }}>
         <div onClick={onBack} role="button" style={{ width:36, height:36, borderRadius:999, background:'rgba(45,80,22,0.08)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}><IconBack/></div>
-        <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest }}>This week in your garden</div>
+        <div>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:22, color:C.forest }}>This week in your garden</div>
+          <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>{rangeLabel}</div>
+        </div>
       </div>
-      <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', display:'flex', flexDirection:'column', gap:18 }}>
-        {highlight && (
-          <div style={{ borderRadius:rad(20), overflow:'hidden', position:'relative', height:180, flexShrink:0 }}>
-            <img src={userPhoto(highlight.plant)} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
-            <div style={{ position:'absolute', left:0, right:0, bottom:0, padding:'28px 16px 12px', background:'linear-gradient(transparent, rgba(0,0,0,0.55))' }}>
-              <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, color:'#fff' }}>{name(highlight.plant)}</div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:12, color:'rgba(255,255,255,0.8)' }}>{recentlyWatered.some(r => r.plant.id === highlight.plant.id) ? 'most recently watered' : 'from your garden'}</div>
+      <div style={{ flex:1, overflowY:'auto', padding:'0 18px 40px', display:'flex', flexDirection:'column', gap:18, maxWidth: isDesktop ? 720 : undefined, margin: isDesktop ? '0 auto' : undefined, width:'100%', boxSizing:'border-box' }}>
+        {heroTiles.length > 0 && (
+          <div style={{ borderRadius:rad(20), overflow:'hidden', position:'relative', height: isDesktop ? 220 : 176, flexShrink:0 }}>
+            <DigestHeroCollage tiles={heroTiles} reduceMotion={reduceMotion}/>
+            <div style={{ position:'absolute', inset:0, ...warmEdgeStyle(1) }}/>
+            <div style={{ position:'absolute', inset:0, boxShadow:PHOTO_FRAME_SHADOW }}/>
+            <div style={{ position:'absolute', inset:0, background:'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.58) 96%)' }}/>
+            {/* asymmetric: a small stat chip breaks the top-right corner
+                rather than a centered banner strip, name/caption anchored
+                bottom-left with room cut out on the right for the chip */}
+            <div style={{ position:'absolute', top:12, right:14, background:'rgba(0,0,0,0.38)', backdropFilter:'blur(2px)', borderRadius:999, padding:'5px 11px' }}>
+              <span style={{ fontFamily:FONT_SANS, fontSize:11.5, fontWeight:700, color:'#fff' }}>{wateredCount} waterings</span>
+            </div>
+            <div style={{ position:'absolute', left:16, right:'22%', bottom:12 }}>
+              <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:19, color:'#fff' }}>{name(heroPlant)}</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:'rgba(255,255,255,0.82)', marginTop:2 }}>{recentlyWatered.some(r => r.plant.id === heroPlant.id) ? 'most recently watered' : 'from your garden'}</div>
             </div>
           </div>
         )}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-          <div style={{ padding:'14px 16px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
+        {/* asymmetric stat row: one wide "headline" tile + a narrower one,
+            not a rigid 2-up grid of equal boxes */}
+        <div style={{ display:'flex', gap:10 }}>
+          <div style={{ flex:'1 1 60%', padding:'14px 16px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:30, color:C.forest }}>{wateredCount}</div>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>waterings this week</div>
+            <div style={{ marginTop:10 }}><WeekActivityBars counts={dayCounts} labels={dayLabels}/></div>
           </div>
-          <div style={{ padding:'14px 16px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
-            <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:30, color: needsNow.length ? STATUS.needs.dot : C.forest }}>{needsNow.length}</div>
-            <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>need water right now</div>
+          <div style={{ flex:'1 1 40%', display:'flex', flexDirection:'column', gap:10 }}>
+            <div style={{ padding:'12px 14px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
+              <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:24, color: needsNow.length ? STATUS.needs.dot : C.forest }}>{needsNow.length}</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.7 }}>need water now</div>
+            </div>
+            {remindersDone.length > 0 && (
+              <div style={{ padding:'12px 14px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
+                <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:24, color:C.forest }}>{remindersDone.length}</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.7 }}>other reminders done</div>
+              </div>
+            )}
           </div>
         </div>
+        {recentlyWatered.length > 0 && (
+          <div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Watered this week</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {recentlyWatered.slice(0, 8).map(r => (
+                <div key={r.plant.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair }}>
+                  <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest }}>{name(r.plant)}</span>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>{agoLabel(Math.round((todayMidnight() - midnightFromStamp(r.last)) / 86400000))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {remindersDone.length > 0 && (
+          <div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Other reminders completed</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {remindersDone.slice(0, 6).map((r, i) => (
+                <div key={r.plant.id + '-' + r.schedule.id + '-' + i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair }}>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink }}>{r.schedule.label} <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', color:C.forest }}>· {name(r.plant)}</span></span>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>{agoLabel(Math.round((todayMidnight() - midnightFromStamp(r.stamp)) / 86400000))}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div>
           <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Next 7 days</div>
           <WaterForecast plants={plants} czechMode={czechMode}/>
