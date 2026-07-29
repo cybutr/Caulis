@@ -827,12 +827,12 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
           transition: dragging.current ? 'none' : 'box-shadow 200ms ease, transform 200ms ease',
           animation: reduceMotion ? undefined : 'heroIn 420ms cubic-bezier(.2,.8,.2,1) both',
           touchAction:'none',
-          // wide desktop sidebar layouts have far more content width than a
-          // fixed 640px cap used — that read as a small banner stranded in
-          // a corner with a lot of dead space beside it. This scales with
-          // the available column instead of a stingy fixed number.
+          // wide desktop sidebar layouts have far more content width than any
+          // fixed cap can anticipate (a 640px, then a 980px cap, both still
+          // left visible dead space next to the full-width plant grid below
+          // at typical desktop viewports) — match the grid's own width
+          // exactly instead of guessing another fixed number.
           width: isDesktop ? '100%' : undefined,
-          maxWidth: isDesktop ? 980 : undefined,
           ...style,
         }}>
         {/* collage, not one full-bleed photo stretched over a wide/short banner —
