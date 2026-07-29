@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '188'; // keep in sync with sw.js CACHE
+const APP_VERSION = '189'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -376,6 +376,18 @@ function resolveBgColorChoice(choice, customHex) {
   if (choice === 'custom') return customHex;
   if (BG_TINTS[choice]) return BG_TINTS[choice];
   return null;
+}
+// Dark mode is no longer its own toggle — picking "Black" (or any custom
+// color dark enough) from the SAME background-color picker above IS what
+// flips the app into its dark theme now. One control instead of two that
+// used to silently fight each other (see applyCustomBgColor's own history).
+// 'off'/'white'/a palette tint all resolve to null-or-light, so they stay
+// light; deriveBgSurfaces' lightness check (also used for panel/input/ink
+// derivation) is reused here as the single source of truth for dark-or-not.
+function darkFromBgChoice(choice, customHex) {
+  const hex = resolveBgColorChoice(choice, customHex);
+  if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return false;
+  return deriveBgSurfaces(hex).dark;
 }
 
 // corner-radius density — one multiplier over the whole radius scale (11-22px
@@ -1299,7 +1311,7 @@ Object.assign(window, {
   PALETTES, PALETTE_ORDER, ACCENTS, ACCENT_ORDER,
   applyCustomPaletteColor, applyCustomAccentColor, contrastWarningFor,
   applyCustomBgColor, bgContrastWarningFor, rgbToHsv, hsvToRgb, hexToRgb, rgbToHex, relLuminance,
-  BG_COLOR_ORDER, BG_TINTS, resolveBgColorChoice,
+  BG_COLOR_ORDER, BG_TINTS, resolveBgColorChoice, darkFromBgChoice,
   RADIUS_DENSITY, RADIUS_ORDER, applyRadiusDensity, rad,
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,

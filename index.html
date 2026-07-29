@@ -108,11 +108,54 @@
 <link rel="preload" as="script" href="./app.jsx" />
 <script>
   (function() {
+    // Dark mode isn't its own toggle anymore — picking "Black" from the
+    // background-color picker (Settings → Appearance) IS what makes the app
+    // dark now (see darkFromBgChoice()/deriveBgSurfaces() in caulis-core.jsx,
+    // the real source of truth once React mounts). This mirrors that same
+    // resolution just enough for a pre-paint read: 'black' → dark, 'white'/
+    // 'off'/any palette tint → light, 'custom' → whatever the picked hex's
+    // own lightness says. No explicit choice yet falls back to the legacy
+    // caulis_dark flag (pre-merge installs), then the OS preference — the
+    // same first-run default app.jsx's own bgColorChoice init uses.
+    // app.jsx's own bgColorChoice/customBgColor state is persisted via its
+    // lsSet helper (JSON.stringify), so the raw string sitting in
+    // localStorage is quoted ('"black"', not black) — a plain getItem
+    // comparison against 'black' would silently never match. caulis_dark and
+    // caulis_custom_bg_enabled predate that helper and were always written
+    // as plain unquoted strings, so those two stay raw getItem reads below.
+    function lsRead(key) {
+      var raw = localStorage.getItem(key);
+      if (raw == null) return null;
+      try { return JSON.parse(raw); } catch (e) { return raw; }
+    }
+    var bgChoice = null, dark = false;
     try {
-      var stored = localStorage.getItem('caulis_dark');
-      var dark = stored != null ? stored === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
+      bgChoice = lsRead('caulis_bg_color_choice');
+      if (bgChoice === 'black') dark = true;
+      else if (bgChoice === 'white' || bgChoice === 'off') dark = false;
+      else if (bgChoice === 'custom') {
+        var customHex = lsRead('caulis_custom_bg_color');
+        dark = customHex ? isHexDark(customHex) : false;
+      } else if (!bgChoice) {
+        if (localStorage.getItem('caulis_custom_bg_enabled') === 'true') {
+          var legacyHex = lsRead('caulis_custom_bg_color');
+          dark = legacyHex ? isHexDark(legacyHex) : false;
+        } else {
+          var legacyDark = localStorage.getItem('caulis_dark');
+          dark = legacyDark != null ? legacyDark === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
+        }
+      }
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
     } catch (e) {}
+    // same (max+min)/2 HSL-lightness threshold deriveBgSurfaces() uses —
+    // duplicated here since caulis-core.jsx hasn't loaded yet pre-mount
+    function isHexDark(hex) {
+      var m = /^#([0-9a-fA-F]{6})$/.exec(hex);
+      if (!m) return false;
+      var r = parseInt(m[1].substr(0,2),16)/255, g = parseInt(m[1].substr(2,2),16)/255, b = parseInt(m[1].substr(4,2),16)/255;
+      var max = Math.max(r,g,b), min = Math.min(r,g,b);
+      return ((max+min)/2*100) < 50;
+    }
     // font pairing, applied before first paint so a returning user who picked
     // Literary/Editorial doesn't flash Classic for one frame. This duplicates
     // the href/family table also kept in caulis-core.jsx's FONT_PAIRINGS —
@@ -175,7 +218,6 @@
     // the legacy on/off flag for anyone who picked a custom bg before this
     // was a proper White/Black/tint/Custom picker.
     try {
-      var bgChoice = localStorage.getItem('caulis_bg_color_choice');
       if (!bgChoice) bgChoice = localStorage.getItem('caulis_custom_bg_enabled') === 'true' ? 'custom' : 'off';
       // palette-tint choices are deliberately NOT handled here — the tint is
       // a very pale near-white/near-black derived shade (l:96 in
@@ -185,7 +227,7 @@
       var bgHex = null;
       if (bgChoice === 'white') bgHex = '#FFFFFF';
       else if (bgChoice === 'black') bgHex = '#0A0A08';
-      else if (bgChoice === 'custom') bgHex = localStorage.getItem('caulis_custom_bg_color');
+      else if (bgChoice === 'custom') bgHex = lsRead('caulis_custom_bg_color');
       if (bgHex) {
         document.documentElement.style.setProperty('--bg', bgHex);
         document.querySelector('meta[name="theme-color"]').setAttribute('content', bgHex);

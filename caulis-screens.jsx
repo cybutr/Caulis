@@ -1190,7 +1190,16 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
                 <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:30, color:C.forest, letterSpacing:0.3 }}>{gardenName || 'Caulis'}</span>
               </div>
             )}
-            <div onClick={tapGreeting} style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.3, textTransform:'uppercase', cursor:'default' }}>{todayGreeting()}</div>
+            {/* cursor MUST be 'pointer', not 'default' — AmbientBadgeLayer's
+                occlusion probe (caulis-badges.jsx, _looksClickable) treats a
+                spot with no cursor:pointer element as "nothing real here"
+                and can make a drifting badge clickable right on top of it,
+                silently swallowing every tap meant for the 7-tap counter
+                below. This was the actual cause of Layout Lab being
+                unreachable via this trigger whenever any badge was earned
+                and ambient badges were on — reproduced by tracing the probe,
+                not viewport-specific despite reading that way at first. */}
+            <div onClick={tapGreeting} style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.3, textTransform:'uppercase', cursor:'pointer' }}>{todayGreeting()}</div>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:500, fontSize: isDesktop ? 32 : 27, color:C.ink, marginTop:2, lineHeight:1.2 }}>
               {empty ? <>Welcome to Caulis.</> : needs > 0 ? <>{needs} plants would love a drink.</> : <>Everything looks happy today.</>}
             </div>
@@ -2253,7 +2262,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, gridWeighted, onToggleGridWeighted, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, gridWeighted, onToggleGridWeighted, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -2852,14 +2861,7 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
         </div>
         <SettingsSection title="Appearance" open={isOpen('appearance')} onToggle={()=>toggleSec('appearance')} id={'sec-'+'appearance'} matched={settingsMatches[settingsMatchIdx] === 'appearance'} query={settingsMatches.includes('appearance') ? settingsQuery : ''} bodyRef={registerSection('appearance')}>
           <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
-            <div onClick={onToggleDark} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', cursor:'pointer' }}>
-              <div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Dark mode</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.65, marginTop:1 }}>Botanical night theme{bgColorChoice && bgColorChoice !== 'off' ? ' — still shifts your accent palette lighter/darker; text color automatically follows your custom background’s own lightness instead, so it always stays readable' : ''}</div>
-              </div>
-              <ToggleKnob on={darkMode}/>
-            </div>
-            <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+            <div style={{ padding:'12px 16px' }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden name</div>
               <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:8 }}>Shown in place of "Caulis" at the top of every screen</div>
               <input value={gardenName} onChange={e=>onSetGardenName(e.target.value.slice(0,24))} placeholder="Caulis"
@@ -3016,14 +3018,14 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
                   <div>
                     <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Background color</div>
-                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>White or black first, then a soft palette tint, or pick your own — overrides Dark mode's background and text color for readability; Dark mode above still governs your accent palette's shade</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>This is also what controls dark mode now — pick Black for the full dark theme, White/a tint/Custom for light (unless your custom pick is dark enough itself)</div>
                   </div>
                   <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>
-                    {bgColorChoice === 'off' ? 'Theme default' : bgColorChoice === 'white' ? 'White' : bgColorChoice === 'black' ? 'Black' : bgColorChoice === 'custom' ? 'Custom' : (PALETTES[bgColorChoice] ? PALETTES[bgColorChoice].label : 'Theme default')}
+                    {bgColorChoice === 'off' ? 'Light' : bgColorChoice === 'white' ? 'White' : bgColorChoice === 'black' ? 'Black' : bgColorChoice === 'custom' ? 'Custom' : (PALETTES[bgColorChoice] ? PALETTES[bgColorChoice].label : 'Light')}
                   </span>
                 </div>
                 <SwatchRow value={bgColorChoice || 'off'} onSelect={onSetBgColorChoice} options={BG_COLOR_ORDER.map(key => {
-                  if (key === 'off') return { key, label:'Theme default', swatch:`linear-gradient(135deg, ${C_LIGHT.bg} 50%, ${C_DARK.bg} 50%)`, ring:C.forest, border:true };
+                  if (key === 'off') return { key, label:'Light', swatch:C_LIGHT.bg, ring:C.forest, border:true };
                   if (key === 'white') return { key, label:'White', swatch:'#FFFFFF', ring:'#0A0A08', border:true };
                   if (key === 'black') return { key, label:'Black', swatch:'#0A0A08' };
                   if (key === 'custom') return { key, label:'Custom', ring:customBgColor };

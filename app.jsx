@@ -825,14 +825,6 @@ function App() {
     (() => { try { return false; } catch(e) { return false; } })()
   );
 
-  const [darkMode, setDarkModeState] = useState(() => {
-    try { return localStorage.getItem('caulis_dark') === '1'; } catch(e) { return false; }
-  });
-  const setDarkMode = (v) => {
-    try { localStorage.setItem('caulis_dark', v ? '1' : '0'); } catch(e) {}
-    setDarkModeState(v);
-    trackSeenValue('caulis_seen_modes', v ? 'dark' : 'light');
-  };
   const [palette, setPaletteRaw] = useState(() => lsGet('caulis_palette', 'forest'));
   const setPalette = (v) => { setPaletteRaw(v); lsSet('caulis_palette', v); };
   const [accent, setAccentRaw] = useState(() => lsGet('caulis_accent', 'match'));
@@ -864,20 +856,40 @@ function App() {
   // White/Black/palette-tint/Custom selection (SwatchRow, same pattern as
   // accent/palette pickers) — migrate anyone who had the old toggle on into
   // the equivalent 'custom' choice so their picked hex keeps working.
+  //
+  // Dark mode used to be its own independent toggle (caulis_dark) — it's
+  // gone now, merged into this same picker: picking "Black" IS dark mode.
+  // Anyone with the old toggle explicitly on gets migrated straight to
+  // 'black' (not left on 'off', which would now silently mean light); anyone
+  // who never touched either control gets a first-run default from the OS
+  // preference, same job caulis_dark's own matchMedia fallback used to do.
   const [bgColorChoice, setBgColorChoiceRaw] = useState(() => {
     const v = lsGet('caulis_bg_color_choice', null);
     if (v) return v;
-    return lsGet('caulis_custom_bg_enabled', false) ? 'custom' : 'off';
+    if (lsGet('caulis_custom_bg_enabled', false)) return 'custom';
+    const legacyDark = localStorage.getItem('caulis_dark');
+    if (legacyDark != null) return legacyDark === '1' ? 'black' : 'off';
+    try { return matchMedia('(prefers-color-scheme: dark)').matches ? 'black' : 'white'; } catch(e) { return 'off'; }
   });
-  const setBgColorChoice = (v) => { setBgColorChoiceRaw(v); lsSet('caulis_bg_color_choice', v); };
+  const setBgColorChoice = (v) => {
+    setBgColorChoiceRaw(v); lsSet('caulis_bg_color_choice', v);
+    trackSeenValue('caulis_seen_modes', darkFromBgChoice(v, customBgColor) ? 'dark' : 'light');
+  };
   const [customBgColor, setCustomBgColorRaw] = useState(() => lsGet('caulis_custom_bg_color', '#FAFAF7'));
-  const setCustomBgColor = (v) => { setCustomBgColorRaw(v); lsSet('caulis_custom_bg_color', v); };
+  const setCustomBgColor = (v) => {
+    setCustomBgColorRaw(v); lsSet('caulis_custom_bg_color', v);
+    if (bgColorChoice === 'custom') trackSeenValue('caulis_seen_modes', darkFromBgChoice(bgColorChoice, v) ? 'dark' : 'light');
+  };
   const [iconStroke, setIconStrokeRaw] = useState(() => lsGet('caulis_icon_stroke', 'regular'));
   const setIconStroke = (v) => { setIconStrokeRaw(v); lsSet('caulis_icon_stroke', v); };
   const [gardenName, setGardenNameRaw] = useState(() => lsGet('caulis_garden_name', ''));
   const setGardenName = (v) => { setGardenNameRaw(v); lsSet('caulis_garden_name', v); };
   const [fontPairing, setFontPairingRaw] = useState(() => lsGet('caulis_font_pairing', 'classic'));
   const setFontPairing = (v) => { setFontPairingRaw(v); lsSet('caulis_font_pairing', v); };
+  // dark mode is no longer independent state — it's derived straight from
+  // the background-color choice's own lightness, same function the picker's
+  // "Black" swatch and its live contrast note already resolve through
+  const darkMode = darkFromBgChoice(bgColorChoice, customBgColor);
   applyCustomPaletteColor(customPaletteColor);
   applyCustomAccentColor(customAccentColor);
   applyTheme(darkMode, palette, accent);
@@ -2093,7 +2105,7 @@ window.onload=()=>{
   if (tab === 'needs')    screen = <NeedsWaterScreen plants={plants} onOpen={id=>openDetail(id)} onLongPress={p=>setMenuPlant(p)} onSnooze={snooze} onWaterAll={waterAll} onWaterOne={waterOne} onMarkScheduleDone={markScheduleDone} confirmDelete={confirmDelete} czechMode={identifyLang === 'cs'} gardenName={gardenName} reduceMotion={reduceMotion} {...screenProps}/>;
   if (tab === 'scanner')  screen = <ScannerScreen plants={plants} paused={!!detail || !!guestView || plantNotFound} onScan={(id, scannedGarden) => { if (scannedGarden && scannedGarden !== gardenNode) openGuestPlant(scannedGarden, id); else openDetail(id, true); }} {...screenProps}/>;
   if (tab === 'print')    screen = <PrintQueueScreen queue={queue} plants={plants} onOpen={id=>openDetail(id)} onRemove={removeQueue} onPrintAll={printAll} printed={printed} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} queueSizes={queueSizes} onSetSize={setPlantSize} onReorder={reorderQueue} monochromePrint={monochromePrint} onToggleMono={toggleMono} czechMode={identifyLang === 'cs'} locationTags={locationTags} {...screenProps}/>;
-  if (tab === 'settings') screen = <SettingsScreen plants={plants} locations={locations} onAddLocationSetting={addLocation} onRenameLocation={renameLocation} onRemoveLocation={removeLocation} roomLight={roomLight} onSetRoomLight={setRoomLight} locationTags={locationTags} onSetLocationTag={setLocationTag} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} onToggleDark={()=>setDarkMode(!darkMode)} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} gridWeighted={gridWeighted} onToggleGridWeighted={()=>setGridWeighted(!gridWeighted)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} navIndicatorStyle={navIndicatorStyle} onSetNavIndicatorStyle={setNavIndicatorStyle} navBarStyle={navBarStyle} onSetNavBarStyle={setNavBarStyle} hapticIntensity={hapticIntensity} onSetHapticIntensity={setHapticIntensity} cardDateMode={cardDateMode} onSetCardDateMode={setCardDateMode} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} accent={accent} onSetAccent={setAccent} customPaletteColor={customPaletteColor} onSetCustomPaletteColor={setCustomPaletteColor} customAccentColor={customAccentColor} onSetCustomAccentColor={setCustomAccentColor} bgColorChoice={bgColorChoice} onSetBgColorChoice={setBgColorChoice} customBgColor={customBgColor} onSetCustomBgColor={setCustomBgColor} iconStroke={iconStroke} onSetIconStroke={setIconStroke} gardenName={gardenName} onSetGardenName={setGardenName} fontPairing={fontPairing} onSetFontPairing={setFontPairing} radiusDensity={radiusDensity} onSetRadiusDensity={setRadiusDensity} imageTreatment={imageTreatment} onSetImageTreatment={setImageTreatment} uiDensity={uiDensity} onSetUiDensity={setUiDensity} bgTexture={bgTexture} onSetBgTexture={setBgTexture} grainIntensity={grainIntensity} onSetGrainIntensity={setGrainIntensity} heroBanner={heroBanner} onSetHeroBanner={setHeroBanner} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} pushSupported={pushSupported} pushWatering={pushWatering} pushDigest={pushDigest} pushBusy={pushBusy} pushError={pushError} onTogglePushWatering={onTogglePushWatering} onTogglePushDigest={onTogglePushDigest} reminderHourLocal={reminderHourLocal} onSetReminderHourLocal={setReminderHourLocal} digestDay={digestDay} onSetDigestDay={setDigestDay} customRemindersEnabled={customRemindersEnabled} onToggleCustomReminders={onToggleCustomReminders} wateringFrequencyDays={wateringFrequencyDays} onSetWateringFrequencyDays={setWateringFrequencyDays} statusStyle={statusStyle} onSetStatusStyle={setStatusStyle} onOpenDigest={()=>setDigestOpen(true)} onDevTestPush={devTestPush} onDevDedupeHistory={devDedupeHistory} onDevDeleteHistoryEntry={devDeleteHistoryEntry} onDevBulkUndoLastWatering={devBulkUndoLastWatering} sessionInfo={gardenNode ? getSessionInfo(gardenNode) : null} onDevForcePull={devForcePull} onDevForcePush={devForcePush} syncBusy={syncBusy} syncMsg={syncMsg} badges={badges} ambientBadges={ambientBadges} onToggleAmbientBadges={()=>setAmbientBadges(!ambientBadges)} badgeDensity={badgeDensity} onSetBadgeDensity={setBadgeDensity} {...screenProps}/>;
+  if (tab === 'settings') screen = <SettingsScreen plants={plants} locations={locations} onAddLocationSetting={addLocation} onRenameLocation={renameLocation} onRemoveLocation={removeLocation} roomLight={roomLight} onSetRoomLight={setRoomLight} locationTags={locationTags} onSetLocationTag={setLocationTag} gardenKey={gardenKey} gardenHistory={gardenHistory} onRemoveHistory={removeGardenFromHistory} onSetGardenKey={setGardenKey} onRenameGardenKey={renameGardenKey} installPrompt={installPrompt} onInstall={()=>{ if(installPrompt){ installPrompt.prompt(); installPrompt.userChoice.then(()=>setInstallPrompt(null)); } }} darkMode={darkMode} gardenPassword={gardenPassword} onSavePassword={saveGardenPassword} perenualKey={perenualKey} onSavePerenualKey={savePerenualKey} housePlantsKey={housePlantsKey} onSaveHousePlantsKey={saveHousePlantsKey} anthropicKey={anthropicKey} onSaveAnthropicKey={saveAnthropicKey} onRecheckAI={recheckAllAI} aiRecheck={aiRecheck} plantIdKey={plantIdKey} onSavePlantIdKey={savePlantIdKey} identifyLang={identifyLang} onSetIdentifyLang={saveIdentifyLang} defaultEvery={defaultEvery} onSetDefaultEvery={setDefaultEvery} globalPrintSize={globalPrintSize} onSetGlobalSize={setGlobalPrintSize} monochromePrint={monochromePrint} onToggleMono={toggleMono} googleClientId={googleClientId} onSaveGoogleClientId={saveGoogleClientId} googleToken={googleToken} onConnectGoogle={connectGoogle} onSyncCalendar={syncAllToCalendar} onDisconnectGoogle={disconnectGoogle} googleSyncMode={googleSyncMode} onSetGoogleSyncMode={setGoogleSyncMode} reminderTime={reminderTime} onSetReminderTime={setReminderTime} onUpdateApp={updateApp} onExport={exportGarden} onImport={importGarden} onBuildMigrationCode={buildMigrationCode} onApplyMigrationCode={applyMigrationCode} cardDensity={cardDensity} onSetDensity={setCardDensity} hideHealthy={hideHealthy} onToggleHideHealthy={()=>setHideHealthy(!hideHealthy)} gridWeighted={gridWeighted} onToggleGridWeighted={()=>setGridWeighted(!gridWeighted)} reduceMotion={reduceMotion} onToggleReduceMotion={()=>setReduceMotion(!reduceMotion)} confirmDelete={confirmDelete} onToggleConfirmDelete={()=>setConfirmDelete(!confirmDelete)} haptics={haptics} onToggleHaptics={()=>setHaptics(!haptics)} defaultTab={defaultTab} onSetDefaultTab={setDefaultTab} swipeNav={swipeNav} onToggleSwipeNav={()=>setSwipeNav(!swipeNav)} onWaterAll={waterAll} onDevOffsetDays={devOffsetDays} onDevSetDays={devSetDays} onDevResyncFromHistory={devResyncFromHistory} onAdminListGardens={adminListAllGardens} onAdminLoadGarden={adminLoadGarden} onAdminSaveGarden={adminSaveGarden} onAdminRemoveGarden={adminRemoveGarden} onAdminBulkRemove={adminBulkRemove} onAdminStats={adminStats} onAdminGetSettings={adminSettings} onAdminGetSystem={adminSystem} onAdminSaveSettings={adminSaveSettingsFn} onAdminRunBackup={adminRunBackupFn} onAdminListBackups={adminListBackupsFn} onAdminBackupUrl={adminBackupUrl} onVerifyPassword={(pw)=>verifyGardenPassword(gardenKey,pw)} navConfig={navConfig} onSetNavConfig={setNavConfig} navLabels={navLabels} onToggleNavLabels={()=>setNavLabels(!navLabels)} navIndicatorStyle={navIndicatorStyle} onSetNavIndicatorStyle={setNavIndicatorStyle} navBarStyle={navBarStyle} onSetNavBarStyle={setNavBarStyle} hapticIntensity={hapticIntensity} onSetHapticIntensity={setHapticIntensity} cardDateMode={cardDateMode} onSetCardDateMode={setCardDateMode} gridCols={gridCols} onSetGridCols={setGridCols} sidebar={sidebar} onSetSidebar={setSidebar} palette={palette} onSetPalette={setPalette} accent={accent} onSetAccent={setAccent} customPaletteColor={customPaletteColor} onSetCustomPaletteColor={setCustomPaletteColor} customAccentColor={customAccentColor} onSetCustomAccentColor={setCustomAccentColor} bgColorChoice={bgColorChoice} onSetBgColorChoice={setBgColorChoice} customBgColor={customBgColor} onSetCustomBgColor={setCustomBgColor} iconStroke={iconStroke} onSetIconStroke={setIconStroke} gardenName={gardenName} onSetGardenName={setGardenName} fontPairing={fontPairing} onSetFontPairing={setFontPairing} radiusDensity={radiusDensity} onSetRadiusDensity={setRadiusDensity} imageTreatment={imageTreatment} onSetImageTreatment={setImageTreatment} uiDensity={uiDensity} onSetUiDensity={setUiDensity} bgTexture={bgTexture} onSetBgTexture={setBgTexture} grainIntensity={grainIntensity} onSetGrainIntensity={setGrainIntensity} heroBanner={heroBanner} onSetHeroBanner={setHeroBanner} doctorModel={doctorModel} onSetDoctorModel={setDoctorModel} pushSupported={pushSupported} pushWatering={pushWatering} pushDigest={pushDigest} pushBusy={pushBusy} pushError={pushError} onTogglePushWatering={onTogglePushWatering} onTogglePushDigest={onTogglePushDigest} reminderHourLocal={reminderHourLocal} onSetReminderHourLocal={setReminderHourLocal} digestDay={digestDay} onSetDigestDay={setDigestDay} customRemindersEnabled={customRemindersEnabled} onToggleCustomReminders={onToggleCustomReminders} wateringFrequencyDays={wateringFrequencyDays} onSetWateringFrequencyDays={setWateringFrequencyDays} statusStyle={statusStyle} onSetStatusStyle={setStatusStyle} onOpenDigest={()=>setDigestOpen(true)} onDevTestPush={devTestPush} onDevDedupeHistory={devDedupeHistory} onDevDeleteHistoryEntry={devDeleteHistoryEntry} onDevBulkUndoLastWatering={devBulkUndoLastWatering} sessionInfo={gardenNode ? getSessionInfo(gardenNode) : null} onDevForcePull={devForcePull} onDevForcePush={devForcePush} syncBusy={syncBusy} syncMsg={syncMsg} badges={badges} ambientBadges={ambientBadges} onToggleAmbientBadges={()=>setAmbientBadges(!ambientBadges)} badgeDensity={badgeDensity} onSetBadgeDensity={setBadgeDensity} {...screenProps}/>;
 
   // ════════════════════════════════════════
   //  DESKTOP LAYOUT
@@ -2237,12 +2249,34 @@ window.onload=()=>{
 // blank white page — without this, one bad value reaching a render (e.g. a
 // malformed import, a corrupted local cache) silently unmounts the whole app
 // standalone light/dark read for the boundary below — it wraps <App/> so it
-// can't trust App's own darkMode state to still exist by the time it renders
+// can't trust App's own darkMode const to still exist by the time it renders.
+// Mirrors the same background-color-choice-derives-dark logic app.jsx uses
+// now that Dark mode isn't its own toggle, plus the same legacy/system
+// fallback for anyone who hasn't touched either control yet.
 function _crashTheme() {
   let dark = false;
+  // caulis_bg_color_choice/caulis_custom_bg_color are written via app.jsx's
+  // own lsSet (JSON.stringify) — a raw localStorage.getItem on either one
+  // here would compare against a quoted string ('"black"') and never match.
+  // caulis_dark/caulis_custom_bg_enabled predate lsSet and were always
+  // written as plain unquoted strings, so those two stay raw reads.
+  const lsRead = (k) => { try { const v = localStorage.getItem(k); return v == null ? null : JSON.parse(v); } catch (e) { return null; } };
   try {
-    const stored = localStorage.getItem('caulis_dark');
-    dark = stored != null ? stored === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
+    const bgChoice = lsRead('caulis_bg_color_choice');
+    if (bgChoice === 'black') dark = true;
+    else if (bgChoice === 'white' || bgChoice === 'off') dark = false;
+    else if (bgChoice === 'custom') {
+      const hex = lsRead('caulis_custom_bg_color');
+      dark = !!hex && darkFromBgChoice('custom', hex);
+    } else if (!bgChoice) {
+      if (localStorage.getItem('caulis_custom_bg_enabled') === 'true') {
+        const hex = lsRead('caulis_custom_bg_color');
+        dark = !!hex && darkFromBgChoice('custom', hex);
+      } else {
+        const legacyDark = localStorage.getItem('caulis_dark');
+        dark = legacyDark != null ? legacyDark === '1' : matchMedia('(prefers-color-scheme: dark)').matches;
+      }
+    }
   } catch (e) {}
   return dark
     ? { bg:'#111610', panel:'#192115', forest:'#7EC870', ink:'#DCE8CC', brown:'#C4A882' }
