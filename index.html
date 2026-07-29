@@ -164,6 +164,17 @@
         document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#111610' : forestHex);
       }
     } catch (e) {}
+    // custom background override, same pre-mount-flash-avoidance reasoning
+    // as the font pairing/palette blocks above
+    try {
+      if (localStorage.getItem('caulis_custom_bg_enabled') === 'true') {
+        var bgHex = localStorage.getItem('caulis_custom_bg_color');
+        if (bgHex) {
+          document.documentElement.style.setProperty('--bg', bgHex);
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', bgHex);
+        }
+      }
+    } catch (e) {}
   })();
 </script>
 <style>
@@ -173,13 +184,21 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) { --bg: #111610; --forest: #7EC870; --line: rgba(255,255,255,0.07); }
   }
-  :root { --font-serif: "Cormorant Garamond", serif; --font-sans: "DM Sans", sans-serif; --grain-opacity: 0; }
+  :root { --font-serif: "Cormorant Garamond", serif; --font-sans: "DM Sans", sans-serif; --grain-opacity: 0; --vignette-opacity: 0; }
   /* real fractal-noise grain, one fixed full-viewport layer — never per-card
      (an SVG filter per element is expensive; one shared layer isn't). Alpha-
      only (feColorMatrix zeroes RGB) so it blends correctly across every
      theme/palette without carrying its own color — warmth comes from the
      palette and typography, this stays monochrome. */
   .grain-overlay { position:fixed; inset:0; pointer-events:none; z-index:30; filter:url(#grainFilter); mix-blend-mode:overlay; opacity:var(--grain-opacity); isolation:isolate; }
+  /* whisper of warmth at the viewport edges only — never covers content,
+     radial so the center (where everything is read) stays completely
+     untouched. Tied to the same texture toggle/intensity as the grain
+     layer rather than a separate setting (both are "how much depth do you
+     want," one control). Uses brown at the same low opacity ceiling as
+     warmEdgeStyle()'s hero-frame wash, never a literal burnt/vignette PNG. */
+  .vignette-overlay { position:fixed; inset:0; pointer-events:none; z-index:29; opacity:var(--vignette-opacity);
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(107,76,42,0.9) 140%); }
   html, body { background: var(--bg); -webkit-font-smoothing: antialiased; overflow: hidden; height: 100%; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
   #root { height: 100%; overflow: hidden; }
   button, [role="button"], a { touch-action: manipulation; }
@@ -253,6 +272,7 @@
   </filter>
 </svg>
 <div class="grain-overlay"></div>
+<div class="vignette-overlay"></div>
 <div id="root">
   <!-- static splash — replaced the instant React's render() call fires, so it
        needs no JS of its own and covers the gap while CDN scripts/fonts load -->

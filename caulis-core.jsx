@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '178'; // keep in sync with sw.js CACHE
+const APP_VERSION = '179'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -61,6 +61,27 @@ const C_DARK = {
 };
 C.input = C_LIGHT.input;
 C.toast = C_LIGHT.toast;
+
+// custom background color — overrides C.bg after applyTheme() picks the
+// light/dark value, same "apply pattern" as the custom accent/palette
+// colors. Kept separate from PALETTES/ACCENTS since it isn't a swatch
+// choice among presets, it's an on/off override of the base page color.
+let customBgEnabled = false;
+function applyCustomBgColor(hex, enabled) {
+  customBgEnabled = !!enabled;
+  if (customBgEnabled && /^#[0-9a-fA-F]{6}$/.test(hex)) C.bg = hex;
+}
+// body text (C.ink) is the safety-critical check here — it's read against
+// this background everywhere, not just on accent-colored UI elements, so
+// this uses the stricter 4.5:1 WCAG AA text minimum rather than the 3:1
+// large-text/UI-component floor contrastWarningFor() uses for accents.
+function bgContrastWarningFor(hex) {
+  try {
+    const ink = Math.round(contrastRatio(hex, C.ink) * 100) / 100;
+    const brown = Math.round(contrastRatio(hex, C.brown) * 100) / 100;
+    return { ink, brown, warnInk: ink < 4.5, warnBrown: brown < 3 };
+  } catch (e) { return { ink: 21, brown: 21, warnInk: false, warnBrown: false }; }
+}
 
 // every call site sets fontFamily to these two constants inline (538 usages
 // across screens/detail/app) — rather than touch every one, the constants
@@ -140,6 +161,29 @@ function hexToRgb(hex) {
 }
 function rgbToHex({ r, g, b }) {
   return '#' + [r, g, b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+}
+function rgbToHsv({ r, g, b }) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60; if (h < 0) h += 360;
+  }
+  return { h, s: max === 0 ? 0 : d / max, v: max };
+}
+function hsvToRgb({ h, s, v }) {
+  const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return { r: (r + m) * 255, g: (g + m) * 255, b: (b + m) * 255 };
 }
 function rgbToHsl({ r, g, b }) {
   r /= 255; g /= 255; b /= 255;
@@ -309,11 +353,16 @@ function bgTextureStyle() {
 // filter's baseFrequency does NOT reliably take var() across engines, so it's
 // mutated imperatively on the <feTurbulence> node instead.
 const GRAIN_LEVELS = {
-  subtle: { label:'Subtle', freq:0.9, op:0.15 },
-  medium: { label:'Medium', freq:0.7, op:0.3 },
-  bold:   { label:'Bold',   freq:0.5, op:0.45 },
+  subtle: { label:'Subtle', freq:0.9, op:0.15, vignette:0.03 },
+  medium: { label:'Medium', freq:0.7, op:0.3,  vignette:0.05 },
+  bold:   { label:'Bold',   freq:0.5, op:0.45, vignette:0.07 },
+  // one bolder top-end preset the user asked for ("more texture, more
+  // depth") — still alpha-only fractal noise, never a literal burnt/stained
+  // paper PNG, so it stays in this app's restrained-premium lane rather
+  // than crossing into the "cheap Instagram filter" look research flagged.
+  deep:   { label:'Deep',   freq:0.4, op:0.6,  vignette:0.1 },
 };
-const GRAIN_ORDER = ['subtle','medium','bold'];
+const GRAIN_ORDER = ['subtle','medium','bold','deep'];
 let grainLevel = 'medium';
 function applyGrainIntensity(level, textureOn) {
   if (GRAIN_LEVELS[level]) grainLevel = level;
@@ -322,6 +371,10 @@ function applyGrainIntensity(level, textureOn) {
     const fe = document.getElementById('grainTurb');
     if (fe) fe.setAttribute('baseFrequency', String(cfg.freq));
     document.documentElement.style.setProperty('--grain-opacity', textureOn ? cfg.op : 0);
+    // whisper of vignette at the viewport edges, tied to the same texture
+    // toggle/intensity rather than a separate setting — content itself is
+    // never covered, this is a corner/edge-only radial wash
+    document.documentElement.style.setProperty('--vignette-opacity', textureOn ? cfg.vignette : 0);
   } catch (e) {}
 }
 function grain() { return GRAIN_LEVELS[grainLevel] || GRAIN_LEVELS.medium; }
@@ -1026,6 +1079,7 @@ Object.assign(window, {
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor, MILESTONES,
   PALETTES, PALETTE_ORDER, ACCENTS, ACCENT_ORDER,
   applyCustomPaletteColor, applyCustomAccentColor, contrastWarningFor,
+  applyCustomBgColor, bgContrastWarningFor, rgbToHsv, hsvToRgb, hexToRgb, rgbToHex,
   RADIUS_DENSITY, RADIUS_ORDER, applyRadiusDensity, rad,
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,

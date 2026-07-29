@@ -131,35 +131,101 @@ function OptionList({ options, value, onSelect }) {
   );
 }
 
-// the free-form color picker slot — wraps a real <input type="color">
-// (the platform primitive; this repo pulls in zero UI libraries and has no
-// build step, so a color-picker package isn't the right call) in a swatch
-// that matches the rest of this row's visual language as closely as the
-// browser's own color-picker chrome allows. Below it: the live hex value and
-// a REAL computed WCAG contrast check against both theme backgrounds — not a
-// hardcoded guess — so a pick that would be hard to read gets a plain,
-// non-blocking warning instead of silently shipping bad contrast.
-function CustomColorPicker({ hex, onChange }) {
-  const warn = contrastWarningFor(hex);
-  const bad = warn.warnLight || warn.warnDark;
+// a fully in-theme SV square + hue strip, replacing the old native
+// <input type="color"> popup — that native swatch pops the browser/OS's own
+// square hue/saturation grid + RGB boxes, which can't be restyled at all and
+// reads as un-themed chrome next to the rest of this app. Plain HSV math
+// (rgbToHsv/hsvToRgb, caulis-core.jsx) + CSS gradients, no canvas, no lib.
+function HsvSquare({ hsv, onChange }) {
+  const ref = useRef(null);
+  const setFromEvent = (e) => {
+    const r = ref.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+    onChange({ ...hsv, s: x, v: 1 - y });
+  };
+  const onDown = (e) => { e.target.setPointerCapture(e.pointerId); setFromEvent(e); };
+  const onMove = (e) => { if (e.buttons) setFromEvent(e); };
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:ds(12), marginTop:10, padding:`${ds(10)}px ${ds(12)}px`, borderRadius:rad(14), background:C.panel, border:C.hair }}>
-      <label style={{ position:'relative', width:36, height:36, borderRadius:999, flexShrink:0, cursor:'pointer', boxShadow:`0 0 0 3px ${C.bg}, 0 0 0 4px ${C.line}, 0 1px 3px rgba(43,42,38,0.18)` }}>
-        <input type="color" value={hex} onChange={e=>onChange(e.target.value)}
-          style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:0, cursor:'pointer', border:'none', padding:0 }}/>
-        <div style={{ position:'absolute', inset:0, borderRadius:999, background:hex, pointerEvents:'none' }}/>
-      </label>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, color:C.brown, opacity:0.55, letterSpacing:0.5, textTransform:'uppercase' }}>Custom color</div>
-        <div style={{ fontFamily:'ui-monospace, "SF Mono", Menlo, monospace', fontSize:13, fontWeight:600, color:C.ink, marginTop:2 }}>{hex.toUpperCase()}</div>
-        {bad ? (
-          <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:'#B4472E', opacity:0.9, marginTop:2, lineHeight:1.35 }}>
-            Low contrast{warn.warnLight && warn.warnDark ? ' in light & dark mode' : warn.warnLight ? ' in light mode' : ' in dark mode'} — may be hard to read ({(warn.warnLight ? warn.light : warn.dark).toFixed(1)}:1)
-          </div>
-        ) : (
-          <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.5, marginTop:2 }}>Tap the swatch to pick any color</div>
-        )}
+    <div ref={ref} onPointerDown={onDown} onPointerMove={onMove} style={{
+      position:'relative', width:'100%', height:120, borderRadius:rad(10), cursor:'crosshair', touchAction:'none',
+      background:`linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent), hsl(${hsv.h}, 100%, 50%)`,
+    }}>
+      <div style={{
+        position:'absolute', left:`${hsv.s * 100}%`, top:`${(1 - hsv.v) * 100}%`, width:14, height:14, borderRadius:999,
+        transform:'translate(-50%,-50%)', border:'2px solid #fff', boxShadow:'0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4)',
+        background:rgbToHex(hsvToRgb(hsv)), pointerEvents:'none',
+      }}/>
+    </div>
+  );
+}
+function HueStrip({ h, onChange }) {
+  const ref = useRef(null);
+  const setFromEvent = (e) => {
+    const r = ref.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+    onChange(x * 360);
+  };
+  const onDown = (e) => { e.target.setPointerCapture(e.pointerId); setFromEvent(e); };
+  const onMove = (e) => { if (e.buttons) setFromEvent(e); };
+  return (
+    <div ref={ref} onPointerDown={onDown} onPointerMove={onMove} style={{
+      position:'relative', width:'100%', height:16, borderRadius:999, cursor:'pointer', touchAction:'none',
+      background:'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)',
+    }}>
+      <div style={{
+        position:'absolute', left:`${(h / 360) * 100}%`, top:'50%', width:18, height:18, borderRadius:999,
+        transform:'translate(-50%,-50%)', border:'2.5px solid #fff', boxShadow:'0 0 0 1px rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.4)',
+        background:`hsl(${h}, 100%, 50%)`, pointerEvents:'none',
+      }}/>
+    </div>
+  );
+}
+// the free-form color picker slot: a fully in-theme SV square + hue strip
+// (no native browser/OS chrome anywhere in the interactive surface) plus a
+// plain hex text input for direct/keyboard entry. Below it: the live hex
+// value and a REAL computed WCAG contrast check — not a hardcoded guess — so
+// a pick that would be hard to read gets a plain, non-blocking warning
+// instead of silently shipping bad contrast. `mode="bg"` swaps in the
+// stricter body-text-vs-background check (bgContrastWarningFor) used by the
+// custom background color picker, since that background sits behind ALL
+// text, not just accent-colored UI elements like the palette/accent pickers.
+function CustomColorPicker({ hex, onChange, mode = 'accent' }) {
+  const warn = mode === 'bg' ? bgContrastWarningFor(hex) : contrastWarningFor(hex);
+  const bad = mode === 'bg' ? (warn.warnInk || warn.warnBrown) : (warn.warnLight || warn.warnDark);
+  const [hsv, setHsv] = useState(() => rgbToHsv(hexToRgb(hex)));
+  const [text, setText] = useState(hex.toUpperCase());
+  // sync from an external hex change (opening the picker, switching custom
+  // slots) but not from our own onChange round-trip — comparing against the
+  // hex our own hsv would derive avoids the SV dot jittering mid-drag
+  useEffect(() => {
+    if (rgbToHex(hsvToRgb(hsv)).toLowerCase() !== String(hex).toLowerCase()) setHsv(rgbToHsv(hexToRgb(hex)));
+    setText(hex.toUpperCase());
+  }, [hex]);
+  const commit = (nextHsv) => { setHsv(nextHsv); onChange(rgbToHex(hsvToRgb(nextHsv))); };
+  const commitText = (v) => {
+    setText(v);
+    const norm = '#' + v.replace('#', '');
+    if (/^#[0-9a-fA-F]{6}$/.test(norm)) onChange(norm);
+  };
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:10, padding:`${ds(12)}px`, borderRadius:rad(14), background:C.panel, border:C.hair }}>
+      <HsvSquare hsv={hsv} onChange={commit}/>
+      <HueStrip h={hsv.h} onChange={h => commit({ ...hsv, h })}/>
+      <div style={{ display:'flex', alignItems:'center', gap:ds(10) }}>
+        <div style={{ width:28, height:28, borderRadius:999, flexShrink:0, background:hex, boxShadow:`0 0 0 2px ${C.bg}, 0 0 0 3px ${C.line}` }}/>
+        <input value={text} onChange={e => commitText(e.target.value)} maxLength={7}
+          style={{ flex:1, minWidth:0, fontFamily:'ui-monospace, "SF Mono", Menlo, monospace', fontSize:13, fontWeight:600, color:C.ink, background:C.input, border:C.hair, borderRadius:rad(10), padding:'7px 10px', outline:'none' }}/>
       </div>
+      {bad ? (
+        <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:'#B4472E', opacity:0.9, lineHeight:1.35 }}>
+          {mode === 'bg'
+            ? `Low contrast against body text — may be hard to read (${(warn.warnInk ? warn.ink : warn.brown).toFixed(1)}:1)`
+            : `Low contrast${warn.warnLight && warn.warnDark ? ' in light & dark mode' : warn.warnLight ? ' in light mode' : ' in dark mode'} — may be hard to read (${(warn.warnLight ? warn.light : warn.dark).toFixed(1)}:1)`}
+        </div>
+      ) : (
+        <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.5 }}>Drag the square/strip, or type a hex code</div>
+      )}
     </div>
   );
 }
@@ -516,11 +582,41 @@ function pickGardenHero(plants) {
 }
 function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, style, placement, onReposition, labUnlocked, onUnlock }) {
   const [hero, setHero] = useState(null);
-  // computed once plants actually arrive, not locked to whatever the very
-  // first render happened to have — plants can still be mid-sync (local
-  // cache first, remote snapshot later) when this mounts, and a plain lazy
-  // useState initializer would freeze on an empty/partial list forever
-  useEffect(() => { if (!hero && plants && plants.length) setHero(pickGardenHero(plants)); }, [plants]);
+  // the previous pick, kept mounted just long enough to crossfade out under
+  // the new one — without this a rotation is a hard swap ("hot reload"
+  // snap), since a plain setHero(next) unmounts the old collage instantly.
+  const [prevHero, setPrevHero] = useState(null);
+  const [crossfading, setCrossfading] = useState(false);
+  // re-picks live, without ever remounting this component, whenever the day
+  // rolls over or the most-urgent (needs-water) plant changes — the two
+  // conditions that should visibly refresh "what's featured". A 5-minute
+  // tick keeps that check alive even if `plants` itself doesn't change for
+  // a long open session; a plants change (watering, add/remove) re-checks
+  // immediately for free via the effect's own dependency.
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const iv = setInterval(() => setTick(t => t + 1), 5 * 60 * 1000); return () => clearInterval(iv); }, []);
+  const lastPick = useRef({ date: null, topNeedsId: null });
+  useEffect(() => {
+    if (!plants || !plants.length) return;
+    const todayStr = new Date().toDateString();
+    const urgent = plants.filter(p => statusOf(p.days, p.every, p.snoozedUntil) === 'needs')
+      .sort((a, b) => (b.days / b.every) - (a.days / a.every))[0];
+    const topNeedsId = urgent ? urgent.id : null;
+    const last = lastPick.current;
+    if (hero && last.date === todayStr && last.topNeedsId === topNeedsId) return;
+    lastPick.current = { date: todayStr, topNeedsId };
+    const next = pickGardenHero(plants);
+    if (!next) return;
+    setHero(prev => {
+      if (prev && prev.plant.id === next.plant.id) return prev; // same pick — nothing to transition
+      if (prev) {
+        setPrevHero(prev);
+        setCrossfading(true);
+        setTimeout(() => { setCrossfading(false); setPrevHero(null); }, 460);
+      }
+      return next;
+    });
+  }, [plants, tick]);
 
   // secret "Layout Lab" — 7 taps unlocks it (same discovery shape as the
   // Developer panel's 7-tap version row, no PIN needed since this only
@@ -535,30 +631,32 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
   const [dragDy, setDragDy] = useState(0);
   const pressTimer = useRef(null);
   const dragging = useRef(false);
-  const justDragged = useRef(false);
   const startY = useRef(0);
-  // onPointerUp (handleTap, counts toward the secret) fires before the
-  // browser's own click (which opens the plant) on every ordinary tap — so
-  // without this, a single tap both counts AND opens, and the very next tap
-  // reopens Plant Detail before a 2nd/3rd/... tap can ever land, making 7
-  // taps unreachable. First tap in a burst still opens normally (that's the
-  // expected single-tap action); only the 2nd+ rapid tap within the same
-  // counting window is suppressed, so a deliberate rapid-tap burst can keep
-  // going instead of bouncing to Plant Detail after tap one.
-  const suppressOpen = useRef(false);
+  // classic single-tap-vs-multi-tap-burst disambiguation: a tap does NOT
+  // open synchronously. It arms a short (near-imperceptible) deferred open,
+  // well under the ~300-500ms double-tap threshold used everywhere. If a
+  // second tap lands before that timer fires, the pending open is cancelled
+  // and counting continues — so a genuine 7-tap burst never opens Plant
+  // Detail mid-sequence (which would obscure the banner and make tap 8+
+  // unreachable), while a truly isolated single tap still opens, just a
+  // hair later than instant. Only the tap-counting path needs this — once
+  // labUnlocked, a plain tap opens immediately again (see onUp).
+  const openTimer = useRef(null);
+  const OPEN_DELAY = 280;
 
   const handleTap = () => {
-    if (labUnlocked) { suppressOpen.current = false; return; }
     if (tapTimer.current) clearTimeout(tapTimer.current);
     tapTimer.current = setTimeout(() => { tapCount.current = 0; }, 1400);
     tapCount.current += 1;
-    suppressOpen.current = tapCount.current > 1;
+    if (openTimer.current) { clearTimeout(openTimer.current); openTimer.current = null; }
     if (tapCount.current >= 7) {
       tapCount.current = 0;
       onUnlock && onUnlock();
       setLabToast('Layout Lab unlocked — long-press me to drag.');
       setTimeout(() => setLabToast(null), 3200);
+      return;
     }
+    openTimer.current = setTimeout(() => { openTimer.current = null; onOpen(hero.plant.id); }, OPEN_DELAY);
   };
   const onDown = (e) => {
     dragging.current = false;
@@ -578,59 +676,33 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
       else if (dragDy > 40 && placement !== 'below') onReposition && onReposition('below');
       setDragDy(0);
       dragging.current = false;
-      justDragged.current = true;
       return;
     }
+    if (labUnlocked) { if (!labMode) onOpen(hero.plant.id); return; }
     handleTap();
-  };
-  const click = () => {
-    if (justDragged.current) { justDragged.current = false; return; }
-    if (labMode) return;
-    if (suppressOpen.current) { suppressOpen.current = false; return; }
-    onOpen(hero.plant.id);
   };
 
   if (!hero) return null;
-  const { plant, why, group } = hero;
-  const name = czechMode && plant.czech ? plant.czech : plant.name;
-  const caption = why === 'needs' ? `${name} would love a drink today` : why === 'recent' ? 'New in your garden' : `A quiet moment with ${name}`;
   const tileImg = t => (t.plant.photos && t.plant.photos[0]) || t.plant.userImage || t.plant.image;
-  const tiles = (group && group.length ? group : [{ plant, why }]).slice(0, HERO_TILES);
   const hideBrokenTile = e => { e.target.style.opacity = '0'; };
-  return (
-    <div style={{ position:'relative' }}>
-      {labToast && (
-        <div style={{ position:'fixed', bottom:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
-          <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>{labToast}</div>
-        </div>
-      )}
-      {labMode && (
-        <div style={{ position:'absolute', top:-24, left:18, zIndex:3, display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:700, letterSpacing:0.4, textTransform:'uppercase', color:C.sage, background:'rgba(122,158,78,0.16)', borderRadius:999, padding:'3px 9px' }}>Layout Lab · drag up/down</span>
-          <span onClick={()=>setLabMode(false)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:10.5, fontWeight:700, color:C.brown, opacity:0.7 }}>Done</span>
-        </div>
-      )}
-      <div
-        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onClick={click}
-        style={{
-          margin:'14px 18px 0', height:150, borderRadius:rad(20), overflow:'hidden', position:'relative', cursor:'pointer',
-          boxShadow: labMode ? `0 0 0 2px ${C.sage}, 0 8px 22px rgba(45,80,22,0.14)` : '0 8px 22px rgba(45,80,22,0.1)',
-          transform: dragging.current ? `translateY(${dragDy}px) scale(1.02)` : 'none',
-          transition: dragging.current ? 'none' : 'box-shadow 200ms ease, transform 200ms ease',
-          animation: reduceMotion ? undefined : 'heroIn 420ms cubic-bezier(.2,.8,.2,1) both',
-          touchAction:'none',
-          maxWidth: isDesktop ? 640 : undefined,
-          ...style,
-        }}>
-        {/* collage, not one full-bleed photo stretched over a wide/short banner —
-            a single stored photo (compressImage caps at 1024px) has to upscale
-            hard to cover the whole width, which is what made the banner look
-            pixelated; each tile below covers far less area so it needs far less
-            upscale from the same source resolution. Featured tile (the scoring
-            winner) reads left and large; up to two supporting tiles stack right —
-            asymmetric on purpose, same "corner note, not centered" logic as the
-            caption below. Falls back to one full-bleed image when only one
-            plant photo exists at all. */}
+  // shared collage+caption content for a given hero pick — used for both the
+  // live hero and (briefly, during a rotation) the outgoing prevHero, so the
+  // two can cross-dissolve instead of the old pick vanishing instantly the
+  // frame the new one appears (the "hot reload snap" the user was seeing —
+  // there was previously no rotation logic at all to transition between).
+  const renderContent = (h, fadingOut) => {
+    const { plant, why, group } = h;
+    const name = czechMode && plant.czech ? plant.czech : plant.name;
+    const caption = why === 'needs' ? `${name} would love a drink today` : why === 'recent' ? 'New in your garden' : `A quiet moment with ${name}`;
+    const tiles = (group && group.length ? group : [{ plant, why }]).slice(0, HERO_TILES);
+    return (
+      <div style={{
+        position: fadingOut ? 'absolute' : 'relative', inset: fadingOut ? 0 : undefined,
+        width:'100%', height:'100%',
+        opacity: fadingOut ? (crossfading ? 0 : 1) : 1,
+        transition: fadingOut ? 'opacity 420ms ease' : undefined,
+        animation: !fadingOut && !reduceMotion && crossfading ? 'fade 420ms ease both' : undefined,
+      }}>
         {tiles.length === 1 ? (
           <img key={tiles[0].plant.id} src={tileImg(tiles[0])} alt="" onError={hideBrokenTile} style={{
             position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', transformOrigin:'center',
@@ -670,6 +742,50 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
         <div style={{ position:'absolute', top:12, right:14, opacity:0.7, transform:'rotate(12deg)', filter:'drop-shadow(0 1px 3px rgba(0,0,0,0.4))' }}>
           <LeafOutline size={16} color="#fff" sw={1.6}/>
         </div>
+      </div>
+    );
+  };
+  return (
+    <div style={{ position:'relative' }}>
+      {labToast && (
+        <div style={{ position:'fixed', bottom:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:60, animation:'popUp 240ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+          <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>{labToast}</div>
+        </div>
+      )}
+      {labMode && (
+        <div style={{ position:'absolute', top:-24, left:18, zIndex:3, display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:700, letterSpacing:0.4, textTransform:'uppercase', color:C.sage, background:'rgba(122,158,78,0.16)', borderRadius:999, padding:'3px 9px' }}>Layout Lab · drag up/down</span>
+          <span onClick={()=>setLabMode(false)} style={{ cursor:'pointer', fontFamily:FONT_SANS, fontSize:10.5, fontWeight:700, color:C.brown, opacity:0.7 }}>Done</span>
+        </div>
+      )}
+      <div
+        onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
+        style={{
+          margin:'14px 18px 0', height: isDesktop ? 210 : 150, borderRadius:rad(20), overflow:'hidden', position:'relative', cursor:'pointer',
+          boxShadow: labMode ? `0 0 0 2px ${C.sage}, 0 8px 22px rgba(45,80,22,0.14)` : '0 8px 22px rgba(45,80,22,0.1)',
+          transform: dragging.current ? `translateY(${dragDy}px) scale(1.02)` : 'none',
+          transition: dragging.current ? 'none' : 'box-shadow 200ms ease, transform 200ms ease',
+          animation: reduceMotion ? undefined : 'heroIn 420ms cubic-bezier(.2,.8,.2,1) both',
+          touchAction:'none',
+          // wide desktop sidebar layouts have far more content width than a
+          // fixed 640px cap used — that read as a small banner stranded in
+          // a corner with a lot of dead space beside it. This scales with
+          // the available column instead of a stingy fixed number.
+          width: isDesktop ? '100%' : undefined,
+          maxWidth: isDesktop ? 980 : undefined,
+          ...style,
+        }}>
+        {/* collage, not one full-bleed photo stretched over a wide/short banner —
+            a single stored photo (compressImage caps at 1024px) has to upscale
+            hard to cover the whole width, which is what made the banner look
+            pixelated; each tile below covers far less area so it needs far less
+            upscale from the same source resolution. Featured tile (the scoring
+            winner) reads left and large; up to two supporting tiles stack right —
+            asymmetric on purpose, same "corner note, not centered" logic as the
+            caption below. Falls back to one full-bleed image when only one
+            plant photo exists at all. */}
+        {prevHero && renderContent(prevHero, true)}
+        {renderContent(hero, false)}
       </div>
     </div>
   );
@@ -1712,7 +1828,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, customBgEnabled, onToggleCustomBgEnabled, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -2471,6 +2587,14 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                   </div>
                 )}
               </div>
+              <div onClick={onToggleCustomBgEnabled} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Custom background color</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Override the page background instead of just light/dark</div>
+                </div>
+                <ToggleKnob on={customBgEnabled}/>
+              </div>
+              {customBgEnabled && <div style={{ padding:'0 16px 12px' }}><CustomColorPicker hex={customBgColor} onChange={onSetCustomBgColor} mode="bg"/></div>}
               <div style={{ padding:'12px 16px', borderTop:C.hair }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden hero photo</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A rotating plant photo at the top of Garden — off, or placed above/below the title</div>
