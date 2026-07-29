@@ -831,8 +831,11 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
           // fixed cap can anticipate (a 640px, then a 980px cap, both still
           // left visible dead space next to the full-width plant grid below
           // at typical desktop viewports) — match the grid's own width
-          // exactly instead of guessing another fixed number.
-          width: isDesktop ? '100%' : undefined,
+          // exactly instead of guessing another fixed number. calc() (not a
+          // plain 100%) accounts for this same element's own 18px left/right
+          // margin below — 100% + that margin overflowed the sidebar layout
+          // and forced a horizontal scrollbar.
+          width: isDesktop ? 'calc(100% - 36px)' : undefined,
           ...style,
         }}>
         {/* collage, not one full-bleed photo stretched over a wide/short banner —
