@@ -91,11 +91,72 @@ function SwatchRow({ options, value, onSelect, size = 32 }) {
         return (
           <div key={opt.key} onClick={()=>onSelect(opt.key)} title={opt.label} style={{
             flexShrink:0, width:size, height:size, borderRadius:999, background:opt.swatch, cursor:'pointer',
+            // near-white swatches (e.g. a literal "White" background option)
+            // are otherwise invisible against the panel — a thin hairline
+            // keeps them legible without changing the selected-ring language
+            border: opt.border ? C.hair : 'none', boxSizing:'border-box',
             boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${opt.ring || opt.swatch}` : '0 1px 3px rgba(43,42,38,0.18)',
             transition:'box-shadow 160ms ease',
           }}/>
         );
       })}
+    </div>
+  );
+}
+
+// small live-preview tile for one background-texture option — cheap enough
+// to render up to 6 of these at once in Settings. The CSS-only patterns
+// (dot/linen/vein) render through the exact same bgTextureStyle() the real
+// app background uses, so the swatch is a true preview, not an approximation.
+// paper/marble get their own tiny self-contained SVG filter instead of
+// hooking the shared full-viewport grain-overlay — a representative static
+// sample (fixed "medium" look) rather than wiring 6 swatches to the user's
+// live intensity setting, which would need per-swatch filter nodes anyway.
+function TexturePreviewTile({ tKey, size = 34 }) {
+  if (tKey === 'paper' || tKey === 'marble') {
+    const fid = 'texPrev_' + tKey;
+    return (
+      <svg width={size} height={size} style={{ borderRadius:rad(8), display:'block' }}>
+        <defs>
+          <filter id={fid}>
+            <feTurbulence type={tKey === 'marble' ? 'turbulence' : 'fractalNoise'} baseFrequency={tKey === 'marble' ? '0.08' : '0.7'} numOctaves={tKey === 'marble' ? '2' : '3'} stitchTiles="stitch"/>
+            <feColorMatrix type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.9 0"/>
+          </filter>
+        </defs>
+        <rect width="100%" height="100%" fill={C.panel}/>
+        <rect width="100%" height="100%" filter={`url(#${fid})`} opacity="0.4"/>
+      </svg>
+    );
+  }
+  return <div style={{ width:size, height:size, borderRadius:rad(8), background:C.panel, ...bgTextureStyle(tKey) }}/>;
+}
+function TexturePicker({ value, onSelect }) {
+  return (
+    <div style={{ display:'flex', gap:12, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+      {BG_TEXTURE_ORDER.map(k => {
+        const on = value === k;
+        return (
+          <div key={k} onClick={()=>onSelect(k)} title={BG_TEXTURES[k].label} style={{ flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer', width:52 }}>
+            <div style={{ borderRadius:rad(10), border:C.hair, boxShadow: on ? `0 0 0 2px ${C.bg}, 0 0 0 4px ${C.forest}` : 'none', transition:'box-shadow 160ms ease' }}>
+              <TexturePreviewTile tKey={k}/>
+            </div>
+            <span style={{ fontFamily:FONT_SANS, fontSize:9, textAlign:'center', color:C.brown, opacity:on?0.95:0.55, fontWeight:on?600:500, lineHeight:1.2 }}>{BG_TEXTURES[k].label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// non-blocking contrast note reused by every background-color preset (White/
+// Black/palette tint), not just the Custom slot — bgContrastWarningFor() is
+// the same stricter body-text check CustomColorPicker's mode="bg" already uses
+function BgContrastNote({ hex }) {
+  const warn = bgContrastWarningFor(hex);
+  if (!warn.warnInk && !warn.warnBrown) return null;
+  return (
+    <div style={{ fontFamily:FONT_SANS, fontSize:10.5, color:'#B4472E', opacity:0.9, marginTop:8, lineHeight:1.35 }}>
+      Low contrast against body text — may be hard to read ({(warn.warnInk ? warn.ink : warn.brown).toFixed(1)}:1)
     </div>
   );
 }
@@ -362,7 +423,7 @@ function GripIcon({ c = C.brown }) {
 }
 
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion, locationTags }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion, locationTags, cardDateMode = 'last' }) {
   const [press, setPress] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
@@ -420,7 +481,9 @@ function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging
           <svg width="11" height="13" viewBox="0 0 11 13" style={{flexShrink:0}}>
             <path d="M5.5 1C5.5 1 1 6 1 8.6A4.5 4.5 0 0010 8.6C10 6 5.5 1 5.5 1Z" fill="none" stroke={STATUS[status].dot} strokeWidth="1.1"/>
           </svg>
-          <span style={{ fontFamily:FONT_SANS, fontSize: compact ? 10 : 11.5, fontWeight:500, color:C.ink, opacity:0.62, letterSpacing:0.1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{compact ? (plant.days <= 0 ? 'Today' : plant.days === 1 ? '1 day' : `${plant.days} days`) : agoLabel(plant.days)}</span>
+          <span style={{ fontFamily:FONT_SANS, fontSize: compact ? 10 : 11.5, fontWeight:500, color:C.ink, opacity:0.62, letterSpacing:0.1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {cardDateMode === 'due' ? dueLabel(plant.days, plant.every, compact) : (compact ? (plant.days <= 0 ? 'Today' : plant.days === 1 ? '1 day' : `${plant.days} days`) : agoLabel(plant.days))}
+          </span>
         </div>
       </div>
     </div>
@@ -854,7 +917,7 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
   );
 }
 
-function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab, locationTags }) {
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab, locationTags, cardDateMode = 'last' }) {
   const [healthOpen, setHealthOpen] = useState(false);
   const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
@@ -902,7 +965,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
     flat = [...matched];
   }
 
-  const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact, reduceMotion, locationTags };
+  const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact, reduceMotion, locationTags, cardDateMode };
   let entranceCounter = 0;
 
   // easter egg: rapid-tapping the corner sprig watermark is a discoverable
@@ -2017,7 +2080,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, customBgEnabled, onToggleCustomBgEnabled, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, onToggleDark, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -2767,23 +2830,36 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             <SubCollapse title="Background & motion" open={isApOpen('bg')} onToggle={()=>toggleApSec('bg')}>
               <div style={{ padding:'12px 16px' }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Texture</div>
-                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A very subtle wash behind every screen</div>
-                <OptionList value={bgTexture} onSelect={onSetBgTexture} options={BG_TEXTURE_ORDER.map(k=>[k, BG_TEXTURES[k].label])}/>
-                {bgTexture === 'paper' && (
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A very subtle pattern behind every screen</div>
+                <div style={{ marginTop:10 }}><TexturePicker value={bgTexture} onSelect={onSetBgTexture}/></div>
+                {(bgTexture === 'paper' || bgTexture === 'marble') && (
                   <div style={{ marginTop:10 }}>
-                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:6 }}>Grain intensity</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:6 }}>{bgTexture === 'marble' ? 'Marble intensity' : 'Grain intensity'}</div>
                     <Segmented value={grainIntensity} onSelect={onSetGrainIntensity} options={GRAIN_ORDER.map(k=>[k, GRAIN_LEVELS[k].label])}/>
                   </div>
                 )}
               </div>
-              <div onClick={onToggleCustomBgEnabled} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
-                <div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Custom background color</div>
-                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Override the page background instead of just light/dark</div>
+              <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+                <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Background color</div>
+                    <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>White or black first, then a soft palette tint, or pick your own</div>
+                  </div>
+                  <span style={{ flexShrink:0, fontFamily:FONT_SANS, fontSize:11.5, fontWeight:600, color:C.forest }}>
+                    {bgColorChoice === 'off' ? 'Theme default' : bgColorChoice === 'white' ? 'White' : bgColorChoice === 'black' ? 'Black' : bgColorChoice === 'custom' ? 'Custom' : (PALETTES[bgColorChoice] ? PALETTES[bgColorChoice].label : 'Theme default')}
+                  </span>
                 </div>
-                <ToggleKnob on={customBgEnabled}/>
+                <SwatchRow value={bgColorChoice || 'off'} onSelect={onSetBgColorChoice} options={BG_COLOR_ORDER.map(key => {
+                  if (key === 'off') return { key, label:'Theme default', swatch:`linear-gradient(135deg, ${C_LIGHT.bg} 50%, ${C_DARK.bg} 50%)`, ring:C.forest, border:true };
+                  if (key === 'white') return { key, label:'White', swatch:'#FFFFFF', ring:'#0A0A08', border:true };
+                  if (key === 'black') return { key, label:'Black', swatch:'#0A0A08' };
+                  if (key === 'custom') return { key, label:'Custom', ring:customBgColor };
+                  return { key, label:PALETTES[key].label, swatch:BG_TINTS[key], ring:PALETTES[key].swatch, border:true };
+                })}/>
+                {bgColorChoice === 'custom'
+                  ? <CustomColorPicker hex={customBgColor} onChange={onSetCustomBgColor} mode="bg"/>
+                  : bgColorChoice && bgColorChoice !== 'off' && <BgContrastNote hex={resolveBgColorChoice(bgColorChoice, customBgColor)}/>}
               </div>
-              {customBgEnabled && <div style={{ padding:'0 16px 12px' }}><CustomColorPicker hex={customBgColor} onChange={onSetCustomBgColor} mode="bg"/></div>}
               <div style={{ padding:'12px 16px', borderTop:C.hair }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Garden hero photo</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>A rotating plant photo at the top of Garden — off, or placed above/below the title</div>
@@ -2821,6 +2897,11 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Garden shows only soon &amp; thirsty plants</div>
               </div>
               <ToggleKnob on={hideHealthy}/>
+            </div>
+            <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+              <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Card date line</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>What each plant card's small date line says</div>
+              <OptionList value={cardDateMode || 'last'} onSelect={onSetCardDateMode} options={CARD_DATE_MODE_ORDER.map(k=>[k, CARD_DATE_MODES[k].label])}/>
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Opens on launch</div>
@@ -2888,6 +2969,20 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               </div>
               <ToggleKnob on={haptics}/>
             </div>
+            {haptics && (
+              <div style={{ padding:'12px 16px', borderTop:C.hair }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Haptic strength</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1, marginBottom:9 }}>How strong the vibration feels — no sound involved</div>
+                <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
+                  {HAPTIC_INTENSITY_ORDER.map(val => {
+                    const on = (hapticIntensity || 'standard') === val;
+                    return (
+                      <div key={val} onClick={()=>onSetHapticIntensity(val)} style={{ flex:1, textAlign:'center', cursor:'pointer', padding:'6px 0', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight:600, opacity:on?1:0.55, transition:'all 140ms ease' }}>{HAPTIC_INTENSITIES[val].label}</div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </SettingsSection>
         <SettingsSection title="Notifications" open={isOpen('notif')} onToggle={()=>toggleSec('notif')} id={'sec-'+'notif'} matched={settingsMatches[settingsMatchIdx] === 'notif'} query={settingsMatches.includes('notif') ? settingsQuery : ''} bodyRef={registerSection('notif')}>
@@ -3445,6 +3540,18 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                   <ToggleKnob on={navLabels}/>
                 </div>
               </div>
+              <div style={{ borderTop:C.hair, paddingTop:12 }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Active tab indicator</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>How the current {isDesktop ? 'sidebar row' : 'tab'} is marked</div>
+                <OptionList value={navIndicatorStyle || 'tint'} onSelect={onSetNavIndicatorStyle} options={NAV_INDICATOR_ORDER.map(k=>[k, NAV_INDICATOR_STYLES[k].label, NAV_INDICATOR_STYLES[k].desc])}/>
+              </div>
+              {!isDesktop && (
+                <div style={{ borderTop:C.hair, paddingTop:12 }}>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Bar shape</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>The bottom bar's own silhouette, not the icons inside it</div>
+                  <OptionList value={navBarStyle || 'flat'} onSelect={onSetNavBarStyle} options={NAV_BAR_STYLE_ORDER.map(k=>[k, NAV_BAR_STYLES[k].label, NAV_BAR_STYLES[k].desc])}/>
+                </div>
+              )}
             </div>
             <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:14, display:'flex', flexDirection:'column', gap:12, marginTop:14 }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.6, textTransform:'uppercase' }}>Desktop sidebar</div>
@@ -4097,15 +4204,20 @@ function DesktopSettingsAside({
 // ════════════════════════════════════════════════════════════
 //  BOTTOM NAVIGATION
 // ════════════════════════════════════════════════════════════
-function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true }) {
+function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true, indicatorStyle = 'tint', barStyle = 'flat' }) {
   const slots = normalizeNav(navConfig).filter(s => s.action !== 'empty');
   const fire = (action) => { const a = NAV_ACTIONS[action]; if (!a) return; if (a.tab) setTab(action); else onAction && onAction(action); };
+  const floating = barStyle === 'floating';
   return (
     <div style={{
       flexShrink:0, position:'relative', zIndex:30,
       background: C.bg === '#111610' ? 'rgba(17,22,16,0.9)' : 'rgba(250,250,247,0.86)', backdropFilter:'blur(18px) saturate(160%)', WebkitBackdropFilter:'blur(18px) saturate(160%)',
-      borderTop:'0.5px solid rgba(45,80,22,0.1)',
-      padding:'9px 14px calc(26px + env(safe-area-inset-bottom))',
+      borderTop: floating ? 'none' : '0.5px solid rgba(45,80,22,0.1)',
+      borderRadius: floating ? rad(22) : 0,
+      margin: floating ? '0 14px calc(10px + env(safe-area-inset-bottom))' : 0,
+      boxShadow: floating ? '0 10px 28px rgba(45,80,22,0.16), 0 1px 0 rgba(45,80,22,0.06)' : 'none',
+      border: floating ? '0.5px solid rgba(45,80,22,0.1)' : undefined,
+      padding: floating ? '9px 14px 12px' : '9px 14px calc(26px + env(safe-area-inset-bottom))',
       display:'flex', alignItems:'flex-end', justifyContent:'space-between',
     }}>
       {slots.map((s, i) => {
@@ -4132,7 +4244,15 @@ function BottomNav({ tab, setTab, onAction, navConfig, showLabels = true }) {
         const col = active ? accent : C.brown;
         return (
           <div key={i} onClick={()=>fire(s.action)} role="button" aria-label={label} aria-current={active ? 'page' : undefined} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:5, cursor:'pointer', paddingBottom:2 }}>
-            <meta.Icon s={23} c={col} a={active?1:0.55}/>
+            <div style={{
+              display:'flex', alignItems:'center', justifyContent:'center',
+              width: indicatorStyle === 'pill' ? 44 : 'auto', height: indicatorStyle === 'pill' ? 26 : 'auto',
+              borderRadius:999, background: indicatorStyle === 'pill' && active ? (s.color ? `${accent}26` : 'rgba(122,158,78,0.16)') : 'transparent',
+              transition:'background 160ms ease',
+            }}>
+              <meta.Icon s={23} c={col} a={active?1:0.55}/>
+            </div>
+            {indicatorStyle === 'underline' && <div style={{ width: active?16:0, height:2.5, borderRadius:999, background:accent, transition:'width 160ms ease', marginTop:-2 }}/>}
             {showLabels && <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight: active?600:500, color:col, opacity: active?1:0.65, letterSpacing:0.2 }}>{label}</span>}
           </div>
         );
@@ -4217,23 +4337,26 @@ function PlantNotFoundScreen({ onBack }) {
 // tab, matching the mobile card-press/entrance vocabulary instead of the flat
 // background-only state the sidebar had before (desktop was otherwise the
 // one surface today's cozy pass hadn't reached at all)
-function SidebarItem({ onClick, title, collapsed, active, accent, children }) {
+function SidebarItem({ onClick, title, collapsed, active, accent, indicatorStyle = 'tint', children }) {
   const [hover, setHover] = useState(false);
+  const pill = indicatorStyle === 'pill';
+  const underline = indicatorStyle === 'underline';
   return (
     <div onClick={onClick} onMouseEnter={()=>setHover(true)} onMouseLeave={()=>setHover(false)} title={title} style={{
       position:'relative', display:'flex', alignItems:'center', justifyContent: collapsed ? 'center' : 'flex-start', gap:11,
       padding: collapsed ? '11px 0' : '11px 12px', borderRadius:rad(12), marginBottom:4,
       cursor:'pointer',
-      background: active ? 'rgba(45,80,22,0.09)' : hover ? 'rgba(45,80,22,0.045)' : 'transparent',
+      background: active ? (pill ? `${accent}22` : underline ? 'transparent' : 'rgba(45,80,22,0.09)') : hover ? 'rgba(45,80,22,0.045)' : 'transparent',
+      borderBottom: underline ? `2px solid ${active ? accent : 'transparent'}` : 'none',
       transform: hover && !active ? 'translateX(2px)' : 'translateX(0)',
-      transition:'background 140ms ease, transform 160ms cubic-bezier(.2,.8,.2,1)',
+      transition:'background 140ms ease, transform 160ms cubic-bezier(.2,.8,.2,1), border-color 160ms ease',
     }}>
-      {active && <span style={{ position:'absolute', left:-6, top:'22%', bottom:'22%', width:3, borderRadius:999, background:accent }}/>}
+      {active && indicatorStyle === 'tint' && <span style={{ position:'absolute', left:-6, top:'22%', bottom:'22%', width:3, borderRadius:999, background:accent }}/>}
       {children}
     </div>
   );
 }
-function DesktopSidebar({ tab, setTab, onAction, navConfig, showLabels = true, sidebar = {} }) {
+function DesktopSidebar({ tab, setTab, onAction, navConfig, showLabels = true, sidebar = {}, indicatorStyle = 'tint' }) {
   const slots = normalizeNav(navConfig).filter(s => s.action !== 'empty');
   const fire = (action) => { const a = NAV_ACTIONS[action]; if (!a) return; if (a.tab) setTab(action); else onAction && onAction(action); };
   const collapsed = !!sidebar.collapsed;
@@ -4264,7 +4387,7 @@ function DesktopSidebar({ tab, setTab, onAction, navConfig, showLabels = true, s
           const active = meta.tab && tab === s.action;
           const accent = navColor(s);
           return (
-            <SidebarItem key={i} onClick={()=>fire(s.action)} title={collapsed ? navLabel(s) : undefined} collapsed={collapsed} active={active} accent={accent}>
+            <SidebarItem key={i} onClick={()=>fire(s.action)} title={collapsed ? navLabel(s) : undefined} collapsed={collapsed} active={active} accent={accent} indicatorStyle={indicatorStyle}>
               <meta.Icon s={20} c={active ? accent : C.brown} a={active ? 1 : 0.55}/>
               {labels && <span style={{
                 fontFamily:FONT_SANS, fontSize:14, fontWeight: active ? 600 : 500,

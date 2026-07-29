@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '183'; // keep in sync with sw.js CACHE
+const APP_VERSION = '185'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -66,10 +66,11 @@ C.toast = C_LIGHT.toast;
 // light/dark value, same "apply pattern" as the custom accent/palette
 // colors. Kept separate from PALETTES/ACCENTS since it isn't a swatch
 // choice among presets, it's an on/off override of the base page color.
-let customBgEnabled = false;
-function applyCustomBgColor(hex, enabled) {
-  customBgEnabled = !!enabled;
-  if (customBgEnabled && /^#[0-9a-fA-F]{6}$/.test(hex)) C.bg = hex;
+// resolveBgColorChoice() (below, once PALETTE_ORDER exists) turns a picker
+// choice into this one hex-or-null — applyCustomBgColor never has to know
+// about "off" vs "white" vs a palette tint vs custom, only the result.
+function applyCustomBgColor(hex) {
+  if (hex && /^#[0-9a-fA-F]{6}$/.test(hex)) C.bg = hex;
 }
 // body text (C.ink) is the safety-critical check here — it's read against
 // this background everywhere, not just on accent-colored UI elements, so
@@ -231,6 +232,19 @@ function deriveShadesFromHex(hex) {
     },
   };
 }
+// five additional curated hues rounding out the wheel the original seven
+// left uncovered — blue-violet, jade green, true red, olive-gold, and a
+// desaturated neutral (no strong hue at all, for anyone who wants a calmer
+// accent than every other option). Derived through the same deriveShadesFromHex
+// math a custom pick goes through, rather than hand-tuned, so each still
+// follows the established "darken for light mode, lift for dark mode" shape.
+Object.assign(PALETTES, {
+  indigo:   { label:'Indigo',   swatch:'#3F3D9E', ...deriveShadesFromHex('#3F3D9E') },
+  jade:     { label:'Jade',     swatch:'#1C6B4F', ...deriveShadesFromHex('#1C6B4F') },
+  crimson:  { label:'Crimson',  swatch:'#9E1B23', ...deriveShadesFromHex('#9E1B23') },
+  olive:    { label:'Olive',    swatch:'#6B6B1E', ...deriveShadesFromHex('#6B6B1E') },
+  graphite: { label:'Graphite', swatch:'#4A4A46', ...deriveShadesFromHex('#4A4A46') },
+});
 // the independent tab-highlight accent only needs a single dark-mode variant
 function deriveAccentDark(hex) {
   const hsl = rgbToHsl(hexToRgb(hex));
@@ -258,7 +272,7 @@ function contrastWarningFor(hex) {
   } catch (e) { return { light: 21, dark: 21, warnLight: false, warnDark: false }; }
 }
 
-const PALETTE_ORDER = ['forest','teal','plum','clay','ocean','amber','rose','custom'];
+const PALETTE_ORDER = ['forest','teal','plum','clay','ocean','amber','rose','indigo','jade','crimson','olive','graphite','custom'];
 let activePalette = 'forest';
 // seeded with a sane default so PALETTES.custom always exists even before the
 // user ever opens the color picker
@@ -282,12 +296,46 @@ const ACCENTS = {
   amber:  { label:'Amber',  swatch:'#8A6A12', dark:'#E0B84E' },
   rose:   { label:'Rose',   swatch:'#8A2A3E', dark:'#E08096' },
 };
-const ACCENT_ORDER = ['match','forest','teal','plum','clay','ocean','amber','rose','custom'];
+// same five additions as PALETTES above, mirrored here with identical hexes
+// so "Indigo" means the same color whether picked as the main palette or
+// just the tab-highlight accent
+Object.assign(ACCENTS, {
+  indigo:   { label:'Indigo',   swatch:'#3F3D9E', dark: deriveAccentDark('#3F3D9E') },
+  jade:     { label:'Jade',     swatch:'#1C6B4F', dark: deriveAccentDark('#1C6B4F') },
+  crimson:  { label:'Crimson',  swatch:'#9E1B23', dark: deriveAccentDark('#9E1B23') },
+  olive:    { label:'Olive',    swatch:'#6B6B1E', dark: deriveAccentDark('#6B6B1E') },
+  graphite: { label:'Graphite', swatch:'#4A4A46', dark: deriveAccentDark('#4A4A46') },
+});
+const ACCENT_ORDER = ['match','forest','teal','plum','clay','ocean','amber','rose','indigo','jade','crimson','olive','graphite','custom'];
 let activeAccent = 'match';
 ACCENTS.custom = { label: 'Custom', swatch: '#2D5016', dark: deriveAccentDark('#2D5016') };
 function applyCustomAccentColor(hex) {
   if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
   ACCENTS.custom = { label: 'Custom', swatch: hex, dark: deriveAccentDark(hex) };
+}
+
+// background-color picker — Off (theme default) first, exactly like
+// ACCENTS' own 'match' slot, then literal White/Black, then one soft tint
+// per curated palette (derived, not full-saturation — a page background
+// should read as "this palette's mood," not shout the accent color), and
+// finally the existing free-form Custom slot. Every option resolves through
+// resolveBgColorChoice() into one hex-or-null, so applyCustomBgColor keeps
+// its simple "one hex or nothing" shape from before this picker existed.
+function deriveBgTint(hex) {
+  const hsl = rgbToHsl(hexToRgb(hex));
+  return rgbToHex(hslToRgb({ h: hsl.h, s: Math.min(38, hsl.s * 0.55), l: 96 }));
+}
+const BG_TINT_KEYS = PALETTE_ORDER.filter(k => k !== 'custom');
+const BG_TINTS = {};
+BG_TINT_KEYS.forEach(k => { BG_TINTS[k] = deriveBgTint(PALETTES[k].swatch); });
+const BG_COLOR_ORDER = ['off', 'white', 'black', ...BG_TINT_KEYS, 'custom'];
+function resolveBgColorChoice(choice, customHex) {
+  if (!choice || choice === 'off') return null;
+  if (choice === 'white') return '#FFFFFF';
+  if (choice === 'black') return '#0A0A08';
+  if (choice === 'custom') return customHex;
+  if (BG_TINTS[choice]) return BG_TINTS[choice];
+  return null;
 }
 
 // corner-radius density — one multiplier over the whole radius scale (11-22px
@@ -328,30 +376,65 @@ let uiDensityMult = 1;
 function applyUiDensity(level) { uiDensityMult = (UI_DENSITY[level] || UI_DENSITY.comfortable).mult; }
 function ds(px) { return Math.max(2, Math.round(px * uiDensityMult)); }
 
-// background texture — a very subtle, optional wash behind every screen,
-// in the same restrained spirit as the Sprig watermark. Off by default.
+// background texture — a very subtle, optional wash behind every screen, in
+// the same restrained spirit as the Sprig watermark. Off by default. Three
+// families now, not just "more grain": a CSS-only organic dot jitter, a
+// CSS-only woven linen crosshatch, a CSS-only botanical leaf-vein line
+// pattern (thematically apt for a plant app), plus the two feTurbulence-
+// driven noise characters (fine-grain paper, marbled turbulence) that share
+// the one fixed full-viewport .grain-overlay layer. Every one stays alpha-
+// only/monochrome — texture never carries its own color, warmth still only
+// ever comes from palette + typography.
 const BG_TEXTURES = {
-  none:  { label:'None' },
-  dot:   { label:'Dot grid' },
-  paper: { label:'Paper grain' },
+  none:   { label:'None' },
+  dot:    { label:'Dot grid' },
+  linen:  { label:'Linen weave' },
+  vein:   { label:'Leaf vein' },
+  paper:  { label:'Paper grain' },
+  marble: { label:'Marble grain' },
 };
-const BG_TEXTURE_ORDER = ['none','dot','paper'];
+const BG_TEXTURE_ORDER = ['none','dot','linen','vein','paper','marble'];
 let activeBgTexture = 'none';
 function applyBgTexture(v) { if (BG_TEXTURES[v]) activeBgTexture = v; }
-function bgTextureStyle() {
-  if (activeBgTexture === 'dot') return { backgroundImage:`radial-gradient(${C.line} 1px, transparent 1px)`, backgroundSize:'22px 22px' };
-  // real grain (feTurbulence, see index.html's #grainFilter + .grain-overlay)
-  // now carries the "paper" texture as one fixed full-viewport layer — this
-  // background-image trick used to fake it with offset dot layers, no longer
-  // needed once the real overlay is toggled on by applyGrainIntensity().
+// deterministic point set (not Math.random per call) so the dot jitter
+// never visibly re-randomizes on re-render — "irregular" is baked into the
+// fixed offsets themselves, not regenerated
+const DOT_JITTER_PTS = [[6,8],[19,4],[33,14],[46,7],[12,24],[28,29],[41,22],[54,31],[7,42],[22,46],[37,44],[50,50],[15,55],[44,58]];
+function dotPatternUri(color) {
+  const circles = DOT_JITTER_PTS.map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.1" fill="${color}"/>`).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60">${circles}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+function veinPatternUri(color) {
+  // a few branching curved strokes, not a literal leaf outline — reads as
+  // "organic linework" at this scale/opacity rather than wallpaper botanical art
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="130" height="130">
+    <path d="M12 122 C 32 100, 26 66, 42 44 C 52 28, 46 12, 62 4" stroke="${color}" stroke-width="1" fill="none"/>
+    <path d="M42 44 C 58 50, 68 55, 82 60" stroke="${color}" stroke-width="0.7" fill="none"/>
+    <path d="M26 66 C 15 71, 8 82, 5 98" stroke="${color}" stroke-width="0.7" fill="none"/>
+    <path d="M62 4 C 78 15, 88 10, 104 22" stroke="${color}" stroke-width="0.7" fill="none"/>
+  </svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+// texture parameter accepted so Settings' live preview swatches can render
+// any option regardless of which one is currently active — defaults to the
+// active texture for the real app-background call sites, which never pass it
+function bgTextureStyle(texture) {
+  const t = texture || activeBgTexture;
+  if (t === 'dot') return { backgroundImage: dotPatternUri(C.line), backgroundSize:'60px 60px' };
+  if (t === 'linen') return { backgroundImage: `repeating-linear-gradient(45deg, ${C.line} 0 1px, transparent 1px 15px), repeating-linear-gradient(-45deg, ${C.line} 0 1px, transparent 1px 15px)` };
+  if (t === 'vein') return { backgroundImage: veinPatternUri(C.line), backgroundSize:'130px 130px' };
+  // paper/marble: real grain (feTurbulence, see index.html's #grainFilter +
+  // .grain-overlay) carries these as one fixed full-viewport layer instead of
+  // a backgroundImage trick, toggled on by applyGrainIntensity() below.
   return {};
 }
 
 // grain intensity — same apply/read pattern as icon stroke / radius density:
 // a module-level `let`, an apply* fn called every render, a plain reader.
 // Only the blend layer's CSS opacity goes through a custom property; the SVG
-// filter's baseFrequency does NOT reliably take var() across engines, so it's
-// mutated imperatively on the <feTurbulence> node instead.
+// filter's baseFrequency/type do NOT reliably take var()/CSS across engines,
+// so they're mutated imperatively on the <feTurbulence> node instead.
 const GRAIN_LEVELS = {
   subtle: { label:'Subtle', freq:0.9, op:0.15, vignette:0.03 },
   medium: { label:'Medium', freq:0.7, op:0.3,  vignette:0.05 },
@@ -364,12 +447,23 @@ const GRAIN_LEVELS = {
 };
 const GRAIN_ORDER = ['subtle','medium','bold','deep'];
 let grainLevel = 'medium';
-function applyGrainIntensity(level, textureOn) {
+// 'marble' reuses the exact same singleton <feTurbulence> node as 'paper' —
+// only one grain-family texture is ever active at once, so switching the
+// filter's type/baseFrequency in place is one DOM write instead of a second
+// full-viewport overlay. type="turbulence" (not fractalNoise) at a much
+// lower base frequency + fewer octaves is what gives it the coarser, veined/
+// marbled character instead of paper's fine grain.
+function applyGrainIntensity(level, textureOn, texture) {
   if (GRAIN_LEVELS[level]) grainLevel = level;
   const cfg = GRAIN_LEVELS[grainLevel];
+  const marble = (texture || activeBgTexture) === 'marble';
   try {
     const fe = document.getElementById('grainTurb');
-    if (fe) fe.setAttribute('baseFrequency', String(cfg.freq));
+    if (fe) {
+      fe.setAttribute('type', marble ? 'turbulence' : 'fractalNoise');
+      fe.setAttribute('baseFrequency', String(marble ? cfg.freq * 0.12 : cfg.freq));
+      fe.setAttribute('numOctaves', marble ? '2' : '3');
+    }
     document.documentElement.style.setProperty('--grain-opacity', textureOn ? cfg.op : 0);
     // whisper of vignette at the viewport edges, tied to the same texture
     // toggle/intensity rather than a separate setting — content itself is
@@ -497,6 +591,15 @@ function agoLabel(days) {
   if (days <= 0) return 'Watered today';
   if (days === 1) return 'Watered yesterday';
   return `Watered ${days} days ago`;
+}
+// the "Next due" alternative to agoLabel for PlantCard's date line — a pure
+// countdown of the same days/every ratio statusOf already derives from,
+// never a second source of truth on the watering model
+function dueLabel(days, every, compact) {
+  const left = Math.round((every || 7) - days);
+  if (left <= 0) return compact ? 'Due now' : (left === 0 ? 'Due today' : `Overdue ${-left}d`);
+  if (compact) return `${left}d left`;
+  return left === 1 ? 'Due tomorrow' : `Due in ${left} days`;
 }
 
 // local YYYY-MM-DD (never UTC — avoids off-by-one in +UTC timezones)
@@ -1091,6 +1194,44 @@ function normalizeNav(cfg) {
 }
 const navLabel = (s) => (s && s.label) || (NAV_ACTIONS[s && s.action] ? NAV_ACTIONS[s.action].label : '');
 const navColor = (s) => (s && s.color) || C.accent || C.forest;
+
+// active-tab indicator treatment — independent of icon-stroke-weight (line
+// boldness) and radius density (corner rounding scale): this is which visual
+// device marks "you are here" on a regular (non-center) bottom-nav slot.
+const NAV_INDICATOR_STYLES = {
+  tint:      { label:'Icon & label tint', desc:'Color the icon and label — no extra shape' },
+  underline: { label:'Underline', desc:'A short accent bar beneath the active icon' },
+  pill:      { label:'Filled pill', desc:'A soft pill fills in behind the active icon' },
+};
+const NAV_INDICATOR_ORDER = ['tint','underline','pill'];
+
+// nav bar shape/elevation — a container silhouette choice, distinct from
+// radius density (which scales corner rounding proportionally everywhere):
+// this changes whether the bar spans edge-to-edge or floats as an island.
+const NAV_BAR_STYLES = {
+  flat:     { label:'Flat bar', desc:'Edge-to-edge, anchored to the bottom' },
+  floating: { label:'Floating pill', desc:'Rounded, inset from the edges with a shadow' },
+};
+const NAV_BAR_STYLE_ORDER = ['flat','floating'];
+
+// haptic intensity — a silent, tactile-only axis (sound stays out of scope
+// on purpose); scales the existing vibrate-pattern ms values in app.jsx's
+// fireHaptic rather than inventing new patterns per kind.
+const HAPTIC_INTENSITIES = {
+  gentle:   { label:'Gentle',   mult:0.55 },
+  standard: { label:'Standard', mult:1 },
+  firm:     { label:'Firm',     mult:1.7 },
+};
+const HAPTIC_INTENSITY_ORDER = ['gentle','standard','firm'];
+
+// which date line a PlantCard face shows — last-watered ("ago") is the long-
+// standing default; next-due flips the same slot to a countdown instead.
+// Pure display choice, no change to the underlying watering model.
+const CARD_DATE_MODES = {
+  last: { label:'Last watered' },
+  due:  { label:'Next due' },
+};
+const CARD_DATE_MODE_ORDER = ['last','due'];
 // ordered tab actions present in the bar — what swipes and launch-tab respect
 function navTabOrder(cfg) {
   const seen = new Set();
@@ -1103,14 +1244,17 @@ function navTabOrder(cfg) {
 
 // export to window for other babel scripts -------------------
 Object.assign(window, {
-  C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, todayGreeting, fmtLocalDate, wateringStats,
+  C, FONT_SERIF, FONT_SANS, qrUrl, TINTS, statusOf, STATUS, agoLabel, dueLabel, todayGreeting, fmtLocalDate, wateringStats,
   ROOM_LIGHT_LEVELS, sunlightLevel, plantLightRange, roomLightMismatch,
   careCheckDue, adjustEveryForOutcome, HEALTH_TIERS, gardenHealthScore, plantMilestoneLabel,
   todayMidnight, midnightFromStamp, daysSinceMidnight, deriveWateredAt, WATER_SCHEMA,
   NAV_ACTIONS, NAV_ORDER, NAV_MAX, DEFAULT_NAV, normalizeNav, navTabOrder, navLabel, navColor, MILESTONES,
+  NAV_INDICATOR_STYLES, NAV_INDICATOR_ORDER, NAV_BAR_STYLES, NAV_BAR_STYLE_ORDER,
+  HAPTIC_INTENSITIES, HAPTIC_INTENSITY_ORDER, CARD_DATE_MODES, CARD_DATE_MODE_ORDER,
   PALETTES, PALETTE_ORDER, ACCENTS, ACCENT_ORDER,
   applyCustomPaletteColor, applyCustomAccentColor, contrastWarningFor,
   applyCustomBgColor, bgContrastWarningFor, rgbToHsv, hsvToRgb, hexToRgb, rgbToHex,
+  BG_COLOR_ORDER, BG_TINTS, resolveBgColorChoice,
   RADIUS_DENSITY, RADIUS_ORDER, applyRadiusDensity, rad,
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,

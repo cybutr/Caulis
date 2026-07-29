@@ -144,13 +144,18 @@
     try {
       var pal = localStorage.getItem('caulis_palette') || 'forest';
       var curated = {
-        forest: { light: '#2D5016', dark: '#7EC870' },
-        teal:   { light: '#15605A', dark: '#5FC7BC' },
-        plum:   { light: '#5A2456', dark: '#C870BC' },
-        clay:   { light: '#8A3A1E', dark: '#D4885F' },
-        ocean:  { light: '#1D4E89', dark: '#7DAEDC' },
-        amber:  { light: '#8A6A12', dark: '#E0B84E' },
-        rose:   { light: '#8A2A3E', dark: '#E08096' },
+        forest:   { light: '#2D5016', dark: '#7EC870' },
+        teal:     { light: '#15605A', dark: '#5FC7BC' },
+        plum:     { light: '#5A2456', dark: '#C870BC' },
+        clay:     { light: '#8A3A1E', dark: '#D4885F' },
+        ocean:    { light: '#1D4E89', dark: '#7DAEDC' },
+        amber:    { light: '#8A6A12', dark: '#E0B84E' },
+        rose:     { light: '#8A2A3E', dark: '#E08096' },
+        indigo:   { light: '#3B3993', dark: '#A1A0DF' },
+        jade:     { light: '#1C6B4F', dark: '#52D8A9' },
+        crimson:  { light: '#9E1B23', dark: '#EB7178' },
+        olive:    { light: '#6B6B1E', dark: '#D6D656' },
+        graphite: { light: '#4A4A46', dark: '#A1A192' },
       };
       var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
       var forestHex = null;
@@ -164,21 +169,42 @@
         document.querySelector('meta[name="theme-color"]').setAttribute('content', isDark ? '#111610' : forestHex);
       }
     } catch (e) {}
-    // custom background override, same pre-mount-flash-avoidance reasoning
-    // as the font pairing/palette blocks above
+    // background-color override, same pre-mount-flash-avoidance reasoning as
+    // the font pairing/palette blocks above. Mirrors resolveBgColorChoice()
+    // (caulis-core.jsx) just enough for a sub-second splash — falls back to
+    // the legacy on/off flag for anyone who picked a custom bg before this
+    // was a proper White/Black/tint/Custom picker.
     try {
-      if (localStorage.getItem('caulis_custom_bg_enabled') === 'true') {
-        var bgHex = localStorage.getItem('caulis_custom_bg_color');
-        if (bgHex) {
-          document.documentElement.style.setProperty('--bg', bgHex);
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', bgHex);
-        }
+      var bgChoice = localStorage.getItem('caulis_bg_color_choice');
+      if (!bgChoice) bgChoice = localStorage.getItem('caulis_custom_bg_enabled') === 'true' ? 'custom' : 'off';
+      // palette-tint choices are deliberately NOT handled here — the tint is
+      // a very pale near-white/near-black derived shade (l:96 in
+      // deriveBgTint), so skipping it pre-mount is a near-invisible one-frame
+      // gap, while approximating it from the saturated accent hex instead
+      // would flash the wrong, much-too-vivid color until React corrects it
+      var bgHex = null;
+      if (bgChoice === 'white') bgHex = '#FFFFFF';
+      else if (bgChoice === 'black') bgHex = '#0A0A08';
+      else if (bgChoice === 'custom') bgHex = localStorage.getItem('caulis_custom_bg_color');
+      if (bgHex) {
+        document.documentElement.style.setProperty('--bg', bgHex);
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', bgHex);
       }
     } catch (e) {}
   })();
 </script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* crossfade theme/palette/accent/background-color changes instead of
+     snapping instantly — scoped to color-only properties (never transform/
+     opacity/left/width) so it can't fight a purpose-built animation's own
+     timing. Any element with its own inline `transition` (card press-scale,
+     ToggleKnob's flip, etc.) fully overrides this per the cascade, so
+     nothing here races those. Left ungated by reduceMotion on purpose: a
+     color crossfade has no spatial/vestibular component, and it's still
+     collapsed to ~0 for free by the reduce-motion override below anyway
+     (belt and suspenders, same as every other animation in this app). */
+  *, *::before, *::after { transition: background-color 320ms ease, border-color 320ms ease, color 320ms ease, box-shadow 320ms ease; }
   :root { --bg: #FAFAF7; --forest: #2D5016; --line: rgba(45,80,22,0.15); }
   :root[data-theme="dark"] { --bg: #111610; --forest: #7EC870; --line: rgba(255,255,255,0.07); }
   @media (prefers-color-scheme: dark) {
