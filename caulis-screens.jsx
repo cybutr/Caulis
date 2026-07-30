@@ -423,34 +423,70 @@ function GripIcon({ c = C.brown }) {
 }
 
 // ── Plant card (Garden grid) ──────────────────────────────
-function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion, locationTags, cardDateMode = 'last', span }) {
+function PlantCard({ plant, tint, onOpen, onLongPress, czechMode, grip, dragging, over, selectable, selected, onToggleSelect, compact, entranceIdx, reduceMotion, locationTags, cardDateMode = 'last', span, labMode, onToggleFeatured }) {
   const [press, setPress] = useState(false);
+  const [hover, setHover] = useState(false);
   const timer = useRef(null);
   const longed = useRef(false);
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
+  // Layout Lab tap-to-feature: a quick tap toggles `featured` directly
+  // instead of opening the plant, replacing long-press → context menu →
+  // "Feature this plant" as the primary way in. Long-press/context menu
+  // still has the same toggle for parity, just no longer the only path.
+  // Skipping the press-and-hold timer entirely here (not just ignoring its
+  // result) avoids a stray context-menu flash on an ordinary quick tap.
   const start = () => {
-    if (selectable) return;
+    if (selectable || labMode) return;
     setPress(true); longed.current = false;
     timer.current = setTimeout(() => { longed.current = true; setPress(false); onLongPress && onLongPress(plant); }, 480);
   };
   const end = () => { setPress(false); if (timer.current) clearTimeout(timer.current); };
-  const click = () => { if (selectable) { onToggleSelect(plant.id); return; } if (longed.current) { longed.current = false; return; } onOpen(plant.id); };
+  const click = () => {
+    if (labMode) { onToggleFeatured && onToggleFeatured(plant.id); return; }
+    if (selectable) { onToggleSelect(plant.id); return; }
+    if (longed.current) { longed.current = false; return; }
+    onOpen(plant.id);
+  };
   const entrance = (!reduceMotion && entranceIdx != null) ? cardEntranceStyle(entranceIdx) : {};
+  // confirming pulse when `featured` flips — via Layout Lab's tap-to-feature
+  // or the long-press context menu action, either path lands here since both
+  // ultimately just flip the same plant.featured boolean
+  const prevFeatured = useRef(plant.featured);
+  const [pulse, setPulse] = useState(false);
+  useEffect(() => {
+    if (prevFeatured.current !== plant.featured) {
+      prevFeatured.current = plant.featured;
+      if (reduceMotion) return;
+      setPulse(true);
+      const t = setTimeout(() => setPulse(false), 560);
+      return () => clearTimeout(t);
+    }
+  }, [plant.featured, reduceMotion]);
   return (
     <div data-noswipe="1" style={{ position:'relative', borderRadius: compact ? rad(16) : rad(22), overflow:'hidden', gridColumn: span ? `span ${span}` : undefined, ...entrance }}>
+      {pulse && <div style={{ position:'absolute', inset:-2, borderRadius: compact ? rad(18) : rad(24), boxShadow:`0 0 0 2px ${C.sage}`, animation:'featurePulse 560ms ease-out both', pointerEvents:'none', zIndex:3 }}/>}
       <div
-        onPointerDown={start} onPointerUp={end} onPointerLeave={end} onPointerCancel={end} onClick={click}
+        onPointerDown={start} onPointerUp={end} onPointerLeave={()=>{ end(); setHover(false); }} onPointerCancel={end}
+        onPointerEnter={()=>setHover(true)} onClick={click}
         style={{
           background:C.panel, borderRadius: compact ? rad(16) : rad(22), padding: ds(compact ? 8 : 12), minWidth:0,
-          boxShadow: press ? '0 1px 3px rgba(43,42,38,0.06)' : '0 1px 2px rgba(43,42,38,0.04), 0 8px 22px rgba(45,80,22,0.05)',
-          border: selected ? `1.5px solid ${C.forest}` : over ? '1px solid rgba(110,154,62,0.6)' : '0.5px solid rgba(45,80,22,0.06)',
-          transform: `scale(${press ? 0.975 : 1})`,
+          boxShadow: press ? '0 1px 3px rgba(43,42,38,0.06)' : hover ? '0 2px 4px rgba(43,42,38,0.06), 0 14px 30px rgba(45,80,22,0.09)' : '0 1px 2px rgba(43,42,38,0.04), 0 8px 22px rgba(45,80,22,0.05)',
+          border: selected ? `1.5px solid ${C.forest}` : over ? '1px solid rgba(110,154,62,0.6)' : labMode ? '1.5px dashed rgba(122,158,78,0.55)' : '0.5px solid rgba(45,80,22,0.06)',
+          transform: `scale(${press ? 0.975 : 1}) translateY(${!press && hover && !labMode ? -2 : 0}px)`,
           opacity: dragging ? 0.5 : 1,
           transition: 'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease, opacity 140ms ease, border-color 140ms ease',
           cursor:'pointer', position:'relative', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y',
         }}>
         <div style={{ position:'relative' }}>
           <Specimen tint={tint} height={span ? (compact ? 96 : 122) : (compact ? 76 : 96)} radius={compact ? 11 : 15} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/>
+          <div style={{ position:'absolute', inset:0, borderRadius: compact ? 11 : 15, boxShadow:PHOTO_FRAME_SHADOW, pointerEvents:'none' }}/>
+          {labMode && (
+            <div title={plant.featured ? 'Tap to unfeature' : 'Tap to feature (bigger card)'} style={{ position:'absolute', bottom:7, right:7, width:22, height:22, borderRadius:999, background: plant.featured ? C.forest : 'rgba(255,255,255,0.85)', display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 3px rgba(43,42,38,0.2)' }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+                <path d="M4 14v6h6M20 10V4h-6M20 4l-7 7M4 20l7-7" stroke={plant.featured ? '#fff' : C.forest} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+          )}
           {grip && (
             <div {...grip} onClick={e=>e.stopPropagation()} style={{ position:'absolute', top:9, left:9, width:24, height:24, borderRadius:999, background:C.panel, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 2px rgba(43,42,38,0.12)', cursor:'grab', touchAction:'none' }}>
               <GripIcon/>
@@ -787,7 +823,7 @@ function pickGardenHero(plants) {
   }
   return { plant: pick.p, why: pick.why, group };
 }
-function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, style, placement, onReposition, labUnlocked, onUnlock }) {
+function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, style, placement, onReposition, labUnlocked, onUnlock, labMode, onLabModeChange }) {
   const [hero, setHero] = useState(null);
   // the previous pick, kept mounted just long enough to crossfade out under
   // the new one — without this a rotation is a hard swap ("hot reload"
@@ -834,7 +870,10 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
   const tapCount = useRef(0);
   const tapTimer = useRef(null);
   const [labToast, setLabToast] = useState(null);
-  const [labMode, setLabMode] = useState(false);
+  // labMode is lifted to GardenScreen (via labMode/onLabModeChange) so the
+  // same "editing" session also unlocks tap-to-feature on plant cards below —
+  // one shared edit session, not two independent drag modes.
+  const setLabMode = onLabModeChange || (() => {});
   // "why this photo" — the scoring behind pickGardenHero is real (needs-water
   // signal, recency, not-shown-lately), but was entirely invisible; a curious
   // user had no way to know it wasn't random. A tiny reveal, not a settings
@@ -1036,8 +1075,13 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
   );
 }
 
-function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab, locationTags, cardDateMode = 'last', gridWeighted }) {
+function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder, isDesktop, czechMode, density, gridCols: gridColsPref, hideHealthy, onBulkWater, onBulkQueue, onBulkMove, onBulkRemove, onHaptic, onWaterOne, badges, ambientBadges, badgeDensity, onOpenBadges, gardenName, reduceMotion, heroBanner = 'below', onSetHeroBanner, layoutLabUnlocked, onUnlockLayoutLab, locationTags, cardDateMode = 'last', gridWeighted, onToggleFeatured }) {
   const [healthOpen, setHealthOpen] = useState(false);
+  // one shared "editing" session for Layout Lab: entered via the hero
+  // banner's long-press (as before) but now also drives the plant grid below
+  // — tap-to-feature + a persistent app-wide editing indicator — instead of
+  // only ever repositioning the banner itself.
+  const [labMode, setLabMode] = useState(false);
   const health = gardenHealthScore(plants, roomLight || {});
   const [sort, setSort] = useState(() => GS.get('caulis_g_sort', 'all'));
   const [q, setQ] = useState('');
@@ -1086,7 +1130,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
     flat = [...matched];
   }
 
-  const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact, reduceMotion, locationTags, cardDateMode };
+  const cardProps = { onOpen, onLongPress, onWater: onWaterOne, czechMode, selectable: selMode, onToggleSelect: toggleSel, compact, reduceMotion, locationTags, cardDateMode, labMode: layoutLabUnlocked && labMode, onToggleFeatured };
   let entranceCounter = 0;
   // "attention-weighted" grid (opt-in, Settings → Garden): a thirsty or
   // brand-new plant earns a wider card instead of sitting flush with
@@ -1105,6 +1149,10 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
   };
   const hasFeatured = plants.some(p => p.featured);
   const denseFlow = gridWeighted || hasFeatured;
+  // shared with dragEnabled below and the Layout Lab editing bar's copy —
+  // the view-state gates (search/filter/select-mode/location-grouping) that
+  // block reorder regardless of labMode
+  const dragViewOk = sort === 'all' && !nq && fStatus === 'all' && !fLoc && !hideHealthy && !selMode;
 
   // easter egg: rapid-tapping the corner sprig watermark is a discoverable
   // no-op everywhere else in the app — reward the curiosity with a one-line joke
@@ -1178,18 +1226,38 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
           <div style={{ background:C.toast, color:'#fff', borderRadius:999, padding:'10px 18px', fontFamily:FONT_SANS, fontSize:13, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>{greetLabToast}</div>
         </div>
       )}
-      {!empty && heroBanner === 'above' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} isDesktop={isDesktop} style={{ margin:`${topPad-30}px 18px 0` }} placement="above" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
+      {/* app-wide "you are editing" treatment for Layout Lab: a persistent
+          top bar (unlike the hero banner's own small pill, which stays too —
+          additive, not a replacement) plus a soft inset glow around the
+          whole screen so the edit session reads as a real mode, not just a
+          drag affordance on one element. */}
+      {labMode && (
+        <div style={{ position:'fixed', inset:0, pointerEvents:'none', zIndex:50, boxShadow:'inset 0 0 0 3px rgba(122,158,78,0.32)' }}/>
+      )}
+      {labMode && (
+        <div style={{ position:'fixed', top: isDesktop ? 16 : 'calc(env(safe-area-inset-top) + 10px)', left:0, right:0, display:'flex', justifyContent:'center', zIndex:56, animation: reduceMotion ? undefined : 'popUp 240ms cubic-bezier(.2,.9,.3,1.2)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, background:C.forest, color:'#fff', borderRadius:999, padding:'8px 8px 8px 16px', fontFamily:FONT_SANS, fontSize:12.5, fontWeight:500, boxShadow:'0 10px 26px rgba(0,0,0,0.24)' }}>
+            <span>Editing layout — tap a plant to feature it{dragViewOk ? ', drag to reorder' : ''}</span>
+            <span onClick={()=>setLabMode(false)} style={{ cursor:'pointer', background:'rgba(255,255,255,0.2)', borderRadius:999, padding:'6px 14px', fontWeight:700 }}>Done</span>
+          </div>
+        </div>
+      )}
+      {!empty && heroBanner === 'above' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} isDesktop={isDesktop} style={{ margin:`${topPad-30}px 18px 0` }} placement="above" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab} labMode={labMode} onLabModeChange={setLabMode}/>}
       <div style={{ padding:`${topPad}px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
         <div style={{ display:'flex', alignItems: isDesktop ? 'flex-end' : 'center', justifyContent:'space-between', gap:12 }}>
           <div>
-            {!isDesktop && (
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:22 }}>
-                <div style={{ width:30, height:30, borderRadius:999, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                  <Leaf size={16} color={C.forest}/>
-                </div>
-                <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:30, color:C.forest, letterSpacing:0.3 }}>{gardenName || 'Caulis'}</span>
+            {/* was `{!isDesktop && (...)}` — the custom garden-name wordmark
+                never rendered on desktop at all, only the literal sidebar
+                "Caulis" branding showed. Desktop sidebar identity stays
+                literal on purpose (see CLAUDE.md), but this Garden-screen
+                header is the personalizable greeting, so it now shows the
+                custom name on desktop too — same element, just always on. */}
+            <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom: isDesktop ? 14 : 22 }}>
+              <div style={{ width:30, height:30, borderRadius:999, background:'rgba(122,158,78,0.14)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <Leaf size={16} color={C.forest}/>
               </div>
-            )}
+              <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:30, color:C.forest, letterSpacing:0.3 }}>{gardenName || 'Caulis'}</span>
+            </div>
             {/* cursor MUST be 'pointer', not 'default' — AmbientBadgeLayer's
                 occlusion probe (caulis-badges.jsx, _looksClickable) treats a
                 spot with no cursor:pointer element as "nothing real here"
@@ -1247,7 +1315,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
 
       {empty && <EmptyGarden onAdd={onAdd} reduceMotion={reduceMotion}/>}
 
-      {!empty && heroBanner === 'below' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} isDesktop={isDesktop} placement="below" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab}/>}
+      {!empty && heroBanner === 'below' && <GardenHeroBanner plants={plants} onOpen={onOpen} reduceMotion={reduceMotion} czechMode={czechMode} isDesktop={isDesktop} placement="below" onReposition={onSetHeroBanner} labUnlocked={layoutLabUnlocked} onUnlock={onUnlockLayoutLab} labMode={labMode} onLabModeChange={setLabMode}/>}
 
       {!empty && (
         <div style={{ padding:`12px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
@@ -1321,7 +1389,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
         <GardenJournalView plants={matched} onOpen={onOpen} onWaterOne={onWaterOne} czechMode={czechMode} reduceMotion={reduceMotion} sidePad={sidePad}/>
       )}
 
-      {!empty && viewMode === 'grid' && (gridWeighted || hasFeatured) && sort !== 'location' && (
+      {!empty && viewMode === 'grid' && (gridWeighted || hasFeatured) && !labMode && sort !== 'location' && (
         <div style={{ padding:`4px ${sidePad}px 0`, position:'relative', zIndex:2 }}>
           <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>Manual reorder is paused while a plant is emphasized or emphasis is on.</span>
         </div>
@@ -1341,7 +1409,11 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
       )}
 
       {!empty && viewMode === 'grid' && sort !== 'location' && (() => {
-        const dragEnabled = sort === 'all' && !nq && fStatus === 'all' && !fLoc && !hideHealthy && !selMode && !gridWeighted && !hasFeatured;
+        // Layout Lab is a deliberate, explicit editing session — reorder is
+        // safe to re-enable there even with spans active (unlike the ambient
+        // gridWeighted/hasFeatured case, where drop-target math against
+        // varying span sizes gets unreliable during ordinary browsing).
+        const dragEnabled = dragViewOk && (labMode || (!gridWeighted && !hasFeatured));
         return (
           <div ref={dragEnabled ? re.containerRef : null} style={{ display:'grid', gridTemplateColumns:gridCols, gap:gridGap, padding:`14px ${sidePad}px 0`, position:'relative', zIndex:2, gridAutoFlow: denseFlow ? 'dense' : undefined }}>
             {flat.map((p,i) => <PlantCard key={p.id} plant={p} tint={tintFor(p.id)} {...cardProps} selected={sel.has(p.id)} grip={dragEnabled ? re.grip(i) : undefined} dragging={dragEnabled && re.dragIdx===i} over={dragEnabled && re.overIdx===i && re.dragIdx!==i} entranceIdx={i} span={cardSpanFor(p)}/>)}
@@ -1370,7 +1442,7 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
 // ════════════════════════════════════════════════════════════
 //  NEEDS WATER
 // ════════════════════════════════════════════════════════════
-function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMode, reduceMotion }) {
+function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMode, reduceMotion, idx, urgent }) {
   const [press, setPress] = useState(false);
   const [dx, setDx] = useState(0);
   const [celebrate, setCelebrate] = useState(false);
@@ -1425,7 +1497,7 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
   const snoozePull = Math.max(0, Math.min(1, -dx / -SNOOZE_THRESH));
 
   return (
-    <div data-noswipe="1" style={{ position:'relative', borderRadius:rad(18), overflow:'hidden' }}>
+    <div data-noswipe="1" style={{ position:'relative', borderRadius:rad(18), overflow:'hidden', ...(reduceMotion || idx == null ? {} : cardEntranceStyle(idx)) }}>
       {dx < 0 && (
         <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:22, background:`rgba(201,138,43,${0.14 + snoozePull*0.22})`, transition:'background 120ms linear' }}>
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, color:STATUS.soon.dot, transform:`scale(${0.85 + snoozePull*0.25})`, transition:'transform 120ms linear' }}>
@@ -1442,15 +1514,21 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
           </div>
         </div>
       )}
+      {/* real hierarchy, not a flat uniform list: a plant due right now (not
+          just "soon") reads visibly more urgent — a warm left accent bar plus
+          a touch more size, rather than everything sharing one weight */}
       <div onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end} onClick={click} style={{
-        position:'relative', display:'flex', alignItems:'center', gap:ds(13), background:C.panel, borderRadius:rad(18), padding:ds(10),
-        border:'0.5px solid rgba(45,80,22,0.06)', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)',
+        position:'relative', display:'flex', alignItems:'center', gap:ds(13), background:C.panel, borderRadius:rad(18),
+        padding: status === 'needs' ? ds(12) : ds(10),
+        border:'0.5px solid rgba(45,80,22,0.06)',
+        boxShadow: status === 'needs' ? '0 1px 3px rgba(43,42,38,0.04), 0 8px 20px rgba(180,71,46,0.07)' : '0 1px 2px rgba(43,42,38,0.03), 0 6px 16px rgba(45,80,22,0.04)',
         cursor:'pointer', userSelect:'none', WebkitUserSelect:'none', touchAction:'pan-y',
         transform: `translateX(${dx}px) scale(${press ? 0.985 : 1})`, transition: swiping.current ? 'none' : 'transform 220ms cubic-bezier(.2,.8,.2,1)',
       }}>
-        <div style={{ width:62, height:62, flexShrink:0 }}><Specimen tint={tint} height={62} radius={13} leafSize={28} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/></div>
+        {status === 'needs' && <div style={{ position:'absolute', left:0, top:'18%', bottom:'18%', width:3, borderRadius:999, background:STATUS.needs.dot, opacity:0.55 }}/>}
+        <div style={{ width: status === 'needs' ? 66 : 62, height: status === 'needs' ? 66 : 62, flexShrink:0, marginLeft: status === 'needs' ? 4 : 0 }}><Specimen tint={tint} height={status === 'needs' ? 66 : 62} radius={13} leafSize={status === 'needs' ? 30 : 28} image={(plant.photos && plant.photos[0]) || plant.userImage || plant.image}/></div>
         <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:20, color:C.forest, lineHeight:1.1 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
+          <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize: status === 'needs' ? 21 : 20, color:C.forest, lineHeight:1.1 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
           <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.ink, opacity:0.6, marginTop:3 }}>{agoLabel(plant.days)} · {plant.location}</div>
         </div>
         <div style={{ position:'relative', display:'inline-flex' }}>
@@ -1477,21 +1555,27 @@ function NeedsRow({ plant, tint, onOpen, onLongPress, onSnooze, onWater, czechMo
 // bucketing it. Only the *next* time a plant comes due is shown, not every
 // future recurrence — this answers the planning question, a full recurring
 // calendar would just be noise for a week-out glance.
-function WaterForecast({ plants, czechMode, onOpen }) {
+function WaterForecast({ plants, czechMode, onOpen, days = 7, reduceMotion }) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const buckets = Array.from({ length: 7 }, (_, i) => ({ date: new Date(today.getTime() + i * 86400000), count: 0, plants: [] }));
+  const buckets = Array.from({ length: days }, (_, i) => ({ date: new Date(today.getTime() + i * 86400000), count: 0, plants: [] }));
   plants.forEach(p => {
     const daysUntil = Math.max(0, (p.every || 7) - (p.days || 0));
-    if (daysUntil <= 6) { buckets[daysUntil].count++; buckets[daysUntil].plants.push(p); }
+    if (daysUntil <= days - 1) { buckets[daysUntil].count++; buckets[daysUntil].plants.push(p); }
   });
   const [openDay, setOpenDay] = useState(null);
-  useEffect(() => { setOpenDay(null); }, [plants.length]);
+  useEffect(() => { setOpenDay(null); }, [plants.length, days]);
   if (!plants.length) return null;
   const name = p => (czechMode && p.czech) ? p.czech : p.name;
   const active = openDay != null ? buckets[openDay] : null;
+  const entrance = i => (reduceMotion ? {} : cardEntranceStyle(i));
   return (
-    <div>
-      <div style={{ display:'flex', gap:7, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
+    // lifted into its own considered card (was naked chips floating on the
+    // screen background) so it reads as one deliberate surface, matching
+    // every other content block on this pass — warm top wash + the same
+    // soft depth shadow used on NeedsRow/PlantCard, not a flat panel.
+    <div style={{ position:'relative', borderRadius:rad(20), background:C.panel, border:'0.5px solid rgba(45,80,22,0.06)', padding:'13px 11px 11px', overflow:'hidden', boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 8px 20px rgba(45,80,22,0.05)' }}>
+      <div style={{ position:'absolute', inset:0, ...warmEdgeStyle(0.5) }}/>
+      <div style={{ position:'relative', display:'flex', gap:7, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:2 }}>
         {buckets.map((b, i) => {
           const label = i === 0 ? 'Today' : b.date.toLocaleDateString('en-US', { weekday:'short' });
           const busy = b.count > 0;
@@ -1501,8 +1585,8 @@ function WaterForecast({ plants, czechMode, onOpen }) {
               flexShrink:0, minWidth:52, borderRadius:rad(14), padding:'9px 6px', textAlign:'center', cursor: busy ? 'pointer' : 'default',
               background: i === 0 && busy ? C.forest : busy ? 'rgba(110,154,62,0.12)' : 'transparent',
               border: isOpen ? `1.5px solid ${C.forest}` : busy ? 'none' : `0.5px solid ${C.line}`,
-              boxShadow: isOpen ? `0 0 0 2px ${i === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(45,80,22,0.15)'} inset` : 'none',
-              transition:'border 150ms, box-shadow 150ms',
+              boxShadow: isOpen ? `0 0 0 2px ${i === 0 ? 'rgba(255,255,255,0.4)' : 'rgba(45,80,22,0.15)'} inset` : (i === 0 && busy ? '0 4px 14px rgba(45,80,22,0.26)' : 'none'),
+              transition:'border 150ms, box-shadow 150ms', ...entrance(i),
             }}>
               <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, letterSpacing:0.3, textTransform:'uppercase', color: i === 0 && busy ? 'rgba(255,255,255,0.75)' : C.brown, opacity: i === 0 && busy ? 1 : 0.65 }}>{label}</div>
               <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:18, marginTop:3, color: i === 0 && busy ? '#fff' : busy ? C.forest : C.ink, opacity: busy ? 1 : 0.3 }}>{b.count || '·'}</div>
@@ -1512,15 +1596,15 @@ function WaterForecast({ plants, czechMode, onOpen }) {
       </div>
       {active && (
         <div style={{
-          marginTop:8, borderRadius:rad(14), background:C.panel, border:C.hair, padding:'10px 12px',
+          position:'relative', marginTop:8, borderRadius:rad(14), background:C.bg, border:C.hair, padding:'10px 12px',
           display:'flex', flexDirection:'column', gap:2, animation:'slideUp 220ms cubic-bezier(.2,.8,.2,1)',
         }}>
           <div style={{ fontFamily:FONT_SANS, fontSize:10.5, fontWeight:600, letterSpacing:0.4, textTransform:'uppercase', color:C.brown, opacity:0.55, marginBottom:4 }}>
             {openDay === 0 ? 'Today' : active.date.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' })}
           </div>
-          {active.plants.map(p => (
+          {active.plants.map((p, pi) => (
             <div key={p.id} onClick={() => onOpen && onOpen(p.id)} role={onOpen ? 'button' : undefined} style={{
-              display:'flex', alignItems:'center', gap:8, padding:'6px 2px', cursor: onOpen ? 'pointer' : 'default',
+              display:'flex', alignItems:'center', gap:8, padding:'6px 2px', cursor: onOpen ? 'pointer' : 'default', ...entrance(pi),
             }}>
               <div style={{ width:6, height:6, borderRadius:999, background:C.sage, flexShrink:0 }}/>
               <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:15, color:C.forest }}>{name(p)}</div>
@@ -1613,6 +1697,14 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode, reduceMotion }) {
     h.filter(stamp => midnightFromStamp(stamp) >= cutoff).forEach(stamp => remindersDone.push({ plant: p, schedule: s, stamp }));
   }));
   remindersDone.sort((a, b) => midnightFromStamp(b.stamp) - midnightFromStamp(a.stamp));
+  // genuine extra richness, zero new storage: plantMilestoneLabel already
+  // exists purely to flag "with you for a year" style anniversaries within a
+  // short passing window (MILESTONE_WINDOW_DAYS) — a weekly recap is exactly
+  // the cadence that window was built for, so surface whichever plants are
+  // currently inside it rather than fabricating a new "highlight" metric.
+  const milestones = plants
+    .map(p => ({ plant: p, label: plantMilestoneLabel(p.addedAt) }))
+    .filter(m => m.label);
   // real user photo only — never the Perenual/species stock image, which
   // reads as a generic placeholder in a "your garden" recap
   const userPhoto = p => (p.photos && p.photos.length ? p.photos[0] : p.userImage) || null;
@@ -1660,32 +1752,48 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode, reduceMotion }) {
           </div>
         )}
         {/* asymmetric stat row: one wide "headline" tile + a narrower one,
-            not a rigid 2-up grid of equal boxes */}
+            not a rigid 2-up grid of equal boxes. Tiles now carry the same
+            soft depth shadow every other card in this pass uses (previously
+            just a flat hairline border, out of step with the hero/rows). */}
         <div style={{ display:'flex', gap:10 }}>
-          <div style={{ flex:'1 1 60%', padding:'14px 16px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
+          <div style={{ flex:'1 1 60%', padding:'14px 16px', borderRadius:rad(16), background:C.panel, border:C.hair, boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 8px 20px rgba(45,80,22,0.05)', ...(reduceMotion ? {} : cardEntranceStyle(0)) }}>
             <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:30, color:C.forest }}>{wateredCount}</div>
             <div style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.7 }}>waterings this week</div>
             <div style={{ marginTop:10 }}><WeekActivityBars counts={dayCounts} labels={dayLabels}/></div>
           </div>
           <div style={{ flex:'1 1 40%', display:'flex', flexDirection:'column', gap:10 }}>
-            <div style={{ padding:'12px 14px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
+            <div style={{ padding:'12px 14px', borderRadius:rad(16), background:C.panel, border:C.hair, boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 8px 20px rgba(45,80,22,0.05)', ...(reduceMotion ? {} : cardEntranceStyle(1)) }}>
               <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:24, color: needsNow.length ? STATUS.needs.dot : C.forest }}>{needsNow.length}</div>
               <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.7 }}>need water now</div>
             </div>
             {remindersDone.length > 0 && (
-              <div style={{ padding:'12px 14px', borderRadius:rad(16), background:C.panel, border:C.hair }}>
+              <div style={{ padding:'12px 14px', borderRadius:rad(16), background:C.panel, border:C.hair, boxShadow:'0 1px 2px rgba(43,42,38,0.03), 0 8px 20px rgba(45,80,22,0.05)', ...(reduceMotion ? {} : cardEntranceStyle(2)) }}>
                 <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:24, color:C.forest }}>{remindersDone.length}</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.7 }}>other reminders done</div>
               </div>
             )}
           </div>
         </div>
+        {milestones.length > 0 && (
+          <div>
+            <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Milestones this week</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {milestones.map((m, i) => (
+                <div key={m.plant.id} style={{ position:'relative', overflow:'hidden', display:'flex', alignItems:'center', gap:8, padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair, ...(reduceMotion ? {} : cardEntranceStyle(i)) }}>
+                  <div style={{ position:'absolute', inset:0, ...warmEdgeStyle(0.7) }}/>
+                  <LeafOutline size={14} color={C.sage} sw={1.6}/>
+                  <span style={{ position:'relative', fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:14, color:C.forest }}>{name(m.plant)} <span style={{ color:C.brown, opacity:0.75 }}>· {m.label}</span></span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {recentlyWatered.length > 0 && (
           <div>
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Watered this week</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {recentlyWatered.slice(0, 8).map(r => (
-                <div key={r.plant.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair }}>
+              {recentlyWatered.slice(0, 8).map((r, i) => (
+                <div key={r.plant.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair, ...(reduceMotion ? {} : cardEntranceStyle(i)) }}>
                   <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest }}>{name(r.plant)}</span>
                   <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>{agoLabel(Math.round((todayMidnight() - midnightFromStamp(r.last)) / 86400000))}</span>
                 </div>
@@ -1698,7 +1806,7 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode, reduceMotion }) {
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Other reminders completed</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {remindersDone.slice(0, 6).map((r, i) => (
-                <div key={r.plant.id + '-' + r.schedule.id + '-' + i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair }}>
+                <div key={r.plant.id + '-' + r.schedule.id + '-' + i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair, ...(reduceMotion ? {} : cardEntranceStyle(i)) }}>
                   <span style={{ fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, color:C.ink }}>{r.schedule.label} <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', color:C.forest }}>· {name(r.plant)}</span></span>
                   <span style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>{agoLabel(Math.round((todayMidnight() - midnightFromStamp(r.stamp)) / 86400000))}</span>
                 </div>
@@ -1708,14 +1816,14 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode, reduceMotion }) {
         )}
         <div>
           <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Next 7 days</div>
-          <WaterForecast plants={plants} czechMode={czechMode}/>
+          <WaterForecast plants={plants} czechMode={czechMode} reduceMotion={reduceMotion}/>
         </div>
         {needsNow.length > 0 && (
           <div>
             <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase', marginBottom:8 }}>Waiting on you</div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-              {needsNow.slice(0, 6).map(p => (
-                <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair }}>
+              {needsNow.slice(0, 6).map((p, i) => (
+                <div key={p.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 14px', borderRadius:rad(14), background:C.panel, border:C.hair, ...(reduceMotion ? {} : cardEntranceStyle(i)) }}>
                   <span style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontSize:15, color:C.forest }}>{name(p)}</span>
                   <span style={{ fontFamily:FONT_SANS, fontSize:12, color:C.brown, opacity:0.6 }}>{p.location}</span>
                 </div>
@@ -1785,6 +1893,8 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
     return rows.sort((a,b)=> order[a.status] - order[b.status]);
   }, [plants]);
   const [picking, setPicking] = useState(false);
+  const [forecastDays, setForecastDays] = useState(() => GS.get('caulis_water_forecast_days', 7));
+  useEffect(() => { GS.set('caulis_water_forecast_days', forecastDays); }, [forecastDays]);
   const counts = useMemo(() => {
     let needs = 0, soon = 0;
     plants.forEach(p => { const st = statusOf(p.days, p.every, p.snoozedUntil); if (st === 'needs') needs++; if (st === 'needs' || st === 'soon') soon++; });
@@ -1821,7 +1931,22 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
       )}
       {picking && <WaterAllPicker counts={counts} defaultScope="needs" onPick={pickScope} onClose={()=>setPicking(false)}/>}
       <div style={{ padding:`18px ${sp}px 0`, position:'relative', zIndex:2 }}>
-        <WaterForecast plants={plants} czechMode={czechMode} onOpen={onOpen}/>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+          <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, opacity:0.6, letterSpacing:0.5, textTransform:'uppercase' }}>Upcoming</span>
+          {/* device-local, not synced — same GS pattern as the Garden view
+              toggle, self-contained so it costs zero new app.jsx/Settings
+              plumbing for a small "how far ahead do I want to look" pick */}
+          <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:999, padding:2 }}>
+            {[7, 14].map(d => (
+              <div key={d} onClick={()=>setForecastDays(d)} style={{
+                padding:'4px 10px', borderRadius:999, cursor:'pointer', fontFamily:FONT_SANS, fontSize:11, fontWeight:600,
+                color: forecastDays === d ? '#fff' : C.brown, background: forecastDays === d ? C.forest : 'transparent',
+                opacity: forecastDays === d ? 1 : 0.6, transition:'background 150ms, color 150ms',
+              }}>{d}d</div>
+            ))}
+          </div>
+        </div>
+        <WaterForecast plants={plants} czechMode={czechMode} onOpen={onOpen} days={forecastDays} reduceMotion={reduceMotion}/>
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:ds(12), padding:`14px ${sp}px 0`, position:'relative', zIndex:2 }}>
         {list.length === 0 && (
@@ -1837,14 +1962,15 @@ function NeedsWaterScreen({ plants, onOpen, onLongPress, onSnooze, onWaterAll, o
             <div style={{ fontFamily:FONT_SANS, fontSize:12.5, color:C.ink, opacity:0.55, marginTop:4, lineHeight:1.5 }}>Every plant is happily hydrated — a quiet, well-tended kind of day.</div>
           </div>
         )}
-        {list.map((p,i)=> <NeedsRow key={p.id} plant={p} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress} onSnooze={onSnooze} onWater={onWaterOne} czechMode={czechMode} reduceMotion={reduceMotion}/>)}
+        {list.map((p,i)=> <NeedsRow key={p.id} plant={p} idx={i} tint={TINTS[(p.id-1)%TINTS.length]} onOpen={onOpen} onLongPress={onLongPress} onSnooze={onSnooze} onWater={onWaterOne} czechMode={czechMode} reduceMotion={reduceMotion}/>)}
       </div>
       {dueSchedules.length > 0 && (
         <div style={{ padding:`24px ${sp}px 0`, position:'relative', zIndex:2 }}>
           <div style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:C.brown, letterSpacing:0.5, textTransform:'uppercase', opacity:0.6, marginBottom:2 }}>Other reminders</div>
-          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, padding:'2px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)' }}>
-            {dueSchedules.map(({ plant, schedule }) => (
-              <div key={`${plant.id}-${schedule.id}`} onClick={()=>onOpen(plant.id)} style={{ cursor:'pointer' }}>
+          <div style={{ position:'relative', background:C.panel, borderRadius:rad(18), border:C.hair, padding:'2px 15px', boxShadow:'0 1px 2px rgba(43,42,38,0.03)', overflow:'hidden' }}>
+            <div style={{ position:'absolute', inset:0, ...warmEdgeStyle(0.6) }}/>
+            {dueSchedules.map(({ plant, schedule }, i) => (
+              <div key={`${plant.id}-${schedule.id}`} onClick={()=>onOpen(plant.id)} style={{ position:'relative', cursor:'pointer', ...(reduceMotion ? {} : cardEntranceStyle(i)) }}>
                 <div style={{ fontFamily:FONT_SERIF, fontStyle:'italic', fontWeight:600, fontSize:13, color:C.forest, paddingTop:11, opacity:0.85 }}>{czechMode && plant.czech ? plant.czech : plant.name}</div>
                 <div onClick={e=>e.stopPropagation()}>
                   <ScheduleRow schedule={schedule} onMarkDone={onMarkScheduleDone ? id=>onMarkScheduleDone(plant.id, id) : ()=>{}} onEdit={()=>onOpen(plant.id)}/>
@@ -2262,7 +2388,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, gridWeighted, onToggleGridWeighted, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, gridWeighted, onToggleGridWeighted, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, pushTimesPerDay, onSetPushTimesPerDay, noticeUpdateReady, onToggleNoticeUpdateReady, noticeSyncStatus, onToggleNoticeSyncStatus, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
