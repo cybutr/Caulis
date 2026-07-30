@@ -124,6 +124,15 @@ export async function initSchema() {
   // unchanged), 2/3/7 = every N days. Digest stays a fixed weekly cadence
   // with just a day-of-week picker, so it gets no matching column.
   await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS watering_frequency_days SMALLINT NOT NULL DEFAULT 1`);
+
+  // sub-daily cadence: 1 (default, old behavior) sends at most once per day
+  // gated by watering_frequency_days above; 2/3 ignore that day-based gate
+  // and instead space sends every (24 / n) hours from last_watering_sent_at,
+  // so a garden can opt into a morning + evening nudge without the once-a-
+  // day columns fighting it. Capped at 3 on purpose — higher defeats the
+  // whole "never spam" premise this push system was built around.
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS push_times_per_day SMALLINT NOT NULL DEFAULT 1`);
+  await pool.query(`ALTER TABLE push_subscriptions ADD COLUMN IF NOT EXISTS last_watering_sent_at TIMESTAMPTZ`);
 }
 
 export async function getSetting(key) {

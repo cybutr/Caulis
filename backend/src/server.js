@@ -27,6 +27,19 @@ function midnightFromStamp(stamp) {
   const [y, m, d] = String(stamp).split('-').map(Number);
   return Date.UTC(y, (m || 1) - 1, d || 1);
 }
+// node-pg returns a DATE column (last_watering_sent_on/last_digest_sent_on)
+// as a real JS Date object, not the "YYYY-MM-DD" string midnightFromStamp()
+// expects (that shape only ever came from plant.history[] entries, which
+// live in JSONB, not a DATE column). Passing a Date straight through
+// String(date).split('-') silently produced NaN forever after the first
+// successful send — the actual root cause of watering pushes going dead
+// after day one for any garden, found by tracing real stuck DB rows rather
+// than assumed from logs (there were none, see sendPush's own fix above).
+function pgDateMs(val) {
+  if (val == null) return null;
+  if (val instanceof Date) return Date.UTC(val.getUTCFullYear(), val.getUTCMonth(), val.getUTCDate());
+  return midnightFromStamp(val);
+}
 function deriveWateredAt(p) {
   if (p.wv === 3 && typeof p.wateredAt === 'number') return p.wateredAt;
   const h = Array.isArray(p.history) ? p.history : [];
@@ -62,6 +75,12 @@ async function sendPush(sub, payload) {
   } catch (e) {
     if (e.statusCode === 404 || e.statusCode === 410) {
       await pool.query('DELETE FROM push_subscriptions WHERE id = $1', [sub.id]);
+    } else {
+      // this used to be a silent `return false` with zero trace anywhere —
+      // every prior "notifications don't work" investigation checked
+      // subscription rows / VAPID keys / cron ticks and found nothing wrong
+      // because a real send failure here left no evidence at all. Log it.
+      app.log.warn({ subId: sub.id, gardenId: sub.garden_id, statusCode: e.statusCode, body: e.body }, 'push send failed');
     }
     return false;
   }
@@ -268,22 +287,39 @@ async function checkAndSendPushes() {
     // cadence gate: 1 (default/legacy rows) reproduces the old always-daily
     // behavior exactly. Higher values skip the intervening days by comparing
     // elapsed days against the chosen frequency, not just "already sent
-    // today" — that string-equality check alone can never suppress a send on
-    // a later day, so it was never sufficient on its own for anything above
-    // daily cadence.
+    // today" — a plain equality check on the DATE column alone can never
+    // suppress a send on a later day, so it was never sufficient on its own
+    // for anything above daily cadence.
     const freqDays = typeof sub.watering_frequency_days === 'number' && sub.watering_frequency_days > 0 ? sub.watering_frequency_days : 1;
-    const lastSentMs = sub.last_watering_sent_on ? midnightFromStamp(sub.last_watering_sent_on) : null;
+    const lastSentMs = pgDateMs(sub.last_watering_sent_on);
+    const alreadySentToday = lastSentMs === todayMidnightUTC();
     const cadenceDue = lastSentMs == null || Math.round((todayMidnightUTC() - lastSentMs) / DAY_MS) >= freqDays;
 
-    if (sub.watering_enabled && nowUtcHour >= hour && sub.last_watering_sent_on !== todayStr && cadenceDue) {
+    // 2-3x/day opt-in (push_times_per_day): a fixed day-based gate above
+    // can't express "twice a day", so this axis is orthogonal — spaces sends
+    // every (24 / n) hours off a real timestamp instead of a once-per-day
+    // DATE column, and bypasses the day-frequency/hour gate entirely while
+    // active (the Settings UI hides the day slider whenever this is >1, so
+    // the two never fight over the same subscription).
+    const timesPerDay = typeof sub.push_times_per_day === 'number' && sub.push_times_per_day > 1 ? Math.min(3, sub.push_times_per_day) : 1;
+    const subDailyDue = timesPerDay > 1 && (
+      !sub.last_watering_sent_at || (Date.now() - new Date(sub.last_watering_sent_at).getTime()) >= (24 / timesPerDay) * 3600000
+    );
+
+    const wateringDue = timesPerDay > 1
+      ? subDailyDue
+      : (nowUtcHour >= hour && !alreadySentToday && cadenceDue);
+
+    if (sub.watering_enabled && wateringDue) {
       const push = buildWateringPush(sub.garden_id, plants, sub.lang, sub.custom_reminders_enabled);
       if (push) {
         const ok = await sendPush(sub, push);
-        if (ok) await pool.query('UPDATE push_subscriptions SET last_watering_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
+        if (ok) await pool.query('UPDATE push_subscriptions SET last_watering_sent_on = $1, last_watering_sent_at = now() WHERE id = $2', [todayStr, sub.id]);
       }
     }
 
-    if (sub.digest_enabled && todayDow === digestDow && nowUtcHour >= hour && sub.last_digest_sent_on !== todayStr) {
+    const digestAlreadySentToday = pgDateMs(sub.last_digest_sent_on) === todayMidnightUTC();
+    if (sub.digest_enabled && todayDow === digestDow && nowUtcHour >= hour && !digestAlreadySentToday) {
       const ok = await sendPush(sub, buildDigestPush(sub.garden_id, plants, sub.lang, sub.custom_reminders_enabled));
       if (ok) await pool.query('UPDATE push_subscriptions SET last_digest_sent_on = $1 WHERE id = $2', [todayStr, sub.id]);
     }
@@ -645,25 +681,27 @@ app.get('/api/push/vapid-key', async (req, reply) => {
 function clampHour(h) { return Number.isInteger(h) && h >= 0 && h <= 23 ? h : null; }
 function clampDow(d) { return Number.isInteger(d) && d >= 0 && d <= 6 ? d : null; }
 function clampFreq(d) { return Number.isInteger(d) && d >= 1 && d <= 30 ? d : null; }
+function clampTimesPerDay(d) { return Number.isInteger(d) && d >= 1 && d <= 3 ? d : null; }
 
 app.post('/api/push/subscribe', { preHandler: requireAuth }, async (req, reply) => {
-  const { subscription, wateringEnabled = true, digestEnabled = false, lang = 'en', reminderHourUtc, digestDayOfWeek, customRemindersEnabled = false, wateringFrequencyDays } = req.body || {};
+  const { subscription, wateringEnabled = true, digestEnabled = false, lang = 'en', reminderHourUtc, digestDayOfWeek, customRemindersEnabled = false, wateringFrequencyDays, pushTimesPerDay } = req.body || {};
   if (!subscription?.endpoint) return reply.code(400).send({ error: 'subscription required' });
   const hour = clampHour(reminderHourUtc) ?? 8;
   const dow = clampDow(digestDayOfWeek) ?? 1;
   const freq = clampFreq(wateringFrequencyDays) ?? 1;
+  const timesPerDay = clampTimesPerDay(pushTimesPerDay) ?? 1;
   await pool.query(
-    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled, lang, reminder_hour_utc, digest_day_of_week, custom_reminders_enabled, watering_frequency_days)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO push_subscriptions (garden_id, endpoint, subscription, watering_enabled, digest_enabled, lang, reminder_hour_utc, digest_day_of_week, custom_reminders_enabled, watering_frequency_days, push_times_per_day)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      ON CONFLICT (endpoint) DO UPDATE SET
-       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5, lang = $6, reminder_hour_utc = $7, digest_day_of_week = $8, custom_reminders_enabled = $9, watering_frequency_days = $10`,
-    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled, lang === 'cs' ? 'cs' : 'en', hour, dow, !!customRemindersEnabled, freq]
+       garden_id = $1, subscription = $3, watering_enabled = $4, digest_enabled = $5, lang = $6, reminder_hour_utc = $7, digest_day_of_week = $8, custom_reminders_enabled = $9, watering_frequency_days = $10, push_times_per_day = $11`,
+    [req.gardenId, subscription.endpoint, JSON.stringify(subscription), wateringEnabled, digestEnabled, lang === 'cs' ? 'cs' : 'en', hour, dow, !!customRemindersEnabled, freq, timesPerDay]
   );
   return { ok: true };
 });
 
 app.put('/api/push/prefs', { preHandler: requireAuth }, async (req, reply) => {
-  const { endpoint, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled, wateringFrequencyDays } = req.body || {};
+  const { endpoint, wateringEnabled, digestEnabled, lang, reminderHourUtc, digestDayOfWeek, customRemindersEnabled, wateringFrequencyDays, pushTimesPerDay } = req.body || {};
   if (!endpoint) return reply.code(400).send({ error: 'endpoint required' });
   await pool.query(
     `UPDATE push_subscriptions SET
@@ -673,9 +711,10 @@ app.put('/api/push/prefs', { preHandler: requireAuth }, async (req, reply) => {
        reminder_hour_utc = COALESCE($4, reminder_hour_utc),
        digest_day_of_week = COALESCE($5, digest_day_of_week),
        custom_reminders_enabled = COALESCE($6, custom_reminders_enabled),
-       watering_frequency_days = COALESCE($7, watering_frequency_days)
-     WHERE endpoint = $8 AND garden_id = $9`,
-    [wateringEnabled, digestEnabled, lang === 'cs' || lang === 'en' ? lang : null, clampHour(reminderHourUtc), clampDow(digestDayOfWeek), typeof customRemindersEnabled === 'boolean' ? customRemindersEnabled : null, clampFreq(wateringFrequencyDays), endpoint, req.gardenId]
+       watering_frequency_days = COALESCE($7, watering_frequency_days),
+       push_times_per_day = COALESCE($8, push_times_per_day)
+     WHERE endpoint = $9 AND garden_id = $10`,
+    [wateringEnabled, digestEnabled, lang === 'cs' || lang === 'en' ? lang : null, clampHour(reminderHourUtc), clampDow(digestDayOfWeek), typeof customRemindersEnabled === 'boolean' ? customRemindersEnabled : null, clampFreq(wateringFrequencyDays), clampTimesPerDay(pushTimesPerDay), endpoint, req.gardenId]
   );
   return { ok: true };
 });

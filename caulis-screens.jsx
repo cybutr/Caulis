@@ -3331,13 +3331,29 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
             </div>
             <div style={{ padding:'12px 16px', borderTop:C.hair }}>
               <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:1 }}>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Pushes per day</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:C.forest }}>{(pushTimesPerDay || 1) === 1 ? 'Once' : (pushTimesPerDay === 2 ? 'Twice' : '3 times')}</div>
+              </div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:10 }}>Morning-only, or add an evening check-in — spaced evenly through the day</div>
+              <div style={{ display:'flex', background:'rgba(45,80,22,0.07)', borderRadius:9, padding:3 }}>
+                {[1,2,3].map(n => {
+                  const on = (pushTimesPerDay || 1) === n;
+                  return (
+                    <div key={n} onClick={()=>onSetPushTimesPerDay(n)} style={{ flex:1, textAlign:'center', cursor:'pointer', padding:'6px 0', borderRadius:6, background:on?C.forest:'transparent', color:on?'#fff':C.ink, fontFamily:FONT_SANS, fontSize:12, fontWeight:600, opacity:on?1:0.55, transition:'all 140ms ease' }}>{n === 1 ? '1×' : n === 2 ? '2×' : '3×'}</div>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{ padding:'12px 16px', borderTop:C.hair, opacity: (pushTimesPerDay || 1) > 1 ? 0.4 : 1, pointerEvents: (pushTimesPerDay || 1) > 1 ? 'none' : 'auto' }}>
+              <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:1 }}>
                 <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Watering ping frequency</div>
                 <div style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:700, color:C.forest }}>{wateringFrequencyDays === 1 ? 'Daily' : `Every ${wateringFrequencyDays} days`}</div>
               </div>
-              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:12 }}>How often the watering/reminder push can fire</div>
+              <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginBottom:12 }}>{(pushTimesPerDay || 1) > 1 ? 'Off while pushes-per-day is above 1' : 'How often the watering/reminder push can fire'}</div>
               <input
                 type="range" min="1" max="14" step="1" value={wateringFrequencyDays}
                 onChange={e=>onSetWateringFrequencyDays(Number(e.target.value))}
+                disabled={(pushTimesPerDay || 1) > 1}
                 style={{ width:'100%', accentColor:C.forest, height:22, cursor:'pointer' }}
               />
               <div style={{ display:'flex', justifyContent:'space-between', marginTop:2 }}>
@@ -3364,6 +3380,26 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
               </div>
               <span style={{ fontFamily:FONT_SANS, fontSize:18, color:C.brown, opacity:0.4 }}>&rsaquo;</span>
             </div>
+          </div>
+        </SettingsSection>
+        <SettingsSection title="In-app notices" open={isOpen('notices')} onToggle={()=>toggleSec('notices')} id={'sec-'+'notices'} matched={settingsMatches[settingsMatchIdx] === 'notices'} query={settingsMatches.includes('notices') ? settingsQuery : ''} bodyRef={registerSection('notices')}>
+          <div style={{ background:C.panel, borderRadius:rad(18), border:C.hair, overflow:'hidden' }}>
+            <div style={{ padding:'10px 16px', fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6 }}>These are on-screen banners the app itself shows — separate from push notifications above, which come from the server even when the app is closed.</div>
+            <div onClick={onToggleNoticeUpdateReady} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>New version available</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>The "Reload" banner when an update is ready</div>
+              </div>
+              <Toggle on={noticeUpdateReady}/>
+            </div>
+            <div onClick={onToggleNoticeSyncStatus} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
+              <div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Sync status notices</div>
+                <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>"Changed elsewhere, merged" and "saved on this device only" banners</div>
+              </div>
+              <Toggle on={noticeSyncStatus}/>
+            </div>
+            <div style={{ padding:'10px 16px', fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.5, borderTop:C.hair }}>Storage-full warnings always show — they flag photos that may not have actually saved.</div>
           </div>
         </SettingsSection>
         <SettingsSection title="Printing" open={isOpen('printing')} onToggle={()=>toggleSec('printing')} id={'sec-'+'printing'} matched={settingsMatches[settingsMatchIdx] === 'printing'} query={settingsMatches.includes('printing') ? settingsQuery : ''} bodyRef={registerSection('printing')}>
