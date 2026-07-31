@@ -719,6 +719,8 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, o
   const [candidates, setCandidates] = useState([]);
   const [rechecking, setRechecking] = useState(false);
   const [refreshingSpecies, setRefreshingSpecies] = useState(false);
+  const [identifyError, setIdentifyError] = useState('');
+  const [showIdentifyError, setShowIdentifyError] = useState(false);
   const fileRef = useRef(null);
   const photoModeRef = useRef('photo');
 
@@ -854,10 +856,12 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, o
       if (photoModeRef.current === 'identify') {
         setIdentified(false);
         setCandidates([]);
+        setIdentifyError('');
+        setShowIdentifyError(false);
         setIdentifying(true);
         const sp = await identifySpecies(dataUrl);
         setIdentifying(false);
-        if (!sp) { setSource('failed'); return; }
+        if (!sp || sp.__failed) { setSource('failed'); setIdentifyError(sp?.error || 'Unknown error.'); setShowIdentifyError(false); return; }
         if (sp.candidates) { setCandidates(sp.candidates); return; } // uncertain — let user pick
         applyIdentified(sp);
       }
@@ -930,8 +934,14 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, o
               </div>
             )}
             {source === 'failed' && !identifying && (
-              <div style={{ position:'absolute', top:12, left:12, display:'inline-flex', alignItems:'center', gap:6, background:'#B4472E', borderRadius:999, padding:'5px 11px', pointerEvents:'none' }}>
-                <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:'#fff' }}>Couldn't identify</span>
+              <div style={{ position:'absolute', top:12, left:12, zIndex:2 }}>
+                <div onClick={()=>setShowIdentifyError(v=>!v)} style={{ cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6, background:'#B4472E', borderRadius:999, padding:'5px 11px' }}>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:11, fontWeight:600, color:'#fff' }}>Couldn't identify</span>
+                  <span style={{ fontFamily:FONT_SANS, fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.75)' }}>{showIdentifyError ? '▲' : 'ⓘ'}</span>
+                </div>
+                {showIdentifyError && identifyError && (
+                  <div style={{ marginTop:6, maxWidth:230, background:C.toast, color:'#fff', borderRadius:12, padding:'9px 12px', fontFamily:FONT_SANS, fontSize:11.5, lineHeight:1.4, boxShadow:'0 8px 20px rgba(0,0,0,0.24)', animation:'popUp 200ms cubic-bezier(.2,.9,.3,1.2)' }}>{identifyError}</div>
+                )}
               </div>
             )}
             {identifying && (
