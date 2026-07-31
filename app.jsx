@@ -519,6 +519,43 @@ function App() {
     } catch (e) {}
   }, []);
 
+  // "while you were away" return moment — distinct from the Weekly Digest's
+  // fixed weekly cadence, this is a one-off, gap-triggered nudge. Gated on
+  // the same remoteSynced baseline the milestone/badge detectors already use
+  // so a fresh device mid-sync never reports a false "nothing needs water"
+  // from an empty local plants[]. awaySeenRef makes the whole check run
+  // exactly once per mount regardless of how many times plants/gardenNode
+  // change afterward. No per-plant "crossed into needs water" history is
+  // kept anywhere in this app, so the summary is honestly built from
+  // CURRENT state (who needs water right now, any milestone still in its
+  // display window) rather than fabricating a diff against a snapshot that
+  // was never taken.
+  const [awayToast, setAwayToast] = useState(null);
+  const awaySeenRef = useRef(false);
+  useEffect(() => {
+    if (awaySeenRef.current) return;
+    const baselineReady = !gardenNode || remoteSynced;
+    if (!baselineReady) return;
+    awaySeenRef.current = true;
+    try {
+      const last = Number(localStorage.getItem('caulis_last_seen') || 0);
+      const now = Date.now();
+      const gapDays = last ? (now - last) / 86400000 : 0;
+      if (last && gapDays >= 3) {
+        const needsNow = plants.filter(p => statusOf(p.days, p.every) === 'needs').length;
+        const milestone = plants.map(p => plantMilestoneLabel(p.addedAt)).find(Boolean);
+        const parts = [];
+        if (needsNow > 0) parts.push(`${needsNow} plant${needsNow === 1 ? '' : 's'} need${needsNow === 1 ? 's' : ''} water`);
+        if (milestone) parts.push(milestone.charAt(0).toLowerCase() + milestone.slice(1));
+        if (parts.length) {
+          setAwayToast(`Welcome back — it's been ${Math.round(gapDays)} days. ${parts.join(', ')}.`);
+          setTimeout(() => setAwayToast(null), 7000);
+        }
+      }
+      localStorage.setItem('caulis_last_seen', String(now));
+    } catch (e) {}
+  }, [plants, gardenNode, remoteSynced]);
+
   const [monochromePrint, setMonochromePrintRaw] = useState(() => lsGet('caulis_print_mono', false));
   const [gardenPassword, setGardenPassword] = useState(() => { try { return localStorage.getItem('caulis_garden_pw') || ''; } catch(e) { return ''; } });
   const [gardenNode, setGardenNode] = useState(null);
@@ -2094,6 +2131,18 @@ window.onload=()=>{
     </div>
   );
 
+  const awayToastEl = awayToast != null && (
+    <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, padding:'0 18px', animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', pointerEvents:'none' }}>
+      <div style={{ pointerEvents:'auto', display:'inline-flex', alignItems:'center', gap:12, maxWidth:420, background:C.toast, borderRadius:rad(18), padding:'12px 14px 12px 16px', boxShadow:'0 10px 26px rgba(0,0,0,0.28)' }}>
+        <Leaf size={15} color="#fff"/>
+        <span style={{ fontFamily:FONT_SANS, fontSize:13, fontWeight:500, color:'#fff', lineHeight:1.4 }}>{awayToast}</span>
+        <div onClick={()=>setAwayToast(null)} style={{ cursor:'pointer', flexShrink:0, width:26, height:26, borderRadius:999, background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <svg width="11" height="11" viewBox="0 0 12 12"><path d="M3 3l6 6M9 3l-6 6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round"/></svg>
+        </div>
+      </div>
+    </div>
+  );
+
   const updateReadyEl = updateReady && noticeUpdateReady && (
     <div style={{ position:'fixed', bottom: isDesktop?24:'calc(86px + env(safe-area-inset-bottom))', left:0, right:0, display:'flex', justifyContent:'center', zIndex:65, animation:'popUp 320ms cubic-bezier(.2,.9,.3,1.2)', padding:'0 16px' }}>
       <div onClick={updateApp} style={{ cursor:'pointer', background:C.toast, color:'#fff', borderRadius:999, padding:'11px 12px 11px 20px', fontFamily:FONT_SANS, fontSize:13.5, fontWeight:600, boxShadow:'0 10px 26px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:10 }}>
@@ -2194,6 +2243,7 @@ window.onload=()=>{
         {milestoneToastEl}
         {badgeToastEl}
         {holidayToastEl}
+        {awayToastEl}
         {updateReadyEl}
         {launchActionToastEl}
         {confirmRemoveEl}
@@ -2270,6 +2320,7 @@ window.onload=()=>{
       {milestoneToastEl}
       {badgeToastEl}
       {holidayToastEl}
+      {awayToastEl}
       {updateReadyEl}
       {launchActionToastEl}
       {confirmRemoveEl}

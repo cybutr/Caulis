@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '194'; // keep in sync with sw.js CACHE
+const APP_VERSION = '195'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -448,23 +448,55 @@ const BG_TEXTURES = {
 const BG_TEXTURE_ORDER = ['none','dot','linen','vein','paper','marble'];
 let activeBgTexture = 'none';
 function applyBgTexture(v) { if (BG_TEXTURES[v]) activeBgTexture = v; }
-// deterministic point set (not Math.random per call) so the dot jitter
-// never visibly re-randomizes on re-render — "irregular" is baked into the
-// fixed offsets themselves, not regenerated
-const DOT_JITTER_PTS = [[6,8],[19,4],[33,14],[46,7],[12,24],[28,29],[41,22],[54,31],[7,42],[22,46],[37,44],[50,50],[15,55],[44,58]];
+// deterministic point set (not Math.random per call) so the dot jitter never
+// visibly re-randomizes on re-render — "irregular" is baked into fixed
+// offsets. v194: the old 14-point/60px tile made the repeat period obvious
+// within a couple of screen-widths — no amount of per-dot jitter hides a
+// tile that small once it lines up edge-to-edge across a real viewport. Fix
+// is the period itself: a much bigger canvas (220px, ~13x the old area) with
+// more points AND varied radii/opacity so no two dots read as identical,
+// pushing the perceptible repeat far past what a phone or desktop screen
+// shows at once.
+const DOT_JITTER_PTS = [
+  [9,14,1.3,1],[34,7,0.8,0.7],[58,19,1.1,0.9],[81,11,0.9,0.6],[104,24,1.4,1],
+  [128,9,0.8,0.75],[151,20,1.2,0.85],[176,13,1,0.65],[199,27,1.3,0.95],
+  [17,42,1,0.7],[46,36,1.4,1],[68,49,0.8,0.6],[93,41,1.1,0.9],[118,53,0.9,0.7],
+  [143,38,1.3,0.95],[165,47,0.8,0.65],[189,58,1.2,0.85],[211,44,1,0.75],
+  [6,68,1.2,0.9],[29,79,0.9,0.65],[52,62,1.4,1],[77,74,0.8,0.6],[101,66,1.1,0.85],
+  [124,81,1.3,0.95],[148,70,0.9,0.7],[172,84,1,0.8],[196,73,1.2,0.9],
+  [14,96,0.9,0.7],[40,108,1.3,0.95],[63,92,0.8,0.6],[87,104,1.1,0.85],
+  [111,116,1.4,1],[135,98,0.9,0.7],[159,110,1,0.8],[183,101,1.2,0.9],[207,113,0.8,0.65],
+  [22,130,1.1,0.85],[48,142,0.9,0.7],[72,126,1.3,0.95],[96,138,0.8,0.6],
+  [120,150,1.2,0.9],[144,133,1,0.75],[168,145,1.4,1],[192,129,0.9,0.65],
+  [10,164,1,0.8],[35,176,1.2,0.9],[60,160,0.8,0.65],[84,172,1.3,0.95],
+  [109,184,0.9,0.7],[133,167,1.1,0.85],[157,179,1,0.75],[181,163,1.3,0.9],[205,190,0.9,0.7],
+];
 function dotPatternUri(color) {
-  const circles = DOT_JITTER_PTS.map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.1" fill="${color}"/>`).join('');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60">${circles}</svg>`;
+  const circles = DOT_JITTER_PTS.map(([x,y,r,o]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" fill-opacity="${o}"/>`).join('');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220">${circles}</svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
+// v194: the old vein tile was one motif on a 130px square — instantly
+// recognizable once repeated, exactly the "obviously tiled wallpaper" the
+// user called out. Fix keeps this a single inline SVG data-URI (no build
+// step, no external asset) but widens the tile to 420px and scatters five
+// differently-sized/rotated/mirrored branching motifs across it, each with
+// its own stroke-width/opacity, so the repeat unit is both much larger and
+// internally varied — no single silhouette to lock onto when it tiles.
 function veinPatternUri(color) {
-  // a few branching curved strokes, not a literal leaf outline — reads as
-  // "organic linework" at this scale/opacity rather than wallpaper botanical art
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="130" height="130">
-    <path d="M12 122 C 32 100, 26 66, 42 44 C 52 28, 46 12, 62 4" stroke="${color}" stroke-width="1" fill="none"/>
-    <path d="M42 44 C 58 50, 68 55, 82 60" stroke="${color}" stroke-width="0.7" fill="none"/>
-    <path d="M26 66 C 15 71, 8 82, 5 98" stroke="${color}" stroke-width="0.7" fill="none"/>
-    <path d="M62 4 C 78 15, 88 10, 104 22" stroke="${color}" stroke-width="0.7" fill="none"/>
+  const motif = (x, y, scale, rot, op, sw) =>
+    `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${scale})" stroke="${color}" stroke-opacity="${op}" fill="none">
+      <path d="M0 60 C 14 44, 10 26, 22 14 C 28 6, 24 -4, 34 -12" stroke-width="${sw}"/>
+      <path d="M22 14 C 32 18, 40 20, 50 24" stroke-width="${sw * 0.7}"/>
+      <path d="M10 26 C 2 30, -4 38, -7 50" stroke-width="${sw * 0.7}"/>
+      <path d="M34 -12 C 44 -6, 50 -10, 60 -4" stroke-width="${sw * 0.7}"/>
+    </g>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420">
+    ${motif(48, 340, 1.15, -8, 1, 1)}
+    ${motif(240, 60, 0.85, 34, 0.75, 0.8)}
+    ${motif(340, 240, 1.3, 162, 0.9, 1.1)}
+    ${motif(120, 150, 0.65, -110, 0.6, 0.7)}
+    ${motif(300, 380, 1, 90, 0.7, 0.85)}
   </svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
@@ -478,9 +510,9 @@ function veinPatternUri(color) {
 // or disappears across a rerender instead of just changing value.
 function bgTextureStyle(texture) {
   const t = texture || activeBgTexture;
-  if (t === 'dot') return { backgroundImage: dotPatternUri(C.line), backgroundSize:'60px 60px' };
+  if (t === 'dot') return { backgroundImage: dotPatternUri(C.line), backgroundSize:'220px 220px' };
   if (t === 'linen') return { backgroundImage: `repeating-linear-gradient(45deg, ${C.line} 0 1px, transparent 1px 15px), repeating-linear-gradient(-45deg, ${C.line} 0 1px, transparent 1px 15px)`, backgroundSize:'auto' };
-  if (t === 'vein') return { backgroundImage: veinPatternUri(C.line), backgroundSize:'130px 130px' };
+  if (t === 'vein') return { backgroundImage: veinPatternUri(C.line), backgroundSize:'420px 420px' };
   // paper/marble: real grain (feTurbulence, see index.html's #grainFilter +
   // .grain-overlay) carries these as one fixed full-viewport layer instead of
   // a backgroundImage trick, toggled on by applyGrainIntensity() below.

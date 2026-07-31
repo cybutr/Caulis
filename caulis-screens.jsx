@@ -128,7 +128,16 @@ function TexturePreviewTile({ tKey, size = 34 }) {
       </svg>
     );
   }
-  return <div style={{ width:size, height:size, borderRadius:rad(8), background:C.panel, ...bgTextureStyle(tKey) }}/>;
+  // dot/vein now use a much larger real-app tile (220px/420px, see v194 note
+  // in caulis-core.jsx) so the on-screen repeat period reads as organic
+  // instead of obviously tiled — but that same size crammed into a 34px
+  // swatch would just show an empty corner. The swatch scales the identical
+  // backgroundImage down to a legible micro-repeat instead; still a true
+  // preview of the same pattern, just zoomed out for the tiny frame it's in.
+  const preview = bgTextureStyle(tKey);
+  if (tKey === 'dot') preview.backgroundSize = '46px 46px';
+  if (tKey === 'vein') preview.backgroundSize = '70px 70px';
+  return <div style={{ width:size, height:size, borderRadius:rad(8), background:C.panel, ...preview }}/>;
 }
 function TexturePicker({ value, onSelect }) {
   return (
