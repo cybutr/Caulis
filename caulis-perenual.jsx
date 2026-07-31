@@ -244,6 +244,41 @@ async function _czechName(latinName) {
   return '';
 }
 
+// Open-Meteo — free, keyless, plain JSON, no client-side secret to protect
+// (unlike Perenual/Anthropic above). Geolocation is opt-in via Settings and
+// fails silently at every step: denied/unsupported permission, a network
+// error, anything — never surfaces an error state, never re-prompts.
+const WEATHER_CACHE_KEY = 'caulis_weather_cache';
+const WEATHER_TTL_MS = 60 * 60 * 1000;
+function _getPosition() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve(pos.coords),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: WEATHER_TTL_MS }
+    );
+  });
+}
+async function fetchWeatherNote() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(WEATHER_CACHE_KEY) || 'null');
+    if (cached && Date.now() - cached.ts < WEATHER_TTL_MS) return cached.code;
+  } catch(e) {}
+  const coords = await _getPosition();
+  if (!coords) return null;
+  try {
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=weather_code&timezone=auto`;
+    const r = await fetch(u);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const code = d?.current?.weather_code;
+    if (code === undefined || code === null) return null;
+    try { localStorage.setItem(WEATHER_CACHE_KEY, JSON.stringify({ code, ts: Date.now() })); } catch(e) {}
+    return code;
+  } catch(e) { return null; }
+}
+
 function _normalizeHP(p) {
   return {
     id: p.id,
@@ -569,9 +604,12 @@ async function _plantNetIdentify(blob, lang) {
   const r = await fetch(`https://my-api.plantnet.org/v2/identify/all?api-key=${PLANT_ID_KEY}&lang=${lang}`, {
     method: 'POST', body: form,
   });
-  const json = await r.json();
+  const json = await r.json().catch(() => null);
+  // PlantNet returns {statusCode, message} on failure (bad key, quota, no
+  // organ detected, etc.) — surface that instead of pretending it was empty
+  if (!r.ok) throw new Error(`PlantNet ${r.status}: ${json?.message || r.statusText || 'request failed'}`);
   const top = json?.results?.[0];
-  if (!top) return null;
+  if (!top) return { results: [] };
   return {
     scientificName: top.species?.scientificNameWithoutAuthor || '',
     commonName: (top.species?.commonNames || [])[0] || '',
@@ -599,7 +637,13 @@ async function resolveSpecies(scientificName, englishName, score) {
     _source: enrich ? `PlantNet + ${enrich._via}` : 'PlantNet', _score: score });
 }
 
+// on failure returns { __failed:true, error } rather than a bare null, so
+// the UI can show the real reason instead of a mystery "couldn't identify"
 async function identifySpecies(dataUrl) {
+  const errors = [];
+  if (!PLANT_ID_KEY && !API_KEY) {
+    return { __failed:true, error:'No identification key configured — add a PlantNet or Perenual API key in Settings → AI.' };
+  }
   if (PLANT_ID_KEY && dataUrl) {
     try {
       const [meta, b64] = dataUrl.split(',');
@@ -621,8 +665,11 @@ async function identifySpecies(dataUrl) {
         const confident = top && top.score >= 0.5 && (cands.length < 2 || top.score - cands[1].score >= 0.12);
         if (confident) return await resolveSpecies(top.scientificName, top.commonName || top.scientificName, top.score);
         if (cands.length) return { candidates: cands };
+        errors.push('PlantNet: no confident species match');
+      } else {
+        errors.push('PlantNet: no plant detected in photo');
       }
-    } catch(e) {}
+    } catch(e) { errors.push(`PlantNet: ${e?.message || e}`); }
   }
   if (API_KEY && dataUrl) {
     try {
@@ -631,15 +678,21 @@ async function identifySpecies(dataUrl) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ images: [dataUrl] }),
       });
-      const json = await r.json();
-      const hits = json?.data;
-      if (Array.isArray(hits) && hits.length) {
-        const hit = hits[0];
-        if (hit.common_name || hit.scientific_name) return { ...hit, _source: 'Perenual' };
+      const json = await r.json().catch(() => null);
+      if (!r.ok) { errors.push(`Perenual ${r.status}: ${json?.message || json?.err || r.statusText || 'request failed'}`); }
+      else {
+        const hits = json?.data;
+        if (Array.isArray(hits) && hits.length) {
+          const hit = hits[0];
+          if (hit.common_name || hit.scientific_name) return { ...hit, _source: 'Perenual' };
+          errors.push('Perenual: match had no usable name');
+        } else {
+          errors.push('Perenual: no match');
+        }
       }
-    } catch(e) {}
+    } catch(e) { errors.push(`Perenual: ${e?.message || e}`); }
   }
-  return null; // couldn't identify — no fake match
+  return { __failed:true, error: errors.join(' · ') || 'Couldn’t identify this plant.' };
 }
 
 // ── seed garden: 8 plants built from the species library ──
@@ -1064,4 +1117,5 @@ Object.assign(window, {
   PERENUAL, INDOOR_PLANTS, speciesCare, searchSpecies, searchLocalPlants, getSpeciesDetails, identifySpecies, resolveSpecies, setPlantIdKey, setIdentifyLang, setHousePlantsKey,
   setApiKey, hasApiKey, SEED_PLANTS,
   setAnthropicKey, hasAnthropicKey, aiReviewCare, doctorAsk,
+  fetchWeatherNote,
 });

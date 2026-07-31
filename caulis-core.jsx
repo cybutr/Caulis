@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '191'; // keep in sync with sw.js CACHE
+const APP_VERSION = '193'; // keep in sync with sw.js CACHE
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -778,6 +778,58 @@ function todayGreeting() {
   return `${wd} ${part}`;
 }
 
+// Open-Meteo WMO weather codes collapsed to the handful of groups this app
+// actually has copy/an icon for — presentation-only, never touches watering
+// math (see fetchWeatherNote in caulis-perenual.jsx for the network side).
+function weatherGroup(code) {
+  if (code === 0) return 'clear';
+  if (code === 1 || code === 2 || code === 3) return 'cloudy';
+  if (code === 45 || code === 48) return 'fog';
+  if ([51,53,55,56,57].includes(code)) return 'drizzle';
+  if ([61,63,65,66,67,80,81,82].includes(code)) return 'rain';
+  if ([71,73,75,77,85,86].includes(code)) return 'snow';
+  if ([95,96,99].includes(code)) return 'storm';
+  return 'cloudy';
+}
+const WEATHER_COPY = {
+  clear:   'Clear skies today — good light for the windowsill.',
+  cloudy:  'Overcast today — the leaves won’t mind the softer light.',
+  fog:     'Foggy this morning — the air outside is doing some misting of its own.',
+  drizzle: 'Light drizzle out there — outdoor pots are getting a small top-up.',
+  rain:    'Rainy today — outdoor pots got a free drink.',
+  snow:    'Snow outside — everyone indoors is cozier than usual.',
+  storm:   'Stormy out — a good excuse to stay in and check on the leaves.',
+};
+function weatherCopy(code) {
+  const kind = weatherGroup(code);
+  return { kind, text: WEATHER_COPY[kind] };
+}
+function IconWeather({ kind = 'cloudy', s = 14, c = C.brown, a = 0.72 }) {
+  const cloud = <path d="M7 17.5a4 4 0 0 1 .4-7.98A5.5 5.5 0 0 1 18 11.5a4 4 0 0 1-.5 6H7Z" stroke={c} strokeWidth={isw(1.6)} strokeLinejoin="round"/>;
+  return (<svg width={s} height={s} viewBox="0 0 24 24" fill="none" style={{opacity:a, flexShrink:0}}>
+    {kind === 'clear' && (<>
+      <circle cx="12" cy="12" r="4.3" stroke={c} strokeWidth={isw(1.7)}/>
+      <path d="M12 2.8v2.2M12 19v2.2M21.2 12h-2.2M5 12H2.8M18.3 5.7l-1.6 1.6M7.3 16.7l-1.6 1.6M18.3 18.3l-1.6-1.6M7.3 7.3 5.7 5.7" stroke={c} strokeWidth={isw(1.7)} strokeLinecap="round"/>
+    </>)}
+    {kind === 'cloudy' && cloud}
+    {kind === 'fog' && (<>
+      <path d="M4.5 10h15M3.5 13.5h17M5.5 17h13" stroke={c} strokeWidth={isw(1.6)} strokeLinecap="round"/>
+    </>)}
+    {(kind === 'drizzle' || kind === 'rain') && (<>
+      {cloud}
+      <path d={kind === 'rain' ? "M9 19.5v2M12.3 19.5v2.6M15.6 19.5v2" : "M10 19.5v1.4M14 19.5v1.4"} stroke={c} strokeWidth={isw(1.6)} strokeLinecap="round"/>
+    </>)}
+    {kind === 'snow' && (<>
+      {cloud}
+      <path d="M9 19.3v2.4M7.9 20.5h2.2M14 19.3v2.4M12.9 20.5h2.2" stroke={c} strokeWidth={isw(1.5)} strokeLinecap="round"/>
+    </>)}
+    {kind === 'storm' && (<>
+      {cloud}
+      <path d="M12.5 15.5 10 20h2.3l-1 3.2 3.7-5.2h-2.4l1-2.5Z" fill={c}/>
+    </>)}
+  </svg>);
+}
+
 // ════════════════════════════════════════════════════════════
 //  Botanical glyphs
 // ════════════════════════════════════════════════════════════
@@ -1324,6 +1376,7 @@ Object.assign(window, {
   Leaf, LeafOutline, Sprig, gardenGrowthStage, trackSeenValue,
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy, IconPipette,
   IconMist, IconFertilize, IconSun, IconScissors, IconRepot, IconClock, IconCalendarCheck, IconThermometer, IconRotate, IconWipe,
+  weatherGroup, weatherCopy, IconWeather,
   SCHEDULE_ICONS, SCHEDULE_ICON_ORDER, defaultScheduleIcon, scheduleIconKey,
   StatusDot, LocationPill, StatusTag, Specimen, locationTagColor, locationTagIcon,
   SEED_LOCATIONS,
