@@ -13,7 +13,23 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '195'; // keep in sync with sw.js CACHE
+const APP_VERSION = '196'; // keep in sync with sw.js CACHE
+
+// shared tactile press-state for primary CTAs only (the main Water button,
+// Add/Edit save button) — same motion budget as the existing PlantCard press
+// (scale 0.975, 180ms cubic-bezier(.2,.8,.2,1)) rather than a new pattern.
+// Deliberately not applied to every tappable row, just the handful of
+// clearly-primary actions — see CLAUDE.md's anti-scope-creep rule.
+function usePressScale(reduceMotion) {
+  const [pressed, setPressed] = useState(false);
+  const down = () => !reduceMotion && setPressed(true);
+  const up = () => setPressed(false);
+  const style = reduceMotion ? {} : {
+    transform: pressed ? 'scale(0.975)' : 'scale(1)',
+    transition: 'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease',
+  };
+  return { pressed, style, handlers: { onPointerDown: down, onPointerUp: up, onPointerLeave: up, onPointerCancel: up } };
+}
 
 let _html5QrcodeLoad = null;
 function loadHtml5Qrcode() {
@@ -548,10 +564,19 @@ function applyGrainIntensity(level, textureOn, texture) {
   const marble = (texture || activeBgTexture) === 'marble';
   try {
     const fe = document.getElementById('grainTurb');
+    const fe2 = document.getElementById('grainTurb2');
     if (fe) {
       fe.setAttribute('type', marble ? 'turbulence' : 'fractalNoise');
       fe.setAttribute('baseFrequency', String(marble ? cfg.freq * 0.12 : cfg.freq));
       fe.setAttribute('numOctaves', marble ? '2' : '3');
+    }
+    // second pass rides at an unrelated frequency (roughly 0.44x, deliberately
+    // not a clean fraction) so its cell pattern never lines up with the
+    // first pass's — same reasoning as the filter comment in index.html.
+    if (fe2) {
+      fe2.setAttribute('type', marble ? 'turbulence' : 'fractalNoise');
+      fe2.setAttribute('baseFrequency', String(marble ? cfg.freq * 0.053 : cfg.freq * 0.44));
+      fe2.setAttribute('numOctaves', marble ? '2' : '2');
     }
     document.documentElement.style.setProperty('--grain-opacity', textureOn ? cfg.op : 0);
     // whisper of vignette at the viewport edges, tied to the same texture
@@ -862,6 +887,47 @@ function IconWeather({ kind = 'cloudy', s = 14, c = C.brown, a = 0.72 }) {
   </svg>);
 }
 
+// ── moon phase — pure decoration, no interaction, no logic elsewhere reads
+// this. Plain synodic-month math (known new moon reference + 29.53059 day
+// period), no API/network call. Returns 0..1 (0/1 = new, 0.5 = full).
+function moonPhaseFraction(date = new Date()) {
+  const SYNODIC = 29.530588853;
+  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14); // Jan 6 2000, 18:14 UTC — a real new moon
+  const days = (date.getTime() - knownNewMoon) / 86400000;
+  const phase = (days % SYNODIC) / SYNODIC;
+  return phase < 0 ? phase + 1 : phase;
+}
+function moonPhaseLabel(frac) {
+  if (frac < 0.02 || frac > 0.98) return 'New moon';
+  if (frac < 0.24) return 'Waxing crescent';
+  if (frac < 0.26) return 'First quarter';
+  if (frac < 0.49) return 'Waxing gibbous';
+  if (frac < 0.51) return 'Full moon';
+  if (frac < 0.74) return 'Waning gibbous';
+  if (frac < 0.76) return 'Last quarter';
+  return 'Waning crescent';
+}
+// small quiet lunar glyph — lit portion drawn as a clipped disc, themed via
+// C tokens, never an emoji. terminator x-offset follows the standard
+// crescent/gibbous curve (cos of phase angle).
+function MoonPhaseGlyph({ s = 13, c = C.brown, a = 0.55, date }) {
+  const frac = moonPhaseFraction(date);
+  const angle = frac * Math.PI * 2;
+  const waxing = frac < 0.5;
+  const r = 5.6, cx = 7, cy = 7;
+  const k = Math.cos(angle); // -1..1, terminator curvature
+  const rx = Math.abs(k) * r;
+  const sweepOuter = waxing ? 1 : 0;
+  const sweepInner = k >= 0 ? sweepOuter : 1 - sweepOuter;
+  const d = `M ${cx} ${cy - r} A ${r} ${r} 0 0 ${sweepOuter} ${cx} ${cy + r} A ${rx} ${r} 0 0 ${sweepInner} ${cx} ${cy - r} Z`;
+  return (
+    <svg width={s} height={s} viewBox="0 0 14 14" style={{ opacity:a, flexShrink:0, display:'block' }} aria-hidden="true">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={c} strokeWidth="1" opacity="0.55"/>
+      <path d={d} fill={c}/>
+    </svg>
+  );
+}
+
 // ════════════════════════════════════════════════════════════
 //  Botanical glyphs
 // ════════════════════════════════════════════════════════════
@@ -947,6 +1013,12 @@ function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2, onT
     () => <g key="g6"><path d="M122 130 C 116 136, 110 142, 108 148" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{bloom(108,148,14)}<path d="M158 30 C 154 32, 151 32, 150 32" fill="none" stroke={C.brown} strokeWidth="1" strokeLinecap="round" opacity="0.8"/>{bud(150,32,3)}</g>,
   ];
   const sway = !onTap && stage > 0;
+  // rare, untracked, purely cosmetic found-object detail — a tiny ladybug
+  // that occasionally rests on the sprig. Decided fresh per mount via a lazy
+  // useState initializer, never persisted/tracked/gamified — no localStorage
+  // key, no counter, no "collection." pointerEvents:none keeps it out of the
+  // hit-test even when this Sprig instance is the tappable one (onTap set).
+  const [ladybug] = useState(() => Math.random() < 0.03);
   return (
     <svg width={w} height={h} viewBox="0 0 260 300" onClick={onTap}
       style={{ position:'absolute', right, bottom, opacity,
@@ -967,6 +1039,14 @@ function Sprig({ w = 260, h = 300, right = -26, bottom = -22, opacity = 0.2, onT
       {leaf(128,112,-28)}{leaf(146,76,22)}{leaf(170,46,-18)}
       <circle cx="196" cy="14" r="4.5" fill="none" stroke={C.brown} strokeWidth="1.4"/>
       {stages.slice(0, stage).map(fn => fn())}
+      {ladybug && (
+        <g transform="translate(150 232) rotate(38) translate(-7 -20) scale(0.8)" style={{ pointerEvents:'none' }}>
+          <ellipse cx="0" cy="0" rx="3.2" ry="4" fill={C.brown} opacity="0.55"/>
+          <line x1="0" y1="-4" x2="0" y2="4" stroke={C.bg} strokeWidth="0.6" opacity="0.5"/>
+          <circle cx="-1.2" cy="-1" r="0.5" fill={C.bg} opacity="0.5"/>
+          <circle cx="1.2" cy="1" r="0.5" fill={C.bg} opacity="0.5"/>
+        </g>
+      )}
     </svg>
   );
 }
@@ -1409,6 +1489,7 @@ Object.assign(window, {
   IconGarden, IconDrop, IconScan, IconPrint, IconGear, IconPlus, IconBack, IconCheck, IconPin, IconDoctor, IconMore, IconEye, IconEyeOff, IconCopy, IconPipette,
   IconMist, IconFertilize, IconSun, IconScissors, IconRepot, IconClock, IconCalendarCheck, IconThermometer, IconRotate, IconWipe,
   weatherGroup, weatherCopy, IconWeather,
+  moonPhaseFraction, moonPhaseLabel, MoonPhaseGlyph, usePressScale,
   SCHEDULE_ICONS, SCHEDULE_ICON_ORDER, defaultScheduleIcon, scheduleIconKey,
   StatusDot, LocationPill, StatusTag, Specimen, locationTagColor, locationTagIcon,
   SEED_LOCATIONS,

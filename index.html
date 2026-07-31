@@ -336,7 +336,14 @@
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <filter id="grainFilter">
-    <feTurbulence id="grainTurb" type="fractalNoise" baseFrequency="0.7" numOctaves="3" stitchTiles="stitch" result="noise"/>
+    <!-- two independent turbulence passes at different frequencies/seeds,
+         blended together — a single feTurbulence at one frequency reads as
+         a faint quasi-regular cell pattern ("repeating") once it's stretched
+         full-viewport; overlaying a second, unrelated-frequency pass breaks
+         that periodicity so the result reads as fine organic grain instead. -->
+    <feTurbulence id="grainTurb" type="fractalNoise" baseFrequency="0.7" numOctaves="3" seed="4" stitchTiles="stitch" result="n1"/>
+    <feTurbulence id="grainTurb2" type="fractalNoise" baseFrequency="0.31" numOctaves="2" seed="19" stitchTiles="stitch" result="n2"/>
+    <feBlend in="n1" in2="n2" mode="overlay" result="noise"/>
     <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.9 0"/>
   </filter>
 </svg>

@@ -1276,7 +1276,15 @@ function GardenScreen({ plants, roomLight, onOpen, onAdd, onLongPress, onReorder
                 unreachable via this trigger whenever any badge was earned
                 and ambient badges were on — reproduced by tracing the probe,
                 not viewport-specific despite reading that way at first. */}
-            <div onClick={tapGreeting} style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.3, textTransform:'uppercase', cursor:'pointer' }}>{todayGreeting()}</div>
+            <div onClick={tapGreeting} style={{ display:'flex', alignItems:'center', gap:6, fontFamily:FONT_SANS, fontSize:12.5, fontWeight:500, color:C.brown, opacity:0.72, letterSpacing:0.3, textTransform:'uppercase', cursor:'pointer' }}>
+              <span>{todayGreeting()}</span>
+              {/* pure decoration — real synodic-month math, zero interaction,
+                  zero effect on any logic; title gives the phase name on hover,
+                  same as a native <title> tooltip anywhere else in the app */}
+              <span title={moonPhaseLabel(moonPhaseFraction())} style={{ display:'inline-flex' }}>
+                <MoonPhaseGlyph s={12} c={C.brown} a={0.5}/>
+              </span>
+            </div>
             {weatherNote && (
               <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:4 }}>
                 <IconWeather kind={weatherNote.kind}/>

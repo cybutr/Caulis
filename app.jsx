@@ -2023,7 +2023,7 @@ window.onload=()=>{
       locations={locations} plants={plants} editing={form.mode === 'edit' ? form.plant : null}
       onBack={()=>setForm(null)} onSave={savePlant} onAddLocation={addLocation}
       onAddSchedule={addSchedule} onEditSchedule={editSchedule} onRemoveSchedule={removeSchedule} onMarkScheduleDone={markScheduleDone}
-      isDesktop={isDesktop} czechMode={identifyLang === 'cs'}/>
+      isDesktop={isDesktop} czechMode={identifyLang === 'cs'} reduceMotion={reduceMotion}/>
   );
 
   const undoDeleteEl = undoDelete && (

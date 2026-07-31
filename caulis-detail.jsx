@@ -238,6 +238,7 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
   const [showStory, setShowStory] = useState(false);
   const status = statusOf(plant.days, plant.every, plant.snoozedUntil);
   const gallery = plantGallery(plant);
+  const waterPress = usePressScale(reduceMotion);
 
   const water = () => {
     prevRef.current = { days: plant.days };
@@ -338,15 +339,16 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
               <span style={{ fontFamily:FONT_SANS, fontSize:14, color:C.brown, opacity:0.7 }}>View only — not your garden</span>
             </div>
           ) : (<>
-            <div onClick={!justWatered ? water : undefined} style={{
+            <div onClick={!justWatered ? water : undefined} {...(!justWatered ? waterPress.handlers : {})} style={{
               marginTop:18, cursor: justWatered?'default':'pointer',
               display:'flex', alignItems:'center', justifyContent:'center', gap:9,
               height:52, borderRadius:rad(16),
               background: justWatered ? 'rgba(110,154,62,0.14)' : C.forest,
               color: justWatered ? C.sage : '#fff',
-              boxShadow: justWatered ? 'none' : '0 6px 16px rgba(45,80,22,0.24)',
-              transition:'all 260ms cubic-bezier(.2,.8,.2,1)',
+              boxShadow: justWatered ? (waterPress.pressed ? 'none' : 'none') : (waterPress.pressed ? '0 2px 8px rgba(45,80,22,0.18)' : '0 6px 16px rgba(45,80,22,0.24)'),
+              transition:'background 260ms cubic-bezier(.2,.8,.2,1), color 260ms cubic-bezier(.2,.8,.2,1), border-color 260ms cubic-bezier(.2,.8,.2,1), transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease',
               border: justWatered ? '1px solid rgba(110,154,62,0.4)' : 'none',
+              transform: !justWatered && waterPress.pressed && !reduceMotion ? 'scale(0.975)' : 'scale(1)',
             }}>
               {justWatered ? <IconCheck s={19} c={C.sage}/> : <IconDrop s={20} c="#fff" fill/>}
               <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600, letterSpacing:0.2 }}>{justWatered ? 'Watered' + (waterOffset ? ` ${offsetLabel(waterOffset)}` : ' today') : (waterOffset ? `Mark watered ${offsetLabel(waterOffset)}` : 'Mark as watered')}</span>
@@ -679,7 +681,8 @@ function SparkIcon({ s = 20, c = C.forest }) {
   </svg>);
 }
 
-function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, onAddSchedule, onEditSchedule, onRemoveSchedule, onMarkScheduleDone, isDesktop, czechMode }) {
+function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, onAddSchedule, onEditSchedule, onRemoveSchedule, onMarkScheduleDone, isDesktop, czechMode, reduceMotion }) {
+  const savePress = usePressScale(reduceMotion);
   const [scheduleForm, setScheduleForm] = useState(null); // null | {} (new) | schedule (editing) — reminders can only be added/edited here, in edit mode
   const [name, setName] = useState(editing ? editing.name : '');
   const [czech, setCzech] = useState(editing ? (editing.czech || '') : '');
@@ -1171,11 +1174,14 @@ function AddPlant({ locations, plants, editing, onBack, onSave, onAddLocation, o
       {/* save bar */}
       <div style={{ flexShrink:0, padding:'12px 18px 26px', borderTop:'0.5px solid rgba(45,80,22,0.1)', background:C.bg+'F2', backdropFilter:'blur(14px)' }}>
         <div onClick={canSave ? ()=>onSave({ id: editing ? editing.id : undefined, name:name.trim(), czech:czech.trim(), latin:latin.trim()||'\u2014', location:loc||'Unassigned', species, presetImage, photos, every, light:light.trim(), care:care.trim(), fact:fact.trim(), days:lastWatered, toxicToPets, propagatedFrom }) : undefined}
+          {...(canSave ? savePress.handlers : {})}
           style={{
             height:52, borderRadius:rad(16), display:'flex', alignItems:'center', justifyContent:'center', gap:8,
             background: canSave ? C.forest : 'rgba(45,80,22,0.18)', color:'#fff',
-            boxShadow: canSave ? '0 6px 16px rgba(45,80,22,0.24)' : 'none',
-            cursor: canSave?'pointer':'default', transition:'all 200ms ease',
+            boxShadow: canSave ? (savePress.pressed ? '0 2px 8px rgba(45,80,22,0.18)' : '0 6px 16px rgba(45,80,22,0.24)') : 'none',
+            cursor: canSave?'pointer':'default',
+            transition:'background 200ms ease, color 200ms ease, transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease',
+            transform: canSave && savePress.pressed && !reduceMotion ? 'scale(0.975)' : 'scale(1)',
           }}>
           <LeafOutline size={18} color="#fff" sw={1.8}/>
           <span style={{ fontFamily:FONT_SANS, fontSize:15, fontWeight:600 }}>{editing ? 'Save changes' : 'Add to garden'}</span>
