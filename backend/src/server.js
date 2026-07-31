@@ -623,6 +623,29 @@ app.get('/api/perenual/species/:id', { preHandler: [rateLimit(120, 60000), requi
   return reply.code(r.status).send(data);
 });
 
+// PlantNet rejects browser calls with a 403 "Origin not allowed" for keys
+// not on its origin allowlist — a server-to-server call from here has no
+// browser Origin header to check against, so it sidesteps that entirely.
+app.post('/api/identify/plantnet', { preHandler: [rateLimit(30, 60000), requireAuth] }, async (req, reply) => {
+  const { plant_id_key } = await getGardenKeys(req.gardenId);
+  if (!plant_id_key) return reply.code(400).send({ error: 'no PlantNet key set for this garden' });
+
+  const { dataUrl, lang } = req.body || {};
+  if (!dataUrl) return reply.code(400).send({ error: 'dataUrl required' });
+  const [meta, b64] = String(dataUrl).split(',');
+  if (!b64) return reply.code(400).send({ error: 'dataUrl malformed' });
+  const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+
+  const form = new FormData();
+  form.append('images', new Blob([Buffer.from(b64, 'base64')], { type: mime }), 'plant.jpg');
+  form.append('organs', 'auto');
+  const r = await fetch(`https://my-api.plantnet.org/v2/identify/all?api-key=${plant_id_key}&lang=${lang || 'en'}`, {
+    method: 'POST', body: form,
+  });
+  const data = await r.json().catch(() => null);
+  return reply.code(r.status).send(data ?? { message: r.statusText });
+});
+
 app.put('/api/garden/photos/:plantId', { preHandler: requireAuth }, async (req, reply) => {
   const { photos = [] } = req.body || {};
   await pool.query(

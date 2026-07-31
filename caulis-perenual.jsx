@@ -597,7 +597,37 @@ async function getSpeciesDetails(id, latinNameHint) {
   return local ? await aiReviewCare({ ...local, _source: 'library' }) : null;
 }
 
-async function _plantNetIdentify(blob, lang) {
+// PlantNet's own server checks the calling browser's Origin against an
+// allowlist tied to the API key and rejects unlisted origins with a real
+// 403 — routed through our backend (server-to-server, no browser Origin
+// header to check) whenever a garden session exists; falls back to the
+// direct call only for a session-less dev/local run.
+async function _plantNetIdentify(dataUrl, lang) {
+  const token = getActiveToken();
+  if (token) {
+    const r = await fetch(`${BACKEND_URL}/api/identify/plantnet`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ dataUrl, lang }),
+    });
+    const json = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(`PlantNet ${r.status}: ${json?.error || json?.message || r.statusText || 'request failed'}`);
+    const top = json?.results?.[0];
+    if (!top) return { results: [] };
+    return {
+      scientificName: top.species?.scientificNameWithoutAuthor || '',
+      commonName: (top.species?.commonNames || [])[0] || '',
+      score: top.score,
+      results: json.results
+    };
+  }
+
+  const [meta, b64] = dataUrl.split(',');
+  const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  const blob = new Blob([arr], { type: mime });
   const form = new FormData();
   form.append('images', blob, 'plant.jpg');
   form.append('organs', 'auto');
@@ -605,8 +635,6 @@ async function _plantNetIdentify(blob, lang) {
     method: 'POST', body: form,
   });
   const json = await r.json().catch(() => null);
-  // PlantNet returns {statusCode, message} on failure (bad key, quota, no
-  // organ detected, etc.) — surface that instead of pretending it was empty
   if (!r.ok) throw new Error(`PlantNet ${r.status}: ${json?.message || r.statusText || 'request failed'}`);
   const top = json?.results?.[0];
   if (!top) return { results: [] };
@@ -639,20 +667,20 @@ async function resolveSpecies(scientificName, englishName, score) {
 
 // on failure returns { __failed:true, error } rather than a bare null, so
 // the UI can show the real reason instead of a mystery "couldn't identify"
+// Perenual's /identify endpoint is not a plain fallback here — confirmed
+// live (curl) that it 405s any POST regardless of body shape (Allow: GET,
+// HEAD) and its own docs gate the whole feature behind a separate "Request
+// beta access" approval most keys never have. It's dead for a standard
+// Perenual key, not just misconfigured, so it's not called at all — PlantNet
+// (via the backend proxy above) is the sole identify path.
 async function identifySpecies(dataUrl) {
   const errors = [];
-  if (!PLANT_ID_KEY && !API_KEY) {
-    return { __failed:true, error:'No identification key configured — add a PlantNet or Perenual API key in Settings → AI.' };
+  if (!PLANT_ID_KEY) {
+    return { __failed:true, error:'No PlantNet API key configured — add one in Settings → AI. (Perenual has no working photo-identify endpoint for standard keys.)' };
   }
-  if (PLANT_ID_KEY && dataUrl) {
+  if (dataUrl) {
     try {
-      const [meta, b64] = dataUrl.split(',');
-      const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
-      const bytes = atob(b64);
-      const arr = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-      const blob = new Blob([arr], { type: mime });
-      const en = await _plantNetIdentify(blob, 'en');
+      const en = await _plantNetIdentify(dataUrl, 'en');
       const results = en?.results || [];
       if (results.length) {
         const cands = results.slice(0, 3).map(r => ({
@@ -670,27 +698,6 @@ async function identifySpecies(dataUrl) {
         errors.push('PlantNet: no plant detected in photo');
       }
     } catch(e) { errors.push(`PlantNet: ${e?.message || e}`); }
-  }
-  if (API_KEY && dataUrl) {
-    try {
-      const r = await fetch(`https://perenual.com/api/v2/identify?key=${API_KEY}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: [dataUrl] }),
-      });
-      const json = await r.json().catch(() => null);
-      if (!r.ok) { errors.push(`Perenual ${r.status}: ${json?.message || json?.err || r.statusText || 'request failed'}`); }
-      else {
-        const hits = json?.data;
-        if (Array.isArray(hits) && hits.length) {
-          const hit = hits[0];
-          if (hit.common_name || hit.scientific_name) return { ...hit, _source: 'Perenual' };
-          errors.push('Perenual: match had no usable name');
-        } else {
-          errors.push('Perenual: no match');
-        }
-      }
-    } catch(e) { errors.push(`Perenual: ${e?.message || e}`); }
   }
   return { __failed:true, error: errors.join(' · ') || 'Couldn’t identify this plant.' };
 }
