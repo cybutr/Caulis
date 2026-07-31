@@ -157,6 +157,30 @@ function TexturePicker({ value, onSelect }) {
   );
 }
 
+// one shared row for Custom texture's four continuous sliders — same visual
+// treatment as Settings → Notifications' "Watering ping frequency" range
+// input (label + live value up top, bare <input type="range">, low/high
+// end labels underneath), not a bespoke slider look.
+function TextureSlider({ label, value, onChange, lowLabel = '0', highLabel = '100' }) {
+  return (
+    <div style={{ paddingTop:10 }}>
+      <div style={{ display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:1 }}>
+        <div style={{ fontFamily:FONT_SANS, fontSize:13, color:C.ink }}>{label}</div>
+        <div style={{ fontFamily:FONT_SANS, fontSize:12.5, fontWeight:700, color:C.forest }}>{value}</div>
+      </div>
+      <input
+        type="range" min="0" max="100" step="1" value={value}
+        onChange={e=>onChange(Number(e.target.value))}
+        style={{ width:'100%', accentColor:C.forest, height:22, cursor:'pointer' }}
+      />
+      <div style={{ display:'flex', justifyContent:'space-between', marginTop:2 }}>
+        <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.5 }}>{lowLabel}</span>
+        <span style={{ fontFamily:FONT_SANS, fontSize:10.5, color:C.brown, opacity:0.5 }}>{highLabel}</span>
+      </div>
+    </div>
+  );
+}
+
 // non-blocking contrast note reused by every background-color preset (White/
 // Black/palette tint), not just the Custom slot — bgContrastWarningFor() is
 // the same stricter body-text check CustomColorPicker's mode="bg" already uses
@@ -1000,6 +1024,8 @@ function GardenHeroBanner({ plants, onOpen, reduceMotion, czechMode, isDesktop, 
           </div>
         )}
         <div style={{ position:'absolute', inset:0, ...warmEdgeStyle(1) }}/>
+        <div style={{ position:'absolute', inset:0, ...grainTextureStyle(1) }}/>
+        <div style={{ position:'absolute', inset:0, ...burntEdgeStyle(1) }}/>
         <div style={{ position:'absolute', inset:0, boxShadow:PHOTO_FRAME_SHADOW }}/>
         <div style={{ position:'absolute', inset:0, background:`linear-gradient(180deg, transparent 38%, ${C.bg}F2 94%)` }}/>
         {/* deliberately asymmetric: the caption reads as a corner note, not a
@@ -1760,6 +1786,8 @@ function WeeklyDigest({ plants, onBack, isDesktop, czechMode, reduceMotion }) {
           <div style={{ borderRadius:rad(20), overflow:'hidden', position:'relative', height: isDesktop ? 220 : 176, flexShrink:0 }}>
             <DigestHeroCollage tiles={heroTiles} reduceMotion={reduceMotion}/>
             <div style={{ position:'absolute', inset:0, ...warmEdgeStyle(1) }}/>
+            <div style={{ position:'absolute', inset:0, ...grainTextureStyle(1) }}/>
+            <div style={{ position:'absolute', inset:0, ...burntEdgeStyle(1) }}/>
             <div style={{ position:'absolute', inset:0, boxShadow:PHOTO_FRAME_SHADOW }}/>
             <div style={{ position:'absolute', inset:0, background:'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.58) 96%)' }}/>
             {/* asymmetric: a small stat chip breaks the top-right corner
@@ -2411,7 +2439,7 @@ function ApiKeyField({ value, savedValue, onChange, placeholder }) {
 // ════════════════════════════════════════════════════════════
 //  SETTINGS
 // ════════════════════════════════════════════════════════════
-function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, gridWeighted, onToggleGridWeighted, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, heroBanner, onSetHeroBanner, weatherEnabled, onToggleWeather, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, pushTimesPerDay, onSetPushTimesPerDay, noticeUpdateReady, onToggleNoticeUpdateReady, noticeSyncStatus, onToggleNoticeSyncStatus, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
+function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocation, onRemoveLocation, roomLight, onSetRoomLight, locationTags, onSetLocationTag, isDesktop, gardenKey, gardenHistory, onRemoveHistory, onSetGardenKey, onRenameGardenKey, installPrompt, onInstall, darkMode, gardenPassword, onSavePassword, perenualKey, onSavePerenualKey, housePlantsKey, onSaveHousePlantsKey, anthropicKey, onSaveAnthropicKey, onRecheckAI, aiRecheck, plantIdKey, onSavePlantIdKey, identifyLang, onSetIdentifyLang, defaultEvery, onSetDefaultEvery, globalPrintSize, onSetGlobalSize, monochromePrint, onToggleMono, googleClientId, onSaveGoogleClientId, googleToken, onConnectGoogle, onSyncCalendar, onDisconnectGoogle, googleSyncMode, onSetGoogleSyncMode, reminderTime, onSetReminderTime, onUpdateApp, onExport, onImport, onBuildMigrationCode, onApplyMigrationCode, cardDensity, onSetDensity, hideHealthy, onToggleHideHealthy, gridWeighted, onToggleGridWeighted, reduceMotion, onToggleReduceMotion, confirmDelete, onToggleConfirmDelete, haptics, onToggleHaptics, defaultTab, onSetDefaultTab, swipeNav, onToggleSwipeNav, onWaterAll, onDevOffsetDays, onDevSetDays, onDevResyncFromHistory, onAdminListGardens, onAdminLoadGarden, onAdminSaveGarden, onAdminRemoveGarden, onAdminBulkRemove, onAdminStats, onAdminGetSettings, onAdminGetSystem, onAdminSaveSettings, onAdminRunBackup, onAdminListBackups, onAdminBackupUrl, onVerifyPassword, navConfig, onSetNavConfig, navLabels, onToggleNavLabels, navIndicatorStyle, onSetNavIndicatorStyle, navBarStyle, onSetNavBarStyle, hapticIntensity, onSetHapticIntensity, cardDateMode, onSetCardDateMode, gridCols, onSetGridCols, sidebar, onSetSidebar, palette, onSetPalette, accent, onSetAccent, customPaletteColor, onSetCustomPaletteColor, customAccentColor, onSetCustomAccentColor, bgColorChoice, onSetBgColorChoice, customBgColor, onSetCustomBgColor, iconStroke, onSetIconStroke, gardenName, onSetGardenName, fontPairing, onSetFontPairing, radiusDensity, onSetRadiusDensity, imageTreatment, onSetImageTreatment, uiDensity, onSetUiDensity, bgTexture, onSetBgTexture, grainIntensity, onSetGrainIntensity, textureCustom, onToggleTextureCustom, textureGrainAmt, onSetTextureGrainAmt, textureGrainCoarse, onSetTextureGrainCoarse, textureVignette, onSetTextureVignette, textureBurnt, onSetTextureBurnt, texturePatternScale, onSetTexturePatternScale, heroBanner, onSetHeroBanner, weatherEnabled, onToggleWeather, doctorModel, onSetDoctorModel, pushSupported, pushWatering, pushDigest, pushBusy, pushError, onTogglePushWatering, onTogglePushDigest, reminderHourLocal, onSetReminderHourLocal, digestDay, onSetDigestDay, customRemindersEnabled, onToggleCustomReminders, wateringFrequencyDays, onSetWateringFrequencyDays, pushTimesPerDay, onSetPushTimesPerDay, noticeUpdateReady, onToggleNoticeUpdateReady, noticeSyncStatus, onToggleNoticeSyncStatus, statusStyle, onSetStatusStyle, onOpenDigest, onDevTestPush, onDevDedupeHistory, onDevDeleteHistoryEntry, onDevBulkUndoLastWatering, sessionInfo, onDevForcePull, onDevForcePush, syncBusy, syncMsg, badges, ambientBadges, onToggleAmbientBadges, badgeDensity, onSetBadgeDensity }) {
   // accordion — one section open at a time, everything else collapses. With
   // 13 sections all expanded by default this screen was an endless scroll.
   const [activeSec, setActiveSec] = useState(() => GS.get('caulis_set_open', null));
@@ -3163,6 +3191,24 @@ function SettingsScreen({ plants, locations, onAddLocationSetting, onRenameLocat
                   </div>
                 )}
               </div>
+              <div onClick={onToggleTextureCustom} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', borderTop:C.hair, cursor:'pointer' }}>
+                <div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:14, color:C.ink }}>Custom texture controls</div>
+                  <div style={{ fontFamily:FONT_SANS, fontSize:11.5, color:C.brown, opacity:0.6, marginTop:1 }}>Advanced — fine-tune grain, vignette &amp; burnt edges with sliders instead of the presets above</div>
+                </div>
+                <ToggleKnob on={textureCustom}/>
+              </div>
+              {textureCustom && (
+                <div style={{ padding:'4px 16px 14px', borderTop:C.hair }}>
+                  <TextureSlider label="Grain amount" value={textureGrainAmt} onChange={onSetTextureGrainAmt}/>
+                  <TextureSlider label="Grain coarseness" value={textureGrainCoarse} onChange={onSetTextureGrainCoarse} lowLabel="Fine" highLabel="Coarse"/>
+                  <TextureSlider label="Vignette strength" value={textureVignette} onChange={onSetTextureVignette}/>
+                  <TextureSlider label="Burnt edges" value={textureBurnt} onChange={onSetTextureBurnt} lowLabel="Off" highLabel="Scorched"/>
+                  {(bgTexture === 'dot' || bgTexture === 'vein') && (
+                    <TextureSlider label="Pattern density" value={texturePatternScale} onChange={onSetTexturePatternScale} lowLabel="Dense" highLabel="Sparse"/>
+                  )}
+                </div>
+              )}
               <div style={{ padding:'12px 16px', borderTop:C.hair }}>
                 <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10, marginBottom:10 }}>
                   <div>

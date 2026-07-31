@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '196'; // keep in sync with sw.js CACHE
+const APP_VERSION = '197'; // keep in sync with sw.js CACHE
 
 // shared tactile press-state for primary CTAs only (the main Water button,
 // Add/Edit save button) — same motion budget as the existing PlantCard press
@@ -494,11 +494,26 @@ function dotPatternUri(color) {
 }
 // v194: the old vein tile was one motif on a 130px square — instantly
 // recognizable once repeated, exactly the "obviously tiled wallpaper" the
-// user called out. Fix keeps this a single inline SVG data-URI (no build
-// step, no external asset) but widens the tile to 420px and scatters five
-// differently-sized/rotated/mirrored branching motifs across it, each with
-// its own stroke-width/opacity, so the repeat unit is both much larger and
-// internally varied — no single silhouette to lock onto when it tiles.
+// user called out. v197: even the widened 420px/5-motif fix still read as
+// "discrete repeated icons" rather than an actual organic surface once
+// examined live at real viewport sizes — five disconnected leaf clusters
+// floating in empty space, no matter how varied each one is individually,
+// never reads as continuous vine growth. Rebuilt around two long flowing
+// vine strokes that run the full span of the tile (irregular multi-segment
+// beziers, not a clean sine wave), with the leaf motifs now sprouting FROM
+// those vines via short connector stems instead of floating independently —
+// that's what actually reads as "a vine," not just "leaves near each other."
+// TILE bumped again (420→520) for more room for the vines to wander.
+// Seamless tiling is now handled generally rather than by hand-placing
+// motifs away from edges: the vines deliberately run edge-to-edge (organic
+// growth has no reason to stop at a tile boundary), and the whole tile's
+// content — vines and motifs both — is rendered 9× at every combination of
+// -TILE/0/+TILE translation, then clipped to the single-tile viewBox. Any
+// shape crossing an edge reappears, at the exact matching position, via its
+// neighboring-tile copy, so the vine visibly continues into the next tile
+// with zero seam — a general trick that works for literally any content,
+// not just ones drawn "by hand" to line up.
+const VEIN_TILE = 520;
 function veinPatternUri(color) {
   const motif = (x, y, scale, rot, op, sw) =>
     `<g transform="translate(${x} ${y}) rotate(${rot}) scale(${scale})" stroke="${color}" stroke-opacity="${op}" fill="none">
@@ -507,13 +522,39 @@ function veinPatternUri(color) {
       <path d="M10 26 C 2 30, -4 38, -7 50" stroke-width="${sw * 0.7}"/>
       <path d="M34 -12 C 44 -6, 50 -10, 60 -4" stroke-width="${sw * 0.7}"/>
     </g>`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420">
-    ${motif(48, 340, 1.15, -8, 1, 1)}
-    ${motif(240, 60, 0.85, 34, 0.75, 0.8)}
-    ${motif(340, 240, 1.3, 162, 0.9, 1.1)}
-    ${motif(120, 150, 0.65, -110, 0.6, 0.7)}
-    ${motif(300, 380, 1, 90, 0.7, 0.85)}
-  </svg>`;
+  // two long, irregular vine strokes crossing the tile at different angles —
+  // this is what makes the surface read as "one continuous growth" rather
+  // than "a scatter of separate leaf clusters." Control points deliberately
+  // uneven (no repeating amplitude/period) so it doesn't read as a clean
+  // sine wave either.
+  const vineA = `<path d="M -30 140 C 70 70, 130 210, 230 165 C 330 120, 390 250, 460 175 C 510 125, 545 190, 560 150"
+    stroke="${color}" stroke-opacity="0.85" stroke-width="1.3" fill="none" stroke-linecap="round"/>`;
+  const vineB = `<path d="M 90 -30 C 30 90, 200 150, 165 260 C 135 355, 260 400, 235 480 C 218 535, 270 545, 290 560"
+    stroke="${color}" stroke-opacity="0.7" stroke-width="1.1" fill="none" stroke-linecap="round"/>`;
+  // short connector stems, each anchored near a point on vineA/vineB so the
+  // leaf motifs read as sprouting off the vine instead of floating loose
+  const stem = (x1, y1, x2, y2) => `<path d="M ${x1} ${y1} Q ${(x1+x2)/2} ${(y1+y2)/2 - 10}, ${x2} ${y2}" stroke="${color}" stroke-opacity="0.6" stroke-width="0.9" fill="none"/>`;
+  const inner = `
+    ${vineA}
+    ${vineB}
+    ${stem(230, 165, 250, 110)}
+    ${motif(250, 110, 1.1, -14, 1, 1)}
+    ${stem(390, 250, 430, 320)}
+    ${motif(430, 320, 0.8, 128, 0.72, 0.8)}
+    ${stem(165, 260, 95, 235)}
+    ${motif(95, 235, 1.25, 200, 0.9, 1.05)}
+    ${stem(260, 400, 320, 430)}
+    ${motif(320, 430, 0.65, -96, 0.6, 0.7)}
+    ${stem(70, 70, 30, 30)}
+    ${motif(30, 30, 0.9, 60, 0.7, 0.85)}
+    ${stem(545, 190, 505, 130)}
+    ${motif(505, 130, 0.55, -40, 0.55, 0.65)}
+  `;
+  const copies = [];
+  for (const dx of [-VEIN_TILE, 0, VEIN_TILE]) for (const dy of [-VEIN_TILE, 0, VEIN_TILE]) {
+    copies.push(`<g transform="translate(${dx} ${dy})">${inner}</g>`);
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${VEIN_TILE}" height="${VEIN_TILE}">${copies.join('')}</svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 // texture parameter accepted so Settings' live preview swatches can render
@@ -526,9 +567,12 @@ function veinPatternUri(color) {
 // or disappears across a rerender instead of just changing value.
 function bgTextureStyle(texture) {
   const t = texture || activeBgTexture;
-  if (t === 'dot') return { backgroundImage: dotPatternUri(C.line), backgroundSize:'220px 220px' };
+  // patternScaleMult (Custom texture controls' "Pattern density" slider) —
+  // 1 when off, so this multiply is a no-op and every existing call site is
+  // completely unaffected until a user opts in
+  if (t === 'dot') return { backgroundImage: dotPatternUri(C.line), backgroundSize:`${Math.round(220 * patternScaleMult)}px ${Math.round(220 * patternScaleMult)}px` };
   if (t === 'linen') return { backgroundImage: `repeating-linear-gradient(45deg, ${C.line} 0 1px, transparent 1px 15px), repeating-linear-gradient(-45deg, ${C.line} 0 1px, transparent 1px 15px)`, backgroundSize:'auto' };
-  if (t === 'vein') return { backgroundImage: veinPatternUri(C.line), backgroundSize:'420px 420px' };
+  if (t === 'vein') return { backgroundImage: veinPatternUri(C.line), backgroundSize:`${Math.round(VEIN_TILE * patternScaleMult)}px ${Math.round(VEIN_TILE * patternScaleMult)}px` };
   // paper/marble: real grain (feTurbulence, see index.html's #grainFilter +
   // .grain-overlay) carries these as one fixed full-viewport layer instead of
   // a backgroundImage trick, toggled on by applyGrainIntensity() below.
@@ -586,6 +630,120 @@ function applyGrainIntensity(level, textureOn, texture) {
   } catch (e) {}
 }
 function grain() { return GRAIN_LEVELS[grainLevel] || GRAIN_LEVELS.medium; }
+
+// custom texture — advanced opt-in continuous control, layered strictly on
+// top of the GRAIN_LEVELS presets above rather than replacing them: off by
+// default, and while off applyCustomTexture() below never touches the DOM,
+// so applyGrainIntensity()'s preset writes are the only thing in effect —
+// zero regression. When on, these four sliders become the source of truth
+// for grain opacity/coarseness and vignette strength (independent of which
+// bgTexture/grain preset is picked — advanced mode is meant to fully
+// replace preset-picking, not require "paper" to also be selected), plus
+// drive a brand-new burnt-edges layer with no preset equivalent at all.
+let textureCustomOn = false;
+let customGrainAmt = 30;
+let customGrainCoarse = 42;
+let customVignetteAmt = 33;
+let customBurntAmt = 0;
+// "Pattern density" — Dense↔Sparse control over the dot/vein tile's own
+// backgroundSize, read by bgTextureStyle() above. 1 = exactly today's fixed
+// 220px/520px tile (untouched when custom mode is off); < 1 packs the same
+// motifs into a smaller tile (denser, more continuously-organic-reading);
+// > 1 spreads them into a larger one (sparser, more minimal).
+let patternScaleMult = 1;
+// caps chosen so every slider stays "professional" at its 100 extreme —
+// grain/vignette ceilings match GRAIN_LEVELS.deep's own opacity values (the
+// existing top-end preset already vetted as "bold but not amateurish").
+const CUSTOM_GRAIN_OP_MAX = 0.6;
+const CUSTOM_VIGNETTE_MAX = 0.14;
+function applyCustomTexture(enabled, grainAmt, grainCoarse, vignetteAmt, burntAmt, patternScaleAmt) {
+  textureCustomOn = !!enabled;
+  if (typeof grainAmt === 'number') customGrainAmt = grainAmt;
+  if (typeof grainCoarse === 'number') customGrainCoarse = grainCoarse;
+  if (typeof vignetteAmt === 'number') customVignetteAmt = vignetteAmt;
+  // burntAmt is deliberately NOT written to any global DOM/CSS state here —
+  // burnt-edges is a per-element treatment (see burntEdgeStyle() below),
+  // read directly off customBurntAmt by whichever card/panel components opt
+  // in, the same way grain()/rad()/ds() are read directly rather than piped
+  // through a CSS custom property.
+  if (typeof burntAmt === 'number') customBurntAmt = burntAmt;
+  // 0..100 → 0.65x..1.55x, capped so "sparse" never spreads the tile so far
+  // it looks broken/empty and "dense" never shrinks it into a moiré mess
+  patternScaleMult = (textureCustomOn && typeof patternScaleAmt === 'number') ? (0.65 + (patternScaleAmt / 100) * 0.9) : 1;
+  try {
+    if (textureCustomOn) {
+      const op = (customGrainAmt / 100) * CUSTOM_GRAIN_OP_MAX;
+      // coarseness 0 (fine) → high baseFrequency (~0.95, finer than 'subtle'),
+      // 100 (coarse/blotchy) → low baseFrequency (~0.35, coarser than 'deep')
+      const freq = 0.95 - (customGrainCoarse / 100) * 0.6;
+      const fe = document.getElementById('grainTurb');
+      const fe2 = document.getElementById('grainTurb2');
+      if (fe) { fe.setAttribute('type', 'fractalNoise'); fe.setAttribute('baseFrequency', String(freq)); fe.setAttribute('numOctaves', '3'); }
+      if (fe2) { fe2.setAttribute('type', 'fractalNoise'); fe2.setAttribute('baseFrequency', String(freq * 0.44)); fe2.setAttribute('numOctaves', '2'); }
+      document.documentElement.style.setProperty('--grain-opacity', String(op));
+      document.documentElement.style.setProperty('--vignette-opacity', String((customVignetteAmt / 100) * CUSTOM_VIGNETTE_MAX));
+    }
+  } catch (e) {}
+}
+
+// ── per-element burnt-edge / grain treatments ────────────────────────────
+// v197 shipped burnt-edges as a single fixed full-viewport overlay first
+// (mirroring how grain/vignette already work), but that reads as an odd
+// wash over the whole app chrome rather than a considered photo treatment —
+// scorched corners only make sense on an actual photo-like surface. Reworked
+// to the exact warmEdgeStyle()/PHOTO_FRAME_SHADOW pattern instead: a small
+// style-object helper that individual photo-frame call sites opt into,
+// spread onto their own absolutely-positioned overlay div. No shared DOM
+// node to mutate — each call just bakes the current intensity straight into
+// a fresh self-contained SVG data-URI (own embedded feTurbulence +
+// feDisplacementMap), the same technique dotPatternUri/veinPatternUri above
+// already use, so it works identically wherever it's dropped in.
+function burntEdgeUri(intensity) {
+  const op = Math.min(0.85, 0.15 + intensity * 0.7);
+  const disp = 3 + intensity * 7;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200">
+    <defs>
+      <filter id="b" x="-30%" y="-30%" width="160%" height="160%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.05 0.07" numOctaves="2" seed="6" result="n"/>
+        <feDisplacementMap in="SourceGraphic" in2="n" scale="${disp}" xChannelSelector="R" yChannelSelector="G"/>
+      </filter>
+      <radialGradient id="g" cx="0" cy="0" r="0.6">
+        <stop offset="0%" stop-color="rgba(20,10,4,${op})"/>
+        <stop offset="55%" stop-color="rgba(20,10,4,${(op * 0.45).toFixed(2)})"/>
+        <stop offset="100%" stop-color="rgba(20,10,4,0)"/>
+      </radialGradient>
+    </defs>
+    <g filter="url(#b)">
+      <rect width="200" height="200" fill="url(#g)"/>
+      <rect width="200" height="200" fill="url(#g)" transform="translate(200,0) scale(-1,1)"/>
+      <rect width="200" height="200" fill="url(#g)" transform="translate(0,200) scale(1,-1)"/>
+      <rect width="200" height="200" fill="url(#g)" transform="translate(200,200) scale(-1,-1)"/>
+    </g>
+  </svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+// intensityMult lets an individual call site scale the slider value down —
+// a small ~150px plant-card thumbnail needs a gentler read than a full-width
+// hero banner does at the same slider position, same idea as
+// warmEdgeStyle(strength)'s per-call-site multiplier.
+function burntEdgeStyle(intensityMult = 1) {
+  const eff = (textureCustomOn ? customBurntAmt / 100 : 0) * intensityMult;
+  if (eff <= 0) return { backgroundImage:'none' };
+  return { backgroundImage: burntEdgeUri(Math.min(1, eff)), backgroundSize:'100% 100%' };
+}
+function grainTextureUri(op, freq) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120">
+    <filter id="g"><feTurbulence type="fractalNoise" baseFrequency="${freq}" numOctaves="2" seed="3" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 ${op} 0"/></filter>
+    <rect width="120" height="120" filter="url(#g)"/>
+  </svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+function grainTextureStyle(intensityMult = 1) {
+  const eff = (textureCustomOn ? customGrainAmt / 100 : 0) * intensityMult;
+  if (eff <= 0) return { backgroundImage:'none' };
+  const freq = 0.95 - (customGrainCoarse / 100) * 0.6;
+  return { backgroundImage: grainTextureUri(Math.min(0.75, 0.15 + eff * 0.6), freq), backgroundSize:'120px 120px', mixBlendMode:'overlay' };
+}
 
 // ── shared "cozy depth" touches — one small vocabulary reused across every
 // screen instead of a one-off treatment per surface. Warmth always comes
@@ -1367,6 +1525,15 @@ function Specimen({ tint, height, radius = 15, leafSize = 46, caption, image }) 
             ? 'radial-gradient(ellipse at center, transparent 45%, rgba(20,26,14,0.28) 100%), linear-gradient(to top, rgba(28,38,18,0.2), transparent 38%)'
             : 'linear-gradient(to top, rgba(28,38,18,0.18), transparent 38%)' }}/>
       )}
+      {/* Custom texture controls' per-element grain/burnt-edge treatment —
+          every plant photo in the app renders through this one component, so
+          opting in here reaches Garden cards, Plant Detail, Print Queue, the
+          Digest, everywhere, with no per-screen wiring. Toned down (0.55x)
+          relative to the hero-banner call sites below — a ~100-150px card
+          thumbnail reads "scorched" at a much lower intensity than a
+          full-width banner does at the same slider position. */}
+      {showImg && <div style={{ position:'absolute', inset:0, borderRadius:r, pointerEvents:'none', ...grainTextureStyle(0.55) }}/>}
+      {showImg && <div style={{ position:'absolute', inset:0, borderRadius:r, pointerEvents:'none', ...burntEdgeStyle(0.55) }}/>}
       {caption && !showImg && (
         <span style={{
           position:'absolute', bottom:8, left:0, right:0, textAlign:'center',
@@ -1480,7 +1647,7 @@ Object.assign(window, {
   IMAGE_TREATMENTS, IMAGE_TREATMENT_ORDER, applyImageTreatment,
   UI_DENSITY, UI_DENSITY_ORDER, applyUiDensity, ds,
   BG_TEXTURES, BG_TEXTURE_ORDER, applyBgTexture, bgTextureStyle,
-  GRAIN_LEVELS, GRAIN_ORDER, applyGrainIntensity, grain,
+  GRAIN_LEVELS, GRAIN_ORDER, applyGrainIntensity, grain, applyCustomTexture, burntEdgeStyle, grainTextureStyle,
   warmEdgeStyle, PHOTO_FRAME_SHADOW, cardEntranceStyle, CARD_STAGGER_CAP, shimmerStyle,
   STATUS_STYLES, STATUS_STYLE_ORDER, applyStatusStyle, getStatusStyle,
   ICON_STROKE_LEVELS, ICON_STROKE_ORDER, applyIconStroke,

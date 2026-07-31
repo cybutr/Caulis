@@ -282,6 +282,8 @@ function PlantDetail({ plant, tint, fromScan, inQueue, onBack, onWater, onUndoWa
           <div style={{ position:'relative', borderRadius:rad(22), overflow:'hidden' }}>
             <PhotoCarousel images={gallery} tint={tint}/>
             <div style={{ position:'absolute', inset:0, pointerEvents:'none', ...warmEdgeStyle(0.8) }}/>
+            <div style={{ position:'absolute', inset:0, pointerEvents:'none', ...grainTextureStyle(0.8) }}/>
+            <div style={{ position:'absolute', inset:0, pointerEvents:'none', ...burntEdgeStyle(0.8) }}/>
             <div style={{ position:'absolute', inset:0, pointerEvents:'none', boxShadow:PHOTO_FRAME_SHADOW, borderRadius:rad(22) }}/>
           </div>
 

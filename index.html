@@ -267,6 +267,17 @@
      warmEdgeStyle()'s hero-frame wash, never a literal burnt/vignette PNG. */
   .vignette-overlay { position:fixed; inset:0; pointer-events:none; z-index:29; opacity:var(--vignette-opacity);
     background: radial-gradient(ellipse at center, transparent 60%, rgba(107,76,42,0.9) 140%); }
+  /* burnt-edges is NOT a global overlay (unlike grain/vignette above) — see
+     burntEdgeStyle()/burntEdgeUri() in caulis-core.jsx. A page-wide fixed
+     scorched layer was tried first and reverted: even after fixing an
+     initial radial-gradient sizing bug, a single full-viewport "scorch"
+     reads as an odd wash over the whole app chrome, not a considered photo/
+     card treatment — burnt paper corners only make sense on an actual
+     photo-like surface, not the entire screen at once. It's now applied
+     per-element (plant photo tiles via Specimen, the hero banner collages)
+     as a self-contained inline SVG data-URI background-image, the same
+     technique dotPatternUri/veinPatternUri already use, so no shared DOM
+     node or fixed overlay div is needed here at all. */
   html, body { background: var(--bg); -webkit-font-smoothing: antialiased; overflow: hidden; height: 100%; overscroll-behavior: none; user-select: none; -webkit-user-select: none; }
   #root { height: 100%; overflow: hidden; }
   button, [role="button"], a { touch-action: manipulation; }
