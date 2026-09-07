@@ -13,7 +13,7 @@ function useWindowWidth() {
   return w;
 }
 const DESKTOP_BP = 900;
-const APP_VERSION = '197'; // keep in sync with sw.js CACHE
+const APP_VERSION = '198'; // keep in sync with sw.js CACHE
 
 // shared tactile press-state for primary CTAs only (the main Water button,
 // Add/Edit save button) — same motion budget as the existing PlantCard press
@@ -883,7 +883,10 @@ function fmtLocalDate(d) {
 const DAY_MS = 86400000;
 function todayMidnight() { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }
 function midnightFromStamp(stamp) { const [y,m,d] = String(stamp).split('-').map(Number); const dt = new Date(y, (m||1)-1, d||1); dt.setHours(0,0,0,0); return dt.getTime(); }
-function daysSinceMidnight(ms) { return Math.max(0, Math.round((todayMidnight() - ms) / DAY_MS)); }
+function daysSinceMidnight(ms) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return 0; // a bad/missing anchor must never read as a huge day count
+  return Math.max(0, Math.round((todayMidnight() - ms) / DAY_MS));
+}
 // absolute watered timestamp for a plant. trust an existing wateredAt only once
 // the plant carries the current schema marker (wv) — earlier builds wrote a bad
 // "today" stamp, so unmarked plants are recomputed from history, else from days
@@ -1576,6 +1579,22 @@ function normalizeNav(cfg) {
     return out;
   });
   if (!slots.length) return DEFAULT_NAV.map(s => ({ ...s }));
+  // Settings must always be reachable from the bar itself — losing it here
+  // (removed slot, cycled to another action, or a stale/imported config that
+  // never had it) otherwise locks a user out of Settings entirely, since
+  // that's also where the nav editor that could fix it lives. Self-healing:
+  // an empty slot becomes Settings first, else it's appended (or swapped for
+  // the least useful slot, "more", if already at NAV_MAX) — this also
+  // recovers anyone already stuck, the next time their config is read.
+  if (!slots.some(s => s.action === 'settings')) {
+    const emptyIdx = slots.findIndex(s => s.action === 'empty');
+    if (emptyIdx >= 0) slots[emptyIdx] = { action: 'settings' };
+    else if (slots.length < NAV_MAX) slots.push({ action: 'settings' });
+    else {
+      const moreIdx = slots.findIndex(s => s.action === 'more');
+      slots[moreIdx >= 0 ? moreIdx : slots.length - 1] = { action: 'settings' };
+    }
+  }
   if (!slots.some(s => s.center)) { const i = slots.findIndex(s => s.action !== 'empty'); if (i >= 0) slots[i].center = true; }
   let seen = false; for (const s of slots) { if (s.center && !seen) seen = true; else s.center = false; }
   return slots;

@@ -27,12 +27,74 @@ function indexById(arr) {
   return m;
 }
 
+// per-schedule 3-way merge (custom reminders) — same "watering is advance-
+// only, never lose a done-mark" reasoning as the watering cluster in
+// mergeOnePlant below, since a schedule's lastDoneAt/history is the exact
+// same shape as a plant's own wateredAt/history.
+function mergeSchedules(base, local, remote) {
+  const B = indexById(base), L = indexById(local), R = indexById(remote);
+  const ids = new Set([...B.keys(), ...L.keys(), ...R.keys()]);
+  const out = [];
+  for (const id of ids) {
+    const b = B.get(id), l = L.get(id), r = R.get(id);
+    if (!l && !r) continue;
+    if (l && !r) { if (!b || !sameJSON(l, b)) out.push(l); continue; }
+    if (!l && r) { if (!b || !sameJSON(r, b)) out.push(r); continue; }
+    if (sameJSON(l, r)) { out.push(l); continue; }
+    const histL = Array.isArray(l.history) ? l.history : [];
+    const histR = Array.isArray(r.history) ? r.history : [];
+    const winner = (r.lastDoneAt || 0) > (l.lastDoneAt || 0) ? r : l;
+    out.push({ ...winner, history: [...new Set([...histL, ...histR])].sort().slice(-60) });
+  }
+  return out;
+}
+
+// a real edit-vs-edit conflict on the same plant used to just take the whole
+// remote object, which silently threw away ANY local-only change that landed
+// in the same conflict window — most visibly a watering: water a plant on
+// device A, make an unrelated edit on device B before B has seen A's write,
+// and B's push would conflict and blindly overwrite A's watering with B's
+// stale unwatered copy ("I watered it, opened another device, it looked
+// unwatered again"). Field-level instead: plain fields keep whichever side
+// actually changed them since the common ancestor (remote still wins a real
+// same-field double-edit, same convention as before); the watering cluster
+// (wateredAt/wv/days/history) and schedules are merged by recency/union
+// instead, since watering only ever advances — never silently reverted by
+// picking "the other device's older copy".
+function fieldMergePlant(base, l, r) {
+  const b = base || {};
+  const SPECIAL = new Set(['wateredAt', 'wv', 'days', 'history', 'snoozedUntil', 'schedules']);
+  const keys = new Set([...Object.keys(l || {}), ...Object.keys(r || {})]);
+  const out = {};
+  for (const k of keys) {
+    if (SPECIAL.has(k)) continue;
+    const lv = l[k], rv = r[k];
+    if (sameJSON(lv, rv)) { out[k] = lv; continue; }
+    const lChangedK = !sameJSON(lv, b[k]);
+    const rChangedK = !sameJSON(rv, b[k]);
+    if (lChangedK && !rChangedK) out[k] = lv;
+    else if (rChangedK && !lChangedK) out[k] = rv;
+    else out[k] = rv; // both changed this same field differently — remote wins, as before
+  }
+  const wl = deriveWateredAt(l), wr = deriveWateredAt(r);
+  const winner = wr > wl ? r : l;
+  out.wateredAt = winner.wateredAt;
+  out.wv = winner.wv;
+  out.days = winner.days;
+  const histL = Array.isArray(l.history) ? l.history : [];
+  const histR = Array.isArray(r.history) ? r.history : [];
+  out.history = [...new Set([...histL, ...histR])].sort().slice(-60);
+  const sl = l.snoozedUntil || 0, sr = r.snoozedUntil || 0;
+  if (sl || sr) out.snoozedUntil = Math.max(sl, sr);
+  out.schedules = mergeSchedules(b.schedules, l.schedules, r.schedules);
+  return out;
+}
+
 // per-plant 3-way merge: unchanged-on-one-side wins cleanly; a real edit-vs-
-// edit conflict on the same plant prefers the remote copy (so nothing this
-// device hasn't seen yet gets thrown away) and is flagged so the caller can
-// tell the user a merge happened. Deletes never silently eat an edit made on
-// the other side — an edited-elsewhere plant survives even if this device
-// tried to delete it (and vice versa).
+// edit conflict on the same plant merges field-by-field (see fieldMergePlant)
+// and is flagged so the caller can tell the user a merge happened. Deletes
+// never silently eat an edit made on the other side — an edited-elsewhere
+// plant survives even if this device tried to delete it (and vice versa).
 function mergePlants(base, local, remote) {
   const B = indexById(base), L = indexById(local), R = indexById(remote);
   const ids = new Set([...B.keys(), ...L.keys(), ...R.keys()]);
@@ -57,7 +119,7 @@ function mergePlants(base, local, remote) {
     if (!lChanged) { merged.push(r); continue; }
     if (!rChanged) { merged.push(l); continue; }
     if (sameJSON(l, r)) { merged.push(l); continue; } // changed identically, no real conflict
-    merged.push(r); // both edited the same plant differently — prefer remote, flag it
+    merged.push(fieldMergePlant(b, l, r)); // both edited the same plant differently — merge field-by-field
     conflict = true;
   }
   return { plants: merged, conflict };

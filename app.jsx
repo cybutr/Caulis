@@ -1823,7 +1823,15 @@ window.onload=()=>{
         if (data.care) next.care = data.care;
         if (data.fact) next.fact = data.fact;
         if (typeof data.toxicToPets === 'boolean') next.toxicToPets = data.toxicToPets;
-        if (data.days != null) { next.days = data.days; next.wateredAt = todayMidnight() - data.days * 86400000; next.wv = WATER_SCHEMA; }
+        // the edit form's "last watered" stepper is seeded from p.days at the
+        // moment the form opened — if the plant got watered (or synced from
+        // another device) while the form sat open, that stepper value is
+        // stale, and it's resent on every save regardless of whether the user
+        // ever touched it. Only re-derive wateredAt/wv when the saved value
+        // actually differs from the plant's LIVE current days — an untouched
+        // stepper (data.days === p.days) must never silently roll a real,
+        // more-recent watering back to whatever the form started with.
+        if (data.days != null && data.days !== p.days) { next.days = data.days; next.wateredAt = todayMidnight() - data.days * 86400000; next.wv = WATER_SCHEMA; }
         next.photos = data.photos || [];
         next.image = data.presetImage != null ? data.presetImage : p.image;
         next.propagatedFrom = data.propagatedFrom || null;
